@@ -1,0 +1,151 @@
+from datetime import datetime, timezone
+
+from fastapi import HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.models.cart import CartItem
+from app.models.order import Order, OrderItem, OrderStatus
+from app.models.product import Product, ProductStatus
+from app.models.sequence import OrderSequence
+from app.state_machine import can_transition
+from app.services.audit_service import record
+from app.events import bus
+
+
+async def _next_order_no(db: AsyncSession) -> str:
+    day = datetime.now(timezone.utc).strftime("%Y%m%d")
+    seq = await db.scalar(select(OrderSequence).where(OrderSequence.day == day).with_for_update())
+    if seq is None:
+        seq = OrderSequence(day=day, value=0)
+        db.add(seq)
+        await db.flush()
+    seq.value += 1
+    return f"ORD-{day}-{seq.value:04d}"
+
+
+async def checkout(db: AsyncSession, *, buyer_id: str, address: str) -> Order:
+    cart_rows = list(
+        await db.scalars(select(CartItem).where(CartItem.user_id == buyer_id))
+    )
+    if not cart_rows:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="购物车为空")
+
+    order_no = await _next_order_no(db)
+    order = Order(
+        order_no=order_no,
+        buyer_id=buyer_id,
+        status=OrderStatus.PENDING_PAYMENT,
+        address=address,
+    )
+    db.add(order)
+    await db.flush()
+
+    total = 0.0
+    out_of_stock: list[str] = []
+    for item in cart_rows:
+        product = await db.get(Product, item.product_id)
+        if not product or product.status != ProductStatus.ACTIVE:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"商品「{product.name if product else item.product_id}」不可购买",
+            )
+        if product.stock < item.quantity:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"商品「{product.name}」库存不足",
+            )
+        product.stock -= item.quantity
+        if product.stock == 0:
+            out_of_stock.append(product.id)
+        total += float(product.price) * item.quantity
+        db.add(
+            OrderItem(
+                order_id=order.id,
+                product_id=product.id,
+                quantity=item.quantity,
+                price=product.price,
+            )
+        )
+
+    order.total_amount = round(total, 2)
+    for item in cart_rows:
+        await db.delete(item)
+    await record(db, buyer_id, "order.checkout", "order", order.id, order.order_no)
+    await db.commit()
+    await db.refresh(order)
+    # 解耦的库存告警：库存归零时广播事件，由事件处理器异步记录
+    for pid in out_of_stock:
+        await bus.publish("product.out_of_stock", product_id=pid)
+    return order
+
+
+async def _load_order(db: AsyncSession, order_id: str) -> Order:
+    order = await db.scalar(
+        select(Order).where(Order.id == order_id).options(selectinload(Order.items))
+    )
+    if not order:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="订单不存在")
+    return order
+
+
+async def list_orders(
+    db: AsyncSession, *, user_id: str, role: str
+) -> list[Order]:
+    stmt = select(Order)
+    if role == "merchant":
+        stmt = (
+            stmt.join(OrderItem, OrderItem.order_id == Order.id)
+            .join(Product, Product.id == OrderItem.product_id)
+            .where(Product.merchant_id == user_id)
+            .distinct()
+        )
+    else:
+        stmt = stmt.where(Order.buyer_id == user_id)
+    rows = await db.scalars(stmt.order_by(Order.created_at.desc()))
+    return list(rows)
+
+
+async def get_order(db: AsyncSession, order_id: str, *, user_id: str, role: str) -> Order:
+    order = await _load_order(db, order_id)
+    if role == "admin":
+        return order
+    if order.buyer_id != user_id:
+        if role == "merchant":
+            merchant_items = [
+                it for it in order.items if (await db.get(Product, it.product_id)).merchant_id == user_id
+            ]
+            if not merchant_items:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权查看该订单")
+            return order
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权查看该订单")
+    return order
+
+
+async def transition_status(
+    db: AsyncSession, *, order: Order, target: OrderStatus, actor_id: str, role: str
+) -> Order:
+    if not can_transition(order.status, target, role):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"不允许从 {order.status.value} 流转到 {target.value}",
+        )
+    now = datetime.now(timezone.utc)
+    order.status = target
+    if target == OrderStatus.PAID:
+        order.paid_at = now
+    elif target == OrderStatus.SHIPPED:
+        order.shipped_at = now
+    elif target == OrderStatus.COMPLETED:
+        order.completed_at = now
+    elif target == OrderStatus.REFUNDED:
+        for it in order.items:
+            product = await db.get(Product, it.product_id)
+            if product:
+                product.stock += it.quantity
+
+    await record(db, actor_id, f"order.{target.value}", "order", order.id, order.order_no)
+    await db.commit()
+    await db.refresh(order)
+    return order

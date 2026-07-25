@@ -1,0 +1,17 @@
+# 构建上下文为仓库根目录（render.yaml dockerfilePath: backend/Dockerfile）
+# 排除无关文件，加速镜像构建并减小体积
+
+**/node_modules
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.db
+**/.pytest_cache
+backend/tests
+backend/ai_shop.db
+backend/*.txt
+!backend/requirements.txt
+backend/.venv
+.git
+**/.git
+*.md

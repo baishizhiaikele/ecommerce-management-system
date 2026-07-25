@@ -1,0 +1,37 @@
+# AI 全托管小店 —— Render 一键部署
+# 单 Web 服务：后端（FastAPI）镜像内构建前端并同源托管，无需额外静态站点与 CORS 配置。
+# 部署步骤：
+#   1. 在 Render 连接本仓库，Render 会自动识别此文件并创建下方服务与数据库。
+#   2. 在 ai-shop-backend 的环境变量中填写 AI_API_KEY（留空则 AI 自动降级为本地 mock）。
+#   3. 将下方 FRONTEND_ORIGINS 的占位域名替换为实际生成的 Web Service 地址。
+databases:
+  - name: ai-shop-db
+    databaseName: ai_shop
+    user: ai_shop_user
+    plan: free
+
+services:
+  - type: web
+    name: ai-shop-backend
+    runtime: docker
+    dockerfilePath: backend/Dockerfile
+    plan: free
+    region: oregon
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ai-shop-db
+          property: internalConnectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: FRONTEND_ORIGINS
+        value: "https://ai-shop-backend.onrender.com"
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_BASE_URL
+        value: "https://api.openai.com/v1"
+      - key: AI_MODEL
+        value: "gpt-4o-mini"
+      - key: AI_TIMEOUT_SECONDS
+        value: "12"

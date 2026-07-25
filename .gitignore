@@ -1,0 +1,48 @@
+# ---- Python ----
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+ENV/
+*.db
+*.sqlite
+*.sqlite3
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# ---- Node / 前端 ----
+node_modules/
+dist/
+*.local
+*.tsbuildinfo
+.vite/
+coverage/
+test-results/
+playwright-report/
+blob-report/
+
+# ---- 运行 / 构建产物与临时日志（不纳入版本管理）----
+*.log
+*.err
+*.out
+
+# ---- 编辑器 ----
+.vscode/
+.idea/
+
+# ---- 后端调试 / 测试临时输出（不纳入版本管理）----
+backend/*.txt
+!backend/requirements.txt
+backend/t_*.json
+
+# ---- 前端调试 / 测试临时输出 ----
+frontend/e2e_out.txt
+frontend/*.log
+
+# ---- 环境变量 ----
+.env
+.env.*
+!.env.example
