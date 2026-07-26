@@ -57,6 +57,8 @@ class ProductOut(BaseModel):
     price: Decimal
     stock: int
     image_url: Optional[str]
+    images: Optional[str] = None
+    specs: Optional[str] = None
     status: ProductStatus
     sales_count: int = 0
     ai_title: Optional[str]

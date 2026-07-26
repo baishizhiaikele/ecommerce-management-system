@@ -7,6 +7,7 @@ from app.core.deps import get_current_user
 from app.db.session import get_db
 from app.models.cart import CartItem
 from app.models.product import Product, ProductStatus
+from app.models.variant import ProductVariant
 from app.models.user import User
 from app.schemas.cart import CartItemAdd, CartItemOut, CartItemUpdate
 from app.services.audit_service import record
@@ -24,6 +25,7 @@ def _serialize(item: CartItem, snapshot: dict) -> CartItemOut:
         image_url=product.image_url if product else None,
         stock=product.stock if product else 0,
         quantity=item.quantity,
+        variant_id=item.variant_id,
     )
 
 
@@ -45,19 +47,35 @@ async def add_item(
     product = await db.get(Product, data.product_id)
     if not product or product.status != ProductStatus.ACTIVE:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="商品不可购买")
-    if product.stock < data.quantity:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="库存不足")
+    # 校验并锁定库存来源：优先使用规格库存
+    variant = None
+    if data.variant_id:
+        variant = await db.get(ProductVariant, data.variant_id)
+        if not variant or variant.product_id != product.id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="规格不存在")
+        if variant.stock < data.quantity:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="规格库存不足")
+    else:
+        if product.stock < data.quantity:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="库存不足")
     existing = await db.scalar(
         select(CartItem).where(
-            (CartItem.user_id == user.id) & (CartItem.product_id == data.product_id)
+            (CartItem.user_id == user.id)
+            & (CartItem.product_id == data.product_id)
+            & (CartItem.variant_id == data.variant_id)
         )
     )
     if existing:
-        existing.quantity = min(existing.quantity + data.quantity, 99)
-        await record(db, user.id, "cart.add", "cart", existing.id, f"商品 {product.id} x{data.quantity}")
+        new_qty = min(existing.quantity + data.quantity, 99)
+        await record(db, user.id, "cart.add", "cart", existing.id, f"商品 {product.id} x{new_qty}")
         await db.commit()
         return _serialize(existing, {product.id: product})
-    item = CartItem(user_id=user.id, product_id=data.product_id, quantity=data.quantity)
+    item = CartItem(
+        user_id=user.id,
+        product_id=data.product_id,
+        quantity=data.quantity,
+        variant_id=data.variant_id,
+    )
     db.add(item)
     await record(db, user.id, "cart.add", "cart", item.id, f"商品 {data.product_id} x{data.quantity}")
     await db.commit()

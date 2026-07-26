@@ -11,10 +11,6 @@ from app.services.ai_service import ai_service
 router = APIRouter(prefix="/ai", tags=["ai"])
 
 
-class ChatResponseWithHuman(ChatRequest):
-    pass
-
-
 @router.post("/chat")
 async def chat(
     data: ChatRequest,

@@ -11,11 +11,29 @@ async def notify(
     content: str,
     ref_id: str | None = None,
 ) -> Notification:
-    """创建一条站内信（不提交，由调用方统一 commit）。"""
+    """创建一条站内信（flush 取主键，由调用方统一 commit），并实时推送 WebSocket。"""
     n = Notification(
         user_id=user_id, type=ntype, title=title, content=content, ref_id=ref_id
     )
     db.add(n)
+    await db.flush()
+    # 实时推送（WebSocket）；失败不影响主流程与持久化
+    try:
+        from app.core.ws import manager
+
+        await manager.send_personal(
+            user_id,
+            {
+                "id": n.id,
+                "type": n.type.value if hasattr(n.type, "value") else n.type,
+                "title": n.title,
+                "content": n.content,
+                "ref_id": n.ref_id,
+                "created_at": n.created_at.isoformat() if n.created_at else None,
+            },
+        )
+    except Exception:  # noqa: BLE001
+        pass
     return n
 
 

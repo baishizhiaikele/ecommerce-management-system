@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { AxiosError } from "axios";
 import { Table, Button, Tag, message, Card, Select, Popconfirm, Spin } from "antd";
 import EmptyState from "../../components/EmptyState";
 import { adminListProducts, setProductStatus, ProductOut, ProductStatus } from "../../api";
@@ -27,8 +28,9 @@ export default function AdminProducts() {
       await setProductStatus(id, "active");
       message.success("已上架");
       load();
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "操作失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "操作失败");
     }
   };
   const reject = async (id: string) => {
@@ -36,8 +38,9 @@ export default function AdminProducts() {
       await setProductStatus(id, "rejected", "不符合平台规范");
       message.success("已驳回");
       load();
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "操作失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "操作失败");
     }
   };
 

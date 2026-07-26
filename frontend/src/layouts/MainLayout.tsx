@@ -75,6 +75,8 @@ export default function MainLayout() {
             { key: "shops", label: <Link to="/shops">{t("shops")}</Link> },
             { key: "favorites", label: <Link to="/favorites">{t("favorites")}</Link> },
             { key: "points", label: <Link to="/points">{t("points")}</Link> },
+            { key: "promotions", label: <Link to="/promotions">促销活动</Link> },
+            { key: "mall", label: <Link to="/mall">积分商城</Link> },
           ]}
         />
         <div className="flex items-center gap-1">
@@ -111,9 +113,13 @@ export default function MainLayout() {
             menu={{
               items: [
                 { key: "me", label: `${user?.username}（${user?.points ?? 0} 积分）` },
+                { key: "profile", label: "个人中心" },
                 { key: "logout", label: t("logout") },
               ],
-              onClick: ({ key }) => key === "logout" && onLogout(),
+              onClick: ({ key }) => {
+                if (key === "logout") onLogout();
+                else if (key === "profile") navigate("/me");
+              },
             }}
           >
             <Button className="!rounded-full ml-1">

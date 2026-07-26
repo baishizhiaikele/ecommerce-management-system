@@ -1,21 +1,32 @@
+import asyncio
 import importlib
 import os
+from pathlib import Path
 
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import text
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import IntegrityError
+from alembic.config import Config
+from alembic import command
 
 from app.api.admin import router as admin_router
 from app.api.ai import router as ai_router
 from app.api.auth import router as auth_router
+from app.api.banners import router as banners_router
 from app.api.cart import router as cart_router
 from app.api.categories import router as categories_router
 from app.api.coupons import router as coupons_router
+from app.api.promotions import router as promotions_router
+from app.api.rewards import router as rewards_router
+from app.api.inventory import router as inventory_router
+from app.api.search import router as search_router
+from app.api.variant import router as variant_router
+from app.api.follow import router as follow_router
+from app.api.users import router as users_router
 from app.api.favorites import router as favorites_router
 from app.api.health import router as health_router
 from app.api.merchant import router as merchant_router
@@ -28,11 +39,11 @@ from app.api.reviews import router as reviews_router
 from app.api.shops import router as shops_router
 from app.api.support import router as support_router
 from app.api.upload import UPLOAD_DIR
+from app.api.ws import router as ws_router
 from app.core.config import settings
 from app.core.seed import seed_demo
-from app.db.base import Base
-from app.db.session import engine
 from app.events_handlers import register_handlers
+from app.core.scheduler import scheduler_loop
 from app.core.ratelimit import limiter
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -41,31 +52,67 @@ from slowapi.errors import RateLimitExceeded
 importlib.import_module("app.models")
 
 
+BACKEND_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _run_alembic_upgrade() -> None:
+    """在独立线程中同步执行 Alembic 升级，避免与运行中的事件循环冲突。"""
+    cfg = Config(str(BACKEND_ROOT / "alembic.ini"))
+    command.upgrade(cfg, "head")
+
+
+async def _ensure_demo_columns() -> None:
+    """演示项目演进式补充列（幂等，重复执行安全）；生产环境应改用 Alembic migration。"""
+    from sqlalchemy import text
+
+    from app.db.session import engine
+
+    statements = [
+        "ALTER TABLE reviews ADD COLUMN reply TEXT",
+        "ALTER TABLE reviews ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE order_items ADD COLUMN variant_info TEXT",
+        "ALTER TABLE orders ADD COLUMN refund_amount NUMERIC NOT NULL DEFAULT 0",
+        "ALTER TABLE cart_items ADD COLUMN variant_id TEXT",
+    ]
+    async with engine.begin() as conn:
+        for stmt in statements:
+            try:
+                await conn.execute(text(stmt))
+            except Exception:  # noqa: BLE001
+                pass
+
+
+async def run_migrations() -> None:
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, _run_alembic_upgrade)
+    # 建表兜底：仅创建 Alembic 迁移中尚未覆盖的新增表（对已存在表幂等无副作用）
+    from app.db.base import Base
+    from app.db.session import engine
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    await _ensure_demo_columns()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     register_handlers()
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        # 兼容旧库：补充新增列（非破坏性，列已存在则忽略）
-        for stmt in (
-            "ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 1",
-            "ALTER TABLE users ADD COLUMN points INTEGER NOT NULL DEFAULT 0",
-            "ALTER TABLE products ADD COLUMN sales_count INTEGER NOT NULL DEFAULT 0",
-            "ALTER TABLE orders ADD COLUMN discount_amount NUMERIC(12,2) NOT NULL DEFAULT 0",
-            "ALTER TABLE orders ADD COLUMN refund_reason TEXT",
-            "ALTER TABLE orders ADD COLUMN tracking_no VARCHAR(60)",
-            "ALTER TABLE orders ADD COLUMN logistics TEXT",
-        ):
-            try:
-                await conn.execute(text(stmt))
-            except OperationalError as e:
-                # 仅吞掉“列已存在”类错误；语法/权限等真实错误必须暴露，避免静默丢失迁移（P10 轻量健壮化）
-                msg = str(e).lower()
-                if "duplicate column" in msg or "already exists" in msg:
-                    continue
-                raise
-    await seed_demo()
-    yield
+    # 通过 Alembic 将数据库 schema 升级到最新版本（幂等，兼容既有旧库）
+    await run_migrations()
+    # 演示数据（含弱口令演示账号）仅在 SEED_DEMO=True 时灌入，生产应关闭
+    if settings.SEED_DEMO:
+        try:
+            await seed_demo()
+        except IntegrityError:
+            pass
+    # 后台定时任务：自动取消超时未支付订单并回补库存
+    expire_task = asyncio.create_task(scheduler_loop(60))
+    try:
+        yield
+    finally:
+        expire_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await expire_task
 
 
 app = FastAPI(title=settings.PROJECT_NAME, lifespan=lifespan)
@@ -100,6 +147,15 @@ app.include_router(points_router, prefix=settings.API_V1_PREFIX)
 app.include_router(recommendations_router, prefix=settings.API_V1_PREFIX)
 app.include_router(support_router, prefix=settings.API_V1_PREFIX)
 app.include_router(shops_router, prefix=settings.API_V1_PREFIX)
+app.include_router(banners_router, prefix=settings.API_V1_PREFIX)
+app.include_router(promotions_router, prefix=settings.API_V1_PREFIX)
+app.include_router(users_router, prefix=settings.API_V1_PREFIX)
+app.include_router(rewards_router, prefix=settings.API_V1_PREFIX)
+app.include_router(inventory_router, prefix=settings.API_V1_PREFIX)
+app.include_router(search_router, prefix=settings.API_V1_PREFIX)
+app.include_router(variant_router, prefix=settings.API_V1_PREFIX)
+app.include_router(follow_router, prefix=settings.API_V1_PREFIX)
+app.include_router(ws_router, prefix=settings.API_V1_PREFIX)
 
 
 # ---- 上传文件静态服务（开发/生产均生效）----

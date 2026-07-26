@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Outlet, useNavigate, Link, useLocation } from "react-router-dom";
-import { Layout, Menu, Button, Dropdown, Tooltip, Input } from "antd";
+import { Layout, Menu, Button, Dropdown, Tooltip, Input, Badge } from "antd";
 import { ShopOutlined, BellOutlined, LogoutOutlined, SearchOutlined } from "@ant-design/icons";
 import { useAuth } from "../store/auth";
 import { logout, unreadCount } from "../api";
@@ -33,6 +33,9 @@ export default function MerchantLayout() {
   const menuItems = [
     { key: "/merchant", label: <Link to="/merchant">数据看板</Link> },
     { key: "/merchant/products", label: <Link to="/merchant/products">商品管理</Link> },
+    { key: "/merchant/inventory", label: <Link to="/merchant/inventory">库存管理</Link> },
+    { key: "/merchant/reviews", label: <Link to="/merchant/reviews">评价管理</Link> },
+    { key: "/merchant/promotions", label: <Link to="/merchant/promotions">营销活动</Link> },
     { key: "/merchant/coupons", label: <Link to="/merchant/coupons">优惠券</Link> },
     { key: "/merchant/support", label: <Link to="/merchant/support">客服工单</Link> },
   ];

@@ -4,6 +4,14 @@ import pytest
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
 
+async def _merchant_product_id(client, merchant_headers: dict) -> str:
+    """取一个归属于当前商家账号的商品 id（种子数据含多个商家）。"""
+    me = await client.get("/api/auth/me", headers=merchant_headers)
+    mid = me.json()["id"]
+    prods = await client.get(f"/api/products?merchant_id={mid}")
+    return prods.json()[0]["id"]
+
+
 async def test_coupon_claim_and_mine(client, buyer_headers):
     coupons = await client.get("/api/coupons")
     assert coupons.status_code == 200
@@ -21,7 +29,7 @@ async def test_coupon_claim_and_mine(client, buyer_headers):
 
 
 async def test_points_awarded_after_completion(client, buyer_headers, merchant_headers):
-    pid = (await client.get("/api/products")).json()[0]["id"]
+    pid = await _merchant_product_id(client, merchant_headers)
     await client.post("/api/cart/items", json={"product_id": pid, "quantity": 1}, headers=buyer_headers)
     order = (await client.post(
         "/api/orders/checkout", json={"address": "测试地址 12345"}, headers=buyer_headers
@@ -51,7 +59,7 @@ async def test_recommendations_and_shops(client, buyer_headers):
 
 
 async def test_refund_workflow(client, buyer_headers, merchant_headers):
-    pid = (await client.get("/api/products")).json()[0]["id"]
+    pid = await _merchant_product_id(client, merchant_headers)
     await client.post("/api/cart/items", json={"product_id": pid, "quantity": 1}, headers=buyer_headers)
     order = (await client.post(
         "/api/orders/checkout", json={"address": "退款测试 12345"}, headers=buyer_headers
@@ -73,7 +81,7 @@ async def test_refund_workflow(client, buyer_headers, merchant_headers):
 
 
 async def test_logistics_tracking(client, buyer_headers, merchant_headers):
-    pid = (await client.get("/api/products")).json()[0]["id"]
+    pid = await _merchant_product_id(client, merchant_headers)
     await client.post("/api/cart/items", json={"product_id": pid, "quantity": 1}, headers=buyer_headers)
     order = (await client.post(
         "/api/orders/checkout", json={"address": "物流测试 12345"}, headers=buyer_headers

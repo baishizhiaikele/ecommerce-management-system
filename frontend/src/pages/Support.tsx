@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { AxiosError } from "axios";
 import { List, Tag, Button, Modal, Input, Drawer, Empty, Spin, message } from "antd";
 import {
   listTickets,
@@ -43,8 +44,9 @@ export default function Support() {
   const openTicket = async (id: string) => {
     try {
       setActive(await getTicket(id));
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "打开失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "打开失败");
     }
   };
 
@@ -55,8 +57,9 @@ export default function Support() {
       setActive(t);
       setReply("");
       load();
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "回复失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "回复失败");
     }
   };
 
@@ -67,8 +70,9 @@ export default function Support() {
       message.success("工单已关闭");
       setActive(null);
       load();
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "操作失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "操作失败");
     }
   };
 
@@ -80,8 +84,9 @@ export default function Support() {
       setNewOpen(false);
       setNewMsg("");
       load();
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "提交失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "提交失败");
     }
   };
 

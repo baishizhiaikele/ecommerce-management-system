@@ -3,7 +3,8 @@
 # 部署步骤：
 #   1. 在 Render 连接本仓库，Render 会自动识别此文件并创建下方服务与数据库。
 #   2. 在 ai-shop-backend 的环境变量中填写 AI_API_KEY（留空则 AI 自动降级为本地 mock）。
-#   3. 将下方 FRONTEND_ORIGINS 的占位域名替换为实际生成的 Web Service 地址。
+#   3. FRONTEND_ORIGINS 填前端实际访问地址。本项目前端由后端同源托管，
+#      因此默认与后端 Web Service 地址一致即可（部署后再核对是否需要改为自定义域名）。
 databases:
   - name: ai-shop-db
     databaseName: ai_shop
@@ -18,6 +19,8 @@ services:
     plan: free
     region: oregon
     healthCheckPath: /api/health
+    # 启动前先执行数据库迁移（幂等；alembic.ini 与 migrations/ 已随镜像打包）
+    releaseCommand: alembic upgrade head
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -35,3 +38,6 @@ services:
         value: "gpt-4o-mini"
       - key: AI_TIMEOUT_SECONDS
         value: "12"
+      # 演示站保留种子数据；正式生产环境请改为 "false"（避免自动创建弱口令演示账号）
+      - key: SEED_DEMO
+        value: "true"

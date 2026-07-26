@@ -8,12 +8,15 @@ from sqlalchemy.orm import selectinload
 from app.models.cart import CartItem
 from app.models.order import Order, OrderItem, OrderStatus
 from app.models.product import Product, ProductStatus
+from app.models.variant import ProductVariant
+import json
 from app.models.sequence import OrderSequence
 from app.models.user import User
 from app.models.points import PointAction
 from app.state_machine import can_transition
 from app.services.audit_service import record
 from app.services.coupon_service import compute_discount, find_usable_user_coupon, use_coupon
+from app.services.inventory_service import record_cancel_return, record_sale
 from app.services.points_service import POINTS_REDEEM_RATE, add_points
 from app.events import bus
 
@@ -72,21 +75,42 @@ async def checkout(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"商品「{product.name if product else item.product_id}」不可购买",
             )
+        unit_price = float(product.price)
+        variant = None
+        if getattr(item, "variant_id", None):
+            variant = await db.get(ProductVariant, item.variant_id)
+            if not variant or variant.product_id != product.id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="商品规格无效"
+                )
+            if variant.stock < item.quantity:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"规格「{variant.sku_code or '该规格'}」库存不足",
+                )
+            unit_price = float(product.price) + float(variant.price_delta or 0)
+            variant.stock -= item.quantity
         if product.stock < item.quantity:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"商品「{product.name}」库存不足",
             )
-        product.stock -= item.quantity
+        await record_sale(db, product, item.quantity)
         if product.stock == 0:
             out_of_stock.append(product.id)
-        total += float(product.price) * item.quantity
+        total += unit_price * item.quantity
+        variant_info = None
+        if variant is not None:
+            variant_info = json.dumps(
+                {"variant_id": variant.id, "specs": variant.specs_dict()}, ensure_ascii=False
+            )
         db.add(
             OrderItem(
                 order_id=order.id,
                 product_id=product.id,
                 quantity=item.quantity,
-                price=product.price,
+                price=unit_price,
+                variant_info=variant_info,
             )
         )
 
@@ -186,11 +210,16 @@ async def transition_status(
             product = await db.get(Product, it.product_id)
             if product:
                 product.sales_count = (product.sales_count or 0) + it.quantity
+    elif target == OrderStatus.CANCELLED:
+        for it in order.items:
+            product = await db.get(Product, it.product_id)
+            if product:
+                await record_cancel_return(db, product, it.quantity)
     elif target == OrderStatus.REFUNDED:
         for it in order.items:
             product = await db.get(Product, it.product_id)
             if product:
-                product.stock += it.quantity
+                await record_cancel_return(db, product, it.quantity)
                 product.sales_count = max((product.sales_count or 0) - it.quantity, 0)
 
     await record(db, actor_id, f"order.{target.value}", "order", order.id, order.order_no)

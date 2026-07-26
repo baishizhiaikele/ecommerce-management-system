@@ -1,4 +1,5 @@
 import { Package } from "lucide-react";
+import { useState } from "react";
 
 interface Props {
   name: string;
@@ -10,6 +11,7 @@ interface Props {
 
 /**
  * 商品图片：有图用图，无图用简约浅灰占位（中性、克制）。
+ * 图片加载较慢时先显示浅灰底与图标，加载完成后淡入，避免白屏。
  */
 export default function ProductImage({
   name,
@@ -20,13 +22,45 @@ export default function ProductImage({
 }: Props) {
   const usable =
     image_url && !image_url.includes("placeholder") && image_url.startsWith("http");
+  const [loaded, setLoaded] = useState(false);
+
   if (usable) {
     return (
-      <div className={className} style={{ height, borderRadius: rounded, overflow: "hidden" }}>
+      <div
+        className={className}
+        style={{
+          height,
+          borderRadius: rounded,
+          overflow: "hidden",
+          position: "relative",
+          background: "#F3F4F6",
+        }}
+      >
+        {!loaded && (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Package size={42} color="#C7CBD3" strokeWidth={1.5} />
+          </div>
+        )}
         <img
           src={image_url}
           alt={name}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          onLoad={() => setLoaded(true)}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            opacity: loaded ? 1 : 0,
+            transition: "opacity 0.4s ease",
+            position: "relative",
+          }}
         />
       </div>
     );

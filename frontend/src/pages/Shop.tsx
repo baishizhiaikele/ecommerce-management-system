@@ -1,134 +1,195 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Card, Button, Tag, Spin, Row, Col, message } from "antd";
-import { ShopOutlined } from "@ant-design/icons";
-import EmptyState from "../components/EmptyState";
-import { listShops, getShop, addCartItem, ProductOut } from "../api";
-import { useCart } from "../store/cart";
+import { Card, Spin, Empty, Tag, Button } from "antd";
+import { Star, Package, ChevronRight } from "lucide-react";
+import {
+  listShops,
+  getShop,
+  followShop,
+  unfollowShop,
+  followStatus,
+  followersCount,
+  ShopSummary,
+  ShopDetail,
+} from "../api";
+import ProductImage from "../components/ProductImage";
 import { money } from "../utils/format";
+
+function ShopCard({ shop, onClick }: { shop: ShopSummary; onClick: () => void }) {
+  return (
+    <Card hoverable className="soft-card" onClick={onClick} styles={{ body: { padding: 16 } }}>
+      <div className="flex items-center gap-3">
+        <div className="w-14 h-14 rounded-2xl overflow-hidden bg-slate-100 flex items-center justify-center shrink-0">
+          {shop.avatar ? (
+            <img src={shop.avatar} alt={shop.name} className="w-full h-full object-cover" />
+          ) : (
+            <span className="text-xl font-bold text-[#4F46E5]">{shop.name.slice(0, 1)}</span>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold truncate">{shop.name}</div>
+          <div className="flex items-center gap-2 text-xs text-slate-400 mt-1">
+            <span className="flex items-center gap-0.5 text-amber-500">
+              <Star size={12} fill="currentColor" />
+              {shop.rating > 0 ? shop.rating.toFixed(1) : "新店"}
+            </span>
+            <span>·</span>
+            <span>{shop.product_count} 件好物</span>
+          </div>
+        </div>
+        <ChevronRight size={18} className="text-slate-300" />
+      </div>
+      {shop.description && (
+        <div className="text-xs text-slate-400 mt-3 line-clamp-1">{shop.description}</div>
+      )}
+    </Card>
+  );
+}
 
 export default function Shop() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const add = useCart((s) => s.add);
-  const [shops, setShops] = useState<{ id: string; name: string; product_count: number }[]>([]);
-  const [detail, setDetail] = useState<{ id: string; name: string; products: ProductOut[] } | null>(
-    null
-  );
+  const [list, setList] = useState<ShopSummary[]>([]);
+  const [detail, setDetail] = useState<ShopDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [followed, setFollowed] = useState(false);
+  const [followers, setFollowers] = useState(0);
 
   useEffect(() => {
-    setLoading(true);
-    if (id) {
-      getShop(id)
-        .then((d) => setDetail(d))
-        .catch(() => message.error("店铺不存在"))
-        .finally(() => setLoading(false));
-    } else {
-      listShops()
-        .then(setShops)
-        .finally(() => setLoading(false));
+    if (detail) {
+      followStatus(detail.id)
+        .then((r) => setFollowed(r.following))
+        .catch(() => {});
+      followersCount(detail.id)
+        .then((r) => setFollowers(r.count))
+        .catch(() => {});
     }
-  }, [id]);
+  }, [detail]);
 
-  const onAdd = async (p: ProductOut) => {
+  const toggleFollow = async () => {
+    if (!detail) return;
     try {
-      await addCartItem({ product_id: p.id, quantity: 1 });
-      add({
-        product_id: p.id,
-        name: p.name,
-        price: Number(p.price),
-        quantity: 1,
-        image_url: p.image_url || undefined,
-      });
-      message.success("已加入购物车");
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "加入失败");
+      if (followed) await unfollowShop(detail.id);
+      else await followShop(detail.id);
+      setFollowed(!followed);
+      setFollowers((f) => f + (followed ? -1 : 1));
+    } catch {
+      /* 忽略 */
     }
   };
 
-  if (loading) return <div className="text-center py-20"><Spin /></div>;
+  useEffect(() => {
+    if (id) {
+      setLoading(true);
+      getShop(id)
+        .then(setDetail)
+        .finally(() => setLoading(false));
+    } else {
+      setLoading(true);
+      listShops()
+        .then(setList)
+        .finally(() => setLoading(false));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   if (id) {
-    if (!detail) return <EmptyState title="店铺不存在" description="该店铺可能已关闭或链接有误" />;
+    if (loading) return <div className="py-24 flex justify-center"><Spin /></div>;
+    if (!detail) return <Empty description="店铺不存在" className="py-24" />;
     return (
-      <div>
-        <div className="flex items-center gap-2 mb-4">
-          <ShopOutlined className="text-[#4F46E5] text-xl" />
-          <h2 className="text-xl font-bold m-0">{detail.name} 的店铺</h2>
-          <Tag color="cyan">{detail.products.length} 件在售</Tag>
+      <div className="space-y-5">
+        {/* 店铺头图 / 资料卡 */}
+        <div className="relative rounded-3xl overflow-hidden">
+          <div className="h-40 bg-gradient-to-r from-[#4F46E5] via-[#7C3AED] to-[#F97316]" />
+          <Card className="soft-card -mt-12 mx-3 relative" styles={{ body: { padding: 20 } }}>
+            <div className="flex items-end gap-4">
+              <div className="w-20 h-20 rounded-2xl overflow-hidden bg-white shadow-md border border-slate-100 -mt-10 shrink-0">
+                {detail.avatar ? (
+                  <img src={detail.avatar} alt={detail.name} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-2xl font-bold text-[#4F46E5]">
+                    {detail.name.slice(0, 1)}
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 pb-1">
+                <div className="text-xl font-bold">{detail.name}</div>
+                <div className="flex items-center gap-3 mt-1 text-sm text-slate-500">
+                  <span className="flex items-center gap-1 text-amber-500">
+                    <Star size={14} fill="currentColor" />
+                    {detail.rating > 0 ? detail.rating.toFixed(1) : "新店"}
+                  </span>
+                  <span>· {detail.product_count} 件商品</span>
+                  <span>· 已售 {detail.sales_total}</span>
+                </div>
+                <Button
+                  size="small"
+                  type={followed ? "default" : "primary"}
+                  className="mt-2"
+                  onClick={toggleFollow}
+                >
+                  {followed ? "已关注" : "关注"} · {followers}
+                </Button>
+                {detail.description && (
+                  <div className="text-xs text-slate-400 mt-2">{detail.description}</div>
+                )}
+              </div>
+            </div>
+          </Card>
         </div>
-        {detail.products.length === 0 ? (
-          <EmptyState title="该店铺暂无在售商品" description="换个店铺逛逛吧" />
-        ) : (
-          <Row gutter={[16, 16]}>
-            {detail.products.map((p, i) => (
-              <Col key={p.id} xs={24} sm={12} md={8} lg={6}>
+
+        {/* 商品网格 */}
+        <div className="px-1">
+          <div className="flex items-center gap-2 mb-3">
+            <Package size={18} className="text-[#4F46E5]" />
+            <h2 className="text-lg font-bold">店铺好物</h2>
+            <Tag color="purple" className="ml-auto">{detail.products.length} 件</Tag>
+          </div>
+          {detail.products.length === 0 ? (
+            <Empty description="该店铺暂未上架商品" className="py-12" />
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {detail.products.map((p) => (
                 <Card
+                  key={p.id}
                   hoverable
-                  className="product-card group fade-up"
-                  style={{ animationDelay: `${i * 45}ms` }}
+                  className="soft-card overflow-hidden"
+                  onClick={() => navigate(`/product/${p.id}`)}
                   cover={
-                    <div className="h-40 bg-[#F7F8FC] flex items-center justify-center text-4xl transition-transform duration-300 group-hover:scale-105">
-                      🛍️
+                    <div className="h-40 bg-slate-100">
+                      <ProductImage src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
                     </div>
                   }
-                  onClick={() => navigate(`/products/${p.id}`)}
                 >
-                  <Card.Meta
-                    title={<span className="font-medium text-slate-800 truncate">{p.name}</span>}
-                    description={
-                      <div className="flex items-center justify-between mt-2">
-                        <span className="text-[#4F46E5] font-bold text-lg">
-                          <span className="text-sm align-top mr-0.5">¥</span>
-                          {money(p.price)}
-                        </span>
-                        <Button type="link" onClick={(e) => { e.stopPropagation(); onAdd(p); }}>
-                          加购
-                        </Button>
-                      </div>
-                    }
-                  />
+                  <div className="font-medium text-sm line-clamp-1">{p.name}</div>
+                  <div className="text-[#F97316] font-bold mt-1">{money(p.price)}</div>
+                  <div className="text-xs text-slate-400 mt-0.5">已售 {p.sales_count}</div>
                 </Card>
-              </Col>
-            ))}
-          </Row>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     );
   }
 
   return (
-      <div>
-      <div className="flex items-center gap-2 mb-4">
-        <ShopOutlined className="text-[#4F46E5] text-xl" />
-        <h2 className="text-xl font-bold m-0">逛店铺</h2>
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Star className="text-amber-500" size={22} />
+        <h1 className="text-2xl font-bold">逛店铺</h1>
+        <Tag color="purple" className="ml-auto">{list.length} 家好店</Tag>
       </div>
-      {shops.length === 0 ? (
-        <EmptyState title="暂无店铺" description="成为第一个入驻的商家吧" />
+      {loading ? (
+        <div className="py-20 flex justify-center"><Spin /></div>
+      ) : list.length === 0 ? (
+        <Empty description="暂无店铺" className="py-20" />
       ) : (
-        <Row gutter={[16, 16]}>
-          {shops.map((s, i) => (
-            <Col key={s.id} xs={24} sm={12} md={8} lg={6}>
-              <Card
-                hoverable
-                className="soft-card group fade-up"
-                style={{ animationDelay: `${i * 45}ms` }}
-                onClick={() => navigate(`/shops/${s.id}`)}
-              >
-                <div className="flex items-center gap-2">
-                  <div className="w-10 h-10 rounded-full bg-[#4F46E5] flex items-center justify-center text-white">
-                    <ShopOutlined />
-                  </div>
-                  <div>
-                    <div className="font-semibold">{s.name}</div>
-                    <Tag color="cyan">{s.product_count} 件在售</Tag>
-                  </div>
-                </div>
-              </Card>
-            </Col>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {list.map((s) => (
+            <ShopCard key={s.id} shop={s} onClick={() => navigate(`/shop/${s.id}`)} />
           ))}
-        </Row>
+        </div>
       )}
     </div>
   );

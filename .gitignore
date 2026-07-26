@@ -29,6 +29,13 @@ blob-report/
 *.err
 *.out
 
+# ---- 根目录调试残留（一次性脚本/诊断输出，不纳入版本管理）----
+diag*.txt
+pytest_out.txt
+__t*.vbs
+__t*.bat
+__checklnk.ps1
+
 # ---- 编辑器 ----
 .vscode/
 .idea/

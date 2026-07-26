@@ -38,6 +38,8 @@ export interface ProductOut {
   price: Decimal;
   stock: number;
   image_url?: string | null;
+  images?: string | null;
+  specs?: string | null;
   status: ProductStatus;
   sales_count: number;
   ai_title?: string | null;
@@ -198,6 +200,106 @@ export const refreshToken = (refresh_token: string) =>
 export const logout = () => api.post("/auth/logout").then((r) => r.data);
 export const me = () => api.get<UserOut>("/auth/me").then((r) => r.data);
 
+// ---------- 首页运营内容 ----------
+export interface BannerOut {
+  id: string;
+  title: string;
+  image_url: string;
+  link_type: string;
+  link_id?: string | null;
+  link_url?: string | null;
+  sort_order: number;
+}
+export type PromotionType = "flash" | "discount" | "full_reduce";
+export interface PromotionOut {
+  id: string;
+  title: string;
+  type: PromotionType;
+  product_id?: string | null;
+  discount_price?: string | null;
+  discount_rate?: string | null;
+  start_at?: string | null;
+  end_at?: string | null;
+  product_name?: string | null;
+  product_image?: string | null;
+  original_price?: string | null;
+}
+export interface AddressOut {
+  id: string;
+  user_id: string;
+  receiver: string;
+  phone: string;
+  province: string;
+  city: string;
+  district: string;
+  detail: string;
+  is_default: boolean;
+}
+
+export const getBanners = () =>
+  api.get<BannerOut[]>("/banners").then((r) => r.data);
+export const getPromotions = (type?: PromotionType) =>
+  api
+    .get<PromotionOut[]>("/promotions", { params: type ? { type } : undefined })
+    .then((r) => r.data);
+export const myPromotions = () =>
+  api.get<PromotionOut[]>("/promotions/mine").then((r) => r.data);
+export const createPromotion = (p: {
+  title: string;
+  type: PromotionType;
+  product_id: string;
+  discount_price?: number;
+  discount_rate?: number;
+  start_at?: string;
+  end_at?: string;
+  is_active?: boolean;
+}) => api.post<PromotionOut>("/promotions", p).then((r) => r.data);
+export const deletePromotion = (id: string) =>
+  api.delete(`/promotions/${id}`).then((r) => r.data);
+
+// ---------- 买家中心：地址 / 签到 ----------
+export const listAddresses = () =>
+  api.get<AddressOut[]>("/me/addresses").then((r) => r.data);
+export const createAddress = (p: Omit<AddressOut, "id" | "user_id">) =>
+  api.post<AddressOut>("/me/addresses", p).then((r) => r.data);
+export const updateAddress = (id: string, p: Partial<Omit<AddressOut, "id" | "user_id">>) =>
+  api.put<AddressOut>(`/me/addresses/${id}`, p).then((r) => r.data);
+export const deleteAddress = (id: string) => api.delete(`/me/addresses/${id}`);
+export const signIn = () =>
+  api.post<{ signed_today: boolean; points: number; gained: number; streak?: number }>(
+    "/me/signin"
+  ).then((r) => r.data);
+
+// ---------- 积分商城 ----------
+export type RewardType = "coupon" | "virtual";
+export interface RedemptionItemOut {
+  id: string;
+  name: string;
+  description?: string | null;
+  image_url?: string | null;
+  cost_points: number;
+  type: RewardType;
+  stock: number;
+  sold: number;
+  is_active: boolean;
+}
+export interface RedemptionRecordOut {
+  id: string;
+  item_id: string;
+  item_name?: string | null;
+  cost_points: number;
+  reward?: string | null;
+  created_at: string;
+}
+export const listRewards = () =>
+  api.get<RedemptionItemOut[]>("/rewards").then((r) => r.data);
+export const redeemReward = (id: string) =>
+  api
+    .post<RedemptionRecordOut>(`/rewards/${id}/redeem`)
+    .then((r) => r.data);
+export const myRedemptions = () =>
+  api.get<RedemptionRecordOut[]>("/rewards/mine").then((r) => r.data);
+
 // ---------- 商品 ----------
 export const listProducts = (params?: {
   category_id?: string;
@@ -206,6 +308,7 @@ export const listProducts = (params?: {
   min_price?: number;
   max_price?: number;
   in_stock?: boolean;
+  merchant_id?: string;
   page?: number;
   page_size?: number;
 }) => api.get<ProductOut[]>("/products", { params }).then((r) => r.data);
@@ -303,17 +406,27 @@ export const addLogistics = (
     .post(`/orders/${orderId}/logistics`, { tracking_no, event })
     .then((r) => r.data);
 export const getLogistics = (orderId: string) =>
-  api.get<{ tracking_no?: string; events: any[] }>(`/orders/${orderId}/logistics`).then((r) => r.data);
+  api
+    .get<{ tracking_no?: string; events: LogisticsEvent[] }>(`/orders/${orderId}/logistics`)
+    .then((r) => r.data);
 
 // ---------- 店铺 ----------
-export const listShops = () =>
-  api.get<{ id: string; name: string; product_count: number }[]>("/shops").then((r) => r.data);
+export interface ShopSummary {
+  id: string;
+  name: string;
+  avatar?: string | null;
+  description?: string | null;
+  rating: number;
+  product_count: number;
+}
+export interface ShopDetail extends ShopSummary {
+  sales_total: number;
+  joined_at?: string | null;
+  products: ProductOut[];
+}
+export const listShops = () => api.get<ShopSummary[]>("/shops").then((r) => r.data);
 export const getShop = (id: string) =>
-  api
-    .get<{ id: string; name: string; product_count: number; products: ProductOut[] }>(
-      `/shops/${id}`
-    )
-    .then((r) => r.data);
+  api.get<ShopDetail>(`/shops/${id}`).then((r) => r.data);
 export const listOrders = () =>
   api.get<OrderOut[]>("/orders").then((r) => r.data);
 export const getOrder = (id: string) =>
@@ -418,9 +531,17 @@ export interface CouponCreate {
   threshold?: number | string;
   value: number | string;
   total?: number;
-  start_at?: string;
-  end_at?: string;
+  is_active?: boolean;
+  start_at?: string | null;
+  end_at?: string | null;
   merchant_id?: string;
+}
+
+/** 物流轨迹节点 */
+export interface LogisticsEvent {
+  time: string;
+  location?: string;
+  description?: string;
 }
 export const adminCoupons = () =>
   api.get<CouponOut[]>("/coupons/admin").then((r) => r.data);
@@ -529,3 +650,142 @@ export const replyTicket = (id: string, content: string) =>
   api.post<SupportTicketOut>(`/support/tickets/${id}/messages`, { content }).then((r) => r.data);
 export const closeTicket = (id: string) =>
   api.post<SupportTicketOut>(`/support/tickets/${id}/close`).then((r) => r.data);
+
+// ---------- 库存管理（商家）----------
+export interface StockLogOut {
+  id: string;
+  product_id: string;
+  product_name?: string | null;
+  change_type: string;
+  quantity: number;
+  balance_after: number;
+  remark?: string | null;
+  created_at: string;
+}
+export interface StockSummaryOut {
+  total_skus: number;
+  low_stock_count: number;
+  out_of_stock_count: number;
+  recent_changes: number;
+}
+export const inventorySummary = () =>
+  api.get<StockSummaryOut>("/inventory/summary").then((r) => r.data);
+export const inventoryLowStock = () =>
+  api.get<any[]>("/inventory/low-stock").then((r) => r.data);
+export const inventoryLogs = (productId?: string) =>
+  api
+    .get<StockLogOut[]>("/inventory/logs", {
+      params: productId ? { product_id: productId } : undefined,
+    })
+    .then((r) => r.data);
+export const adjustStock = (
+  productId: string,
+  quantity: number,
+  changeType: string,
+  remark?: string
+) =>
+  api
+    .post<StockLogOut>("/inventory/adjust", {
+      product_id: productId,
+      quantity,
+      change_type: changeType,
+      remark,
+    })
+    .then((r) => r.data);
+
+// ---------- 关注店铺 ----------
+export const followShop = (merchantId: string) =>
+  api.post(`/follow/${merchantId}`).then((r) => r.data);
+export const unfollowShop = (merchantId: string) =>
+  api.delete(`/follow/${merchantId}`).then((r) => r.data);
+export const followStatus = (merchantId: string) =>
+  api.get<{ following: boolean }>(`/follow/${merchantId}/status`).then((r) => r.data);
+export const followersCount = (merchantId: string) =>
+  api.get<{ count: number }>(`/follow/${merchantId}/count`).then((r) => r.data);
+export interface FollowShopOut {
+  merchant_id: string;
+  shop_name?: string | null;
+  shop_logo?: string | null;
+  followers_count: number;
+  created_at: string;
+}
+export const myFollowing = () =>
+  api.get<FollowShopOut[]>("/follow/following").then((r) => r.data);
+
+// ---------- 搜索增强 ----------
+export const searchHot = () => api.get<string[]>("/search/hot").then((r) => r.data);
+export const searchRecord = (q: string) =>
+  api.post(`/search/record?q=${encodeURIComponent(q)}`).then((r) => r.data);
+
+// ---------- 商品多规格 SKU ----------
+export interface VariantOut {
+  id: string;
+  product_id: string;
+  sku_code?: string | null;
+  specs: Record<string, string>;
+  price_delta: number;
+  stock: number;
+  image_url?: string | null;
+}
+export const listVariants = (productId: string) =>
+  api.get<VariantOut[]>(`/products/${productId}/variants`).then((r) => r.data);
+export const createVariant = (
+  productId: string,
+  p: { specs: Record<string, string>; stock: number; price_delta?: number; sku_code?: string; image_url?: string }
+) => api.post<VariantOut>(`/products/${productId}/variants`, p).then((r) => r.data);
+export const updateVariant = (variantId: string, p: Partial<VariantOut>) =>
+  api.patch<VariantOut>(`/products/variants/${variantId}`, p).then((r) => r.data);
+export const deleteVariant = (variantId: string) =>
+  api.delete(`/products/variants/${variantId}`);
+
+// ---------- 评价管理（商家）----------
+export interface MerchantReviewItem extends ReviewOut {
+  reply?: string | null;
+  is_pinned?: boolean;
+}
+export interface MerchantReviewPage {
+  items: MerchantReviewItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+export const merchantReviews = (params?: {
+  product_id?: string;
+  sentiment?: string;
+  page?: number;
+  page_size?: number;
+}) => api.get<MerchantReviewPage>("/products/merchant/reviews", { params }).then((r) => r.data);
+export const replyReview = (reviewId: string, content: string) =>
+  api.post<ReviewOut>(`/products/reviews/${reviewId}/reply`, { content }).then((r) => r.data);
+export const pinReview = (reviewId: string, pinned: boolean) =>
+  api.patch<ReviewOut>(`/products/reviews/${reviewId}/pin`, { pinned }).then((r) => r.data);
+export const deleteReview = (reviewId: string) =>
+  api.delete(`/products/reviews/${reviewId}`);
+export const reviewDistribution = (productId: string) =>
+  api
+    .get<{ product_id: string; total: number; average: number; distribution: Record<number, number> }>(
+      `/products/${productId}/reviews/distribution`
+    )
+    .then((r) => r.data);
+
+// ---------- 退货物流（买家）----------
+export const returnLogistics = (
+  orderId: string,
+  tracking_no: string,
+  event: { time: string; location: string; description: string }
+) => api.post(`/orders/${orderId}/return-logistics`, { tracking_no, event }).then((r) => r.data);
+
+// ---------- 部分退款 ----------
+export const requestRefundPartial = (
+  orderId: string,
+  reason: string,
+  refundAmount?: number,
+  image_urls?: string[]
+) =>
+  api
+    .post<OrderOut>(`/orders/${orderId}/refund`, {
+      reason,
+      refund_amount: refundAmount,
+      image_urls: image_urls || [],
+    })
+    .then((r) => r.data);

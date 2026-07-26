@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     FRONTEND_ORIGINS: list[str] = ["http://localhost:5173"]
     # 测试环境下关闭限流，避免影响 pytest 套件
     TESTING: bool = False
+    # 是否在启动时灌入演示数据（含弱口令演示账号）；生产环境应显式设为 False
+    SEED_DEMO: bool = True
 
     AI_API_KEY: str = ""
     AI_BASE_URL: str = "https://api.openai.com/v1"

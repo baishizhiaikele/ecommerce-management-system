@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,11 +8,12 @@ from app.models.audit import AuditLog
 from app.models.product import Product, ProductStatus
 from app.models.user import Role, User
 from app.schemas.audit import AuditLogOut
-from app.schemas.dashboard import AdminStats, TrendPoint
+from app.schemas.dashboard import AdminStats, DashboardAnalytics, TrendPoint
 from app.schemas.product import ProductOut
 from app.schemas.review import ReviewOut
 from app.schemas.user import UserOut, UserUpdate
 from app.services import dashboard_service, review_service
+from app.services.audit_service import record
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -35,6 +36,10 @@ async def update_user(
     user = await db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
+    if user.id == admin.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="不能修改自己的角色或状态"
+        )
     changes: list[str] = []
     if data.is_active is not None and data.is_active != user.is_active:
         user.is_active = data.is_active
@@ -75,6 +80,13 @@ async def trend(
     _: User = Depends(require_role(Role.ADMIN)),
 ) -> list[TrendPoint]:
     return await dashboard_service.sales_trend(db, days=days)
+
+
+@router.get("/dashboard/analytics", response_model=DashboardAnalytics)
+async def analytics(
+    db: AsyncSession = Depends(get_db), _: User = Depends(require_role(Role.ADMIN))
+) -> DashboardAnalytics:
+    return await dashboard_service.dashboard_analytics(db)
 
 
 @router.get("/reviews/negative", response_model=list[ReviewOut])

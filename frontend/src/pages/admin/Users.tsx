@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { AxiosError } from "axios";
 import { Table, Tag, message, Card, Select, Switch, Spin } from "antd";
 import EmptyState from "../../components/EmptyState";
 import { adminListUsers, adminUpdateUser, UserOut, Role } from "../../api";
@@ -25,8 +26,9 @@ export default function AdminUsers() {
       await adminUpdateUser(u.id, { is_active: !u.is_active });
       message.success("已更新");
       load();
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "操作失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "操作失败");
     }
   };
   const changeRole = async (u: UserOut, role: Role) => {
@@ -34,8 +36,9 @@ export default function AdminUsers() {
       await adminUpdateUser(u.id, { role });
       message.success("已更新");
       load();
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "操作失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "操作失败");
     }
   };
 

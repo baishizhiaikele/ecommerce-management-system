@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, Enum as SAEnum, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, Enum as SAEnum, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
@@ -25,6 +25,8 @@ class User(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     token_version = Column(Integer, default=1, nullable=False)
     points = Column(Integer, default=0, nullable=False, server_default="0")
+    avatar = Column(String(512), nullable=True)
+    description = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     products = relationship("Product", back_populates="merchant", cascade="all, delete-orphan")
@@ -35,3 +37,4 @@ class User(Base):
     user_coupons = relationship("UserCoupon", back_populates="user", cascade="all, delete-orphan")
     favorites = relationship("Favorite", back_populates="user", cascade="all, delete-orphan")
     notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
+    redemption_records = relationship("RedemptionRecord", back_populates="user", cascade="all, delete-orphan")

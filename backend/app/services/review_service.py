@@ -1,11 +1,12 @@
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.events import bus
 from app.models.order import Order, OrderItem, OrderStatus
+from app.models.product import Product
+from app.models.review import Review, Sentiment
 from app.services.audit_service import record
-from app.models.review import Review
 from app.schemas.review import ReviewCreate
 
 
@@ -48,13 +49,96 @@ async def create_review(
 
 async def list_product_reviews(db: AsyncSession, product_id: str) -> list[Review]:
     rows = await db.scalars(
-        select(Review).where(Review.product_id == product_id).order_by(Review.created_at.desc())
+        select(Review)
+        .where(Review.product_id == product_id)
+        .order_by(Review.is_pinned.desc(), Review.created_at.desc())
     )
     return list(rows)
 
 
 async def count_negative(db: AsyncSession) -> int:
-    from app.models.review import Sentiment
-
     rows = await db.scalars(select(Review).where(Review.sentiment == Sentiment.NEGATIVE))
     return len(list(rows))
+
+
+async def list_merchant_reviews(
+    db: AsyncSession,
+    *,
+    merchant_id: str,
+    product_id: str | None = None,
+    sentiment: str | None = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> tuple[list[Review], int]:
+    stmt = (
+        select(Review)
+        .join(Product, Product.id == Review.product_id)
+        .where(Product.merchant_id == merchant_id)
+    )
+    if product_id:
+        stmt = stmt.where(Review.product_id == product_id)
+    if sentiment:
+        stmt = stmt.where(Review.sentiment == Sentiment(sentiment))
+    total = int(await db.scalar(select(func.count()).select_from(stmt.subquery())) or 0)
+    stmt = stmt.order_by(Review.is_pinned.desc(), Review.created_at.desc())
+    rows = await db.scalars(stmt.offset((page - 1) * page_size).limit(page_size))
+    return list(rows), total
+
+
+async def reply_review(db: AsyncSession, *, review_id: str, merchant_id: str, content: str) -> Review:
+    review = await db.get(Review, review_id)
+    if not review:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="评价不存在")
+    product = await db.get(Product, review.product_id)
+    if not product or product.merchant_id != merchant_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权操作")
+    review.reply = content
+    await db.commit()
+    await db.refresh(review)
+    return review
+
+
+async def pin_review(db: AsyncSession, *, review_id: str, merchant_id: str, pinned: bool) -> Review:
+    review = await db.get(Review, review_id)
+    if not review:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="评价不存在")
+    product = await db.get(Product, review.product_id)
+    if not product or product.merchant_id != merchant_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权操作")
+    review.is_pinned = 1 if pinned else 0
+    await db.commit()
+    await db.refresh(review)
+    return review
+
+
+async def delete_review(db: AsyncSession, *, review_id: str, merchant_id: str | None = None) -> None:
+    review = await db.get(Review, review_id)
+    if not review:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="评价不存在")
+    if merchant_id:
+        product = await db.get(Product, review.product_id)
+        if not product or product.merchant_id != merchant_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权操作")
+    await db.delete(review)
+    await db.commit()
+
+
+async def review_distribution(db: AsyncSession, *, product_id: str) -> dict:
+    total = int(await db.scalar(select(func.count(Review.id)).where(Review.product_id == product_id)) or 0)
+    dist = {i: 0 for i in range(1, 6)}
+    if total == 0:
+        return {"product_id": product_id, "total": 0, "average": 0.0, "distribution": dist}
+    avg = await db.scalar(select(func.avg(Review.rating)).where(Review.product_id == product_id))
+    rows = await db.execute(
+        select(Review.rating, func.count(Review.id))
+        .where(Review.product_id == product_id)
+        .group_by(Review.rating)
+    )
+    for rating, cnt in rows.all():
+        dist[rating] = cnt
+    return {
+        "product_id": product_id,
+        "total": total,
+        "average": round(float(avg or 0), 2),
+        "distribution": dist,
+    }

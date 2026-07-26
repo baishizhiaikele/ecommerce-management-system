@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { AxiosError } from "axios";
 import {
   Table,
   Button,
@@ -16,6 +17,7 @@ import {
   Switch,
   Spin,
 } from "antd";
+import type { TableColumnsType } from "antd";
 import dayjs, { Dayjs } from "dayjs";
 import {
   adminCoupons,
@@ -24,6 +26,7 @@ import {
   updateCoupon,
   deleteCoupon,
   CouponOut,
+  CouponCreate,
 } from "../api";
 import { money } from "../utils/format";
 
@@ -87,7 +90,7 @@ export default function CouponManager({ mode }: { mode: "admin" | "merchant" }) 
   };
   const onSubmit = async () => {
     const v = await form.validateFields();
-    const payload: Record<string, unknown> = {
+    const payload: CouponCreate = {
       name: v.name,
       type: v.type,
       threshold: v.type === "full_reduce" ? Number(v.threshold || 0) : 0,
@@ -104,13 +107,14 @@ export default function CouponManager({ mode }: { mode: "admin" | "merchant" }) 
         await updateCoupon(editing.id, payload);
         message.success("已更新");
       } else {
-        await createCoupon(payload as any);
+        await createCoupon(payload);
         message.success("已创建");
       }
       setOpen(false);
       load();
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "操作失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "操作失败");
     } finally {
       setSaving(false);
     }
@@ -120,20 +124,22 @@ export default function CouponManager({ mode }: { mode: "admin" | "merchant" }) 
       await deleteCoupon(id);
       message.success("已下架");
       load();
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "下架失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "下架失败");
     }
   };
   const onToggleActive = async (r: CouponOut, checked: boolean) => {
     try {
       await updateCoupon(r.id, { is_active: checked });
       load();
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "操作失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "操作失败");
     }
   };
 
-  const columns = [
+  const columns: TableColumnsType<CouponOut> = [
     { title: "名称", dataIndex: "name" },
     {
       title: "范围",
@@ -184,7 +190,7 @@ export default function CouponManager({ mode }: { mode: "admin" | "merchant" }) 
           <Spin />
         </div>
       ) : (
-        <Table rowKey="id" dataSource={items} pagination={false} columns={columns as any} />
+        <Table rowKey="id" dataSource={items} pagination={false} columns={columns} />
       )}
       <Drawer
         title={editing ? "编辑优惠券" : "新建优惠券"}

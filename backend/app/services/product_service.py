@@ -4,6 +4,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.product import Product, ProductStatus
 from app.models.catalog import Category
+from app.models.review import Review
+
+
+async def _expand_category(db: AsyncSession, pid: str) -> list:
+    """展开一级分类为其自身 + 全部子类 id 列表。"""
+    all_cats = (await db.scalars(select(Category))).all()
+    children_map: dict = {}
+    for c in all_cats:
+        children_map.setdefault(c.parent_id, []).append(c.id)
+
+    def _desc(p: str) -> list:
+        ids: list = []
+        for cid in children_map.get(p, []):
+            ids.append(cid)
+            ids.extend(_desc(cid))
+        return ids
+
+    return [pid, *_desc(pid)]
 from app.schemas.product import ProductCreate, ProductStatusUpdate, ProductUpdate
 from app.services.ai_service import ai_service
 from app.services.audit_service import record
@@ -19,6 +37,7 @@ async def list_products(
     min_price: float | None = None,
     max_price: float | None = None,
     in_stock: bool = False,
+    merchant_id: str | None = None,
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[Product], int]:
@@ -28,8 +47,11 @@ async def list_products(
     base = select(Product)
     if only_active:
         base = base.where(Product.status == ProductStatus.ACTIVE)
+    if merchant_id:
+        base = base.where(Product.merchant_id == merchant_id)
     if category_id:
-        base = base.where(Product.category_id == category_id)
+        cat_ids = await _expand_category(db, category_id)
+        base = base.where(Product.category_id.in_(cat_ids))
     if keyword:
         like = f"%{keyword.strip()}%"
         base = base.where((Product.name.ilike(like)) | (Product.description.ilike(like)))
@@ -43,8 +65,10 @@ async def list_products(
     count_stmt = select(Product.id)
     if only_active:
         count_stmt = count_stmt.where(Product.status == ProductStatus.ACTIVE)
+    if merchant_id:
+        count_stmt = count_stmt.where(Product.merchant_id == merchant_id)
     if category_id:
-        count_stmt = count_stmt.where(Product.category_id == category_id)
+        count_stmt = count_stmt.where(Product.category_id.in_(cat_ids))
     if keyword:
         like = f"%{keyword.strip()}%"
         count_stmt = count_stmt.where((Product.name.ilike(like)) | (Product.description.ilike(like)))
@@ -64,6 +88,14 @@ async def list_products(
         order = Product.price.desc()
     elif sort == "sales":
         order = Product.sales_count.desc()
+    elif sort == "top_rating":
+        rating_subq = (
+            select(func.coalesce(func.avg(Review.rating), 0.0))
+            .where(Review.product_id == Product.id)
+            .correlate(Product)
+            .scalar_subquery()
+        )
+        order = rating_subq.desc()
     elif sort == "newest":
         order = Product.created_at.desc()
 

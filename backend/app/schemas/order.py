@@ -27,6 +27,8 @@ class OrderOut(BaseModel):
     status: OrderStatus
     total_amount: Decimal
     discount_amount: Decimal = Decimal("0")
+    refund_amount: Decimal = Decimal("0")
+    refund_reason: Optional[str] = None
     address: Optional[str]
     items: list[OrderItemOut]
     created_at: datetime
@@ -42,6 +44,7 @@ class OrderStatusUpdate(BaseModel):
 class RefundRequest(BaseModel):
     reason: str = Field(min_length=1, max_length=500)
     image_urls: list[str] = []
+    refund_amount: float | None = None  # 部分退款金额；留空表示退全款
 
 
 class RefundReview(BaseModel):

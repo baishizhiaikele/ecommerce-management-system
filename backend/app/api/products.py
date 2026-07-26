@@ -31,6 +31,7 @@ async def list_products(
     min_price: float | None = Query(None, ge=0),
     max_price: float | None = Query(None, ge=0),
     in_stock: bool = False,
+    merchant_id: str | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> list[Product]:
@@ -42,6 +43,7 @@ async def list_products(
         min_price=min_price,
         max_price=max_price,
         in_stock=in_stock,
+        merchant_id=merchant_id,
         page=page,
         page_size=page_size,
     )

@@ -25,6 +25,8 @@ class Review(Base):
     content = Column(Text)
     sentiment = Column(SAEnum(Sentiment), default=Sentiment.NEUTRAL)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    reply = Column(Text, nullable=True)
+    is_pinned = Column(Integer, nullable=False, default=0)
 
     user = relationship("User", back_populates="reviews")
     product = relationship("Product", back_populates="reviews")

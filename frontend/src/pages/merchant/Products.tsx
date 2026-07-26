@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { AxiosError } from "axios";
 import {
   Table,
   Button,
@@ -14,6 +15,7 @@ import {
   Card,
 } from "antd";
 import EmptyState from "../../components/EmptyState";
+import VariantManager from "../../components/VariantManager";
 import { PlusOutlined, RobotOutlined } from "@ant-design/icons";
 import {
   myProducts,
@@ -43,6 +45,7 @@ export default function MerchantProducts() {
     price_suggestion: number;
   } | null>(null);
   const [aiTarget, setAiTarget] = useState<string>("");
+  const [variantTarget, setVariantTarget] = useState<ProductOut | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -89,8 +92,9 @@ export default function MerchantProducts() {
       }
       setModalOpen(false);
       load();
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "保存失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "保存失败");
     }
   };
 
@@ -99,8 +103,9 @@ export default function MerchantProducts() {
       await deleteProduct(id);
       message.success("已删除");
       load();
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "删除失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "删除失败");
     }
   };
 
@@ -110,8 +115,9 @@ export default function MerchantProducts() {
       setAiResult(r);
       setAiTarget(id);
       setAiOpen(true);
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "生成失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "生成失败");
     }
   };
   const applyPrice = async () => {
@@ -120,8 +126,9 @@ export default function MerchantProducts() {
       message.success("已应用建议价");
       setAiOpen(false);
       load();
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "应用失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "应用失败");
     }
   };
 
@@ -141,8 +148,9 @@ export default function MerchantProducts() {
     try {
       const r = await aiMarketing(mkTarget, mkPlatform);
       setMkCopy(r.content);
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "生成失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "生成失败");
     } finally {
       setMkLoading(false);
     }
@@ -163,8 +171,9 @@ export default function MerchantProducts() {
     try {
       const r = await aiPriceAdvice(prTarget);
       setPrResult(r);
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "生成失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "生成失败");
     } finally {
       setPrLoading(false);
     }
@@ -175,8 +184,9 @@ export default function MerchantProducts() {
       message.success("已应用建议价");
       setPrOpen(false);
       load();
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "应用失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "应用失败");
     }
   };
 
@@ -230,6 +240,9 @@ export default function MerchantProducts() {
                   </Button>
                   <Button type="link" onClick={() => runPrice(r.id)}>
                     智能定价
+                  </Button>
+                  <Button type="link" onClick={() => setVariantTarget(r)}>
+                    规格管理
                   </Button>
                   <Popconfirm title="确认删除？" onConfirm={() => remove(r.id)}>
                     <Button type="link" danger>
@@ -364,6 +377,13 @@ export default function MerchantProducts() {
           <div className="text-slate-400">点击「分析建议价」获取 AI 定价建议</div>
         )}
       </Modal>
+
+      <VariantManager
+        productId={variantTarget?.id || ""}
+        productName={variantTarget?.name || ""}
+        open={!!variantTarget}
+        onClose={() => setVariantTarget(null)}
+      />
     </Card>
   );
 }

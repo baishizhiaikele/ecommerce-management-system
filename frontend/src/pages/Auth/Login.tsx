@@ -1,12 +1,20 @@
 import { useState } from "react";
+import type { AxiosError } from "axios";
 import { useNavigate } from "react-router-dom";
 import { Button, Form, Input, Segmented, message } from "antd";
 import { LockOutlined, UserOutlined, ThunderboltOutlined } from "@ant-design/icons";
-import { api } from "../../api/client";
+import { api, getErrorMessage } from "../../api/client";
 import { useAuth } from "../../store/auth";
 import { homeForRole } from "../../utils/roleRouting";
 
 type Mode = "login" | "register";
+
+interface LoginValues {
+  username?: string;
+  password?: string;
+  email?: string;
+  role?: string;
+}
 
 export default function Login() {
   const [mode, setMode] = useState<Mode>("login");
@@ -15,7 +23,7 @@ export default function Login() {
   const { setUser } = useAuth();
   const [form] = Form.useForm();
 
-  const onFinish = async (values: any) => {
+  const onFinish = async (values: LoginValues) => {
     setLoading(true);
     try {
       const url = mode === "login" ? "/auth/login" : "/auth/register";
@@ -38,8 +46,9 @@ export default function Login() {
         setMode("login");
         form.resetFields();
       }
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "操作失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(getErrorMessage(err));
     } finally {
       setLoading(false);
     }

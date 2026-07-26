@@ -3,7 +3,10 @@ from app.models.user import Role
 
 # 集中式订单状态流转矩阵：每个状态允许流转到 (目标状态, 允许触发的角色)
 ALLOWED_TRANSITIONS: dict[OrderStatus, list[tuple[OrderStatus, list[Role]]]] = {
-    OrderStatus.PENDING_PAYMENT: [(OrderStatus.PAID, [Role.BUYER])],
+    OrderStatus.PENDING_PAYMENT: [
+        (OrderStatus.PAID, [Role.BUYER]),
+        (OrderStatus.CANCELLED, [Role.BUYER, Role.ADMIN]),
+    ],
     OrderStatus.PAID: [
         (OrderStatus.SHIPPED, [Role.MERCHANT]),
         (OrderStatus.REFUND_REQUESTED, [Role.BUYER]),

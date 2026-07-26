@@ -1,7 +1,11 @@
 import hashlib
+import logging
+
 import httpx
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class AIService:
@@ -25,6 +29,7 @@ class AIService:
                 return parsed
             return self._mock_copy(name, category, note)
         except Exception:
+            logger.warning("AI 文案生成调用失败，降级为本地 mock", exc_info=True)
             return self._mock_copy(name, category, note)
 
     async def customer_reply(self, product_ctx: str, history: list[dict], question: str) -> str:
@@ -37,6 +42,7 @@ class AIService:
         try:
             return await self._chat_messages(msgs, temperature=0.4)
         except Exception:
+            logger.warning("AI 客服回复调用失败，降级为本地 mock", exc_info=True)
             return self._mock_reply(question)
 
     async def analyze_sentiment(self, text: str) -> str:
@@ -49,23 +55,25 @@ class AIService:
             result = (await self._chat(prompt, temperature=0)).strip().lower()
             return result if result in ("positive", "neutral", "negative") else "neutral"
         except Exception:
+            logger.warning("AI 情感分析调用失败，降级为本地 mock", exc_info=True)
             return self._mock_sentiment(text)
 
     async def _chat(self, prompt: str, temperature: float = 0.7) -> str:
         return await self._chat_messages([{"role": "user", "content": prompt}], temperature)
 
-    # 复用单一 AsyncClient（P5）：避免每次请求重建连接导致 TIME_WAIT 堆积与连接开销
-    _client = httpx.AsyncClient(timeout=settings.AI_TIMEOUT_SECONDS)
-
     async def _chat_messages(self, messages: list[dict], temperature: float) -> str:
         payload = {"model": settings.AI_MODEL, "messages": messages, "temperature": temperature}
-        resp = await self._client.post(
-            f"{settings.AI_BASE_URL.rstrip('/')}/chat/completions",
-            headers={"Authorization": f"Bearer {settings.AI_API_KEY}"},
-            json=payload,
-        )
-        resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
+        # P7：每次请求使用独立 AsyncClient（async with 自动关闭），
+        # 避免模块导入时在事件循环外创建 client 导致的
+        # "Event loop is closed" / DeprecationWarning，并确保连接被正确回收。
+        async with httpx.AsyncClient(timeout=settings.AI_TIMEOUT_SECONDS) as client:
+            resp = await client.post(
+                f"{settings.AI_BASE_URL.rstrip('/')}/chat/completions",
+                headers={"Authorization": f"Bearer {settings.AI_API_KEY}"},
+                json=payload,
+            )
+            resp.raise_for_status()
+            return resp.json()["choices"][0]["message"]["content"]
 
     def _parse_json(self, text: str) -> dict | None:
         import json
@@ -112,6 +120,7 @@ class AIService:
         try:
             return await self._chat(prompt, temperature=0.9)
         except Exception:
+            logger.warning("AI 营销文案调用失败，降级为本地 mock", exc_info=True)
             return self._mock_marketing(name, category, note, platform)
 
     async def price_advice(
@@ -134,6 +143,7 @@ class AIService:
                 }
             return self._mock_price(name, category, market_price)
         except Exception:
+            logger.warning("AI 定价建议调用失败，降级为本地 mock", exc_info=True)
             return self._mock_price(name, category, market_price)
 
     async def needs_human(self, message: str) -> bool:
@@ -149,6 +159,7 @@ class AIService:
             result = (await self._chat(prompt, temperature=0)).strip().lower()
             return result.startswith("yes")
         except Exception:
+            logger.warning("AI 转人工判断调用失败，降级为本地 mock", exc_info=True)
             return self._mock_needs_human(message)
 
     def _mock_sentiment(self, text: str) -> str:

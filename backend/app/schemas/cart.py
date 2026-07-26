@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 class CartItemAdd(BaseModel):
     product_id: str
     quantity: int = Field(default=1, ge=1, le=99)
+    variant_id: Optional[str] = None
 
 
 class CartItemUpdate(BaseModel):
@@ -21,3 +22,4 @@ class CartItemOut(BaseModel):
     image_url: Optional[str]
     stock: int
     quantity: int
+    variant_id: Optional[str] = None

@@ -2,7 +2,17 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, Enum as SAEnum, ForeignKey, Integer, Numeric, String
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Enum as SAEnum,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
@@ -23,6 +33,9 @@ class Coupon(Base):
     value = Column(Numeric(12, 2), nullable=False)  # 满减金额 或 折扣系数
     total = Column(Integer, default=0)   # 发行量，0 表示不限量
     issued = Column(Integer, default=0, nullable=False)
+    merchant_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
+    start_at = Column(DateTime(timezone=True), nullable=True)
+    end_at = Column(DateTime(timezone=True), nullable=True)
     expire_at = Column(DateTime(timezone=True), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
@@ -30,10 +43,11 @@ class Coupon(Base):
 
 class UserCoupon(Base):
     __tablename__ = "user_coupons"
+    __table_args__ = (UniqueConstraint("user_id", "coupon_id", name="uq_user_coupon"),)
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
-    coupon_id = Column(String(36), ForeignKey("coupons.id"), nullable=False)
+    coupon_id = Column(String(36), ForeignKey("coupons.id"), nullable=False, index=True)
     is_used = Column(Boolean, default=False, nullable=False)
     used_at = Column(DateTime(timezone=True), nullable=True)
     claimed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

@@ -4,6 +4,13 @@ import pytest
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
 
+async def _merchant_product_id(client, merchant_headers: dict) -> str:
+    me = await client.get("/api/auth/me", headers=merchant_headers)
+    mid = me.json()["id"]
+    prods = await client.get(f"/api/products?merchant_id={mid}")
+    return prods.json()[0]["id"]
+
+
 async def test_products_listing(client):
     r = await client.get("/api/products")
     assert r.status_code == 200
@@ -13,7 +20,7 @@ async def test_products_listing(client):
 
 
 async def test_ai_generate_for_merchant(client, merchant_headers):
-    pid = (await client.get("/api/products")).json()[0]["id"]
+    pid = await _merchant_product_id(client, merchant_headers)
     r = await client.post(f"/api/products/{pid}/ai-generate", json={"note": "夏季促销"}, headers=merchant_headers)
     assert r.status_code == 200, r.text
     ai = r.json()
@@ -24,7 +31,7 @@ async def test_ai_generate_for_merchant(client, merchant_headers):
 
 async def test_full_purchase_flow(client, buyer_headers, merchant_headers):
     """完整链路并断言状态机与情感评价。"""
-    pid = (await client.get("/api/products")).json()[0]["id"]
+    pid = await _merchant_product_id(client, merchant_headers)
 
     # 加购
     cart = await client.post("/api/cart/items", json={"product_id": pid, "quantity": 2}, headers=buyer_headers)

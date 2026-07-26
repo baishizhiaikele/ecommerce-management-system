@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { AxiosError } from "axios";
 import { Card, Button, Tabs, Tag, Spin, message } from "antd";
 import { GiftOutlined } from "@ant-design/icons";
 import EmptyState from "../components/EmptyState";
@@ -71,8 +72,9 @@ export default function Coupons() {
       await claimCoupon(id);
       message.success("领取成功");
       load();
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "领取失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "领取失败");
     }
   };
 

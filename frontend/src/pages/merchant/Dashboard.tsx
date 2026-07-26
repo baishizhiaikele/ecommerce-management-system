@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Row, Col, Card, Statistic, Spin, Button, message } from "antd";
+import type { AxiosError } from "axios";
+import { Row, Col, Card, Statistic, Spin, Button, message, Segmented } from "antd";
 import {
   AppstoreOutlined,
   CheckCircleOutlined,
@@ -25,16 +26,18 @@ import { money } from "../../utils/format";
 export default function MerchantDashboard() {
   const [stats, setStats] = useState<MerchantStats | null>(null);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
+  const [days, setDays] = useState<number>(7);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
-    Promise.all([merchantStats(), merchantTrend(7)])
+    setLoading(true);
+    Promise.all([merchantStats(), merchantTrend(days)])
       .then(([s, t]) => {
         setStats(s);
         setTrend(t);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [days]);
   if (loading || !stats)
     return (
       <div className="text-center py-20">
@@ -56,8 +59,9 @@ export default function MerchantDashboard() {
     try {
       await exportOrdersReport();
       message.success("报表已导出");
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "导出失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "导出失败");
     }
   };
 
@@ -90,7 +94,21 @@ export default function MerchantDashboard() {
           </Col>
         ))}
       </Row>
-      <Card title="近 7 天销售趋势" className="mt-6 soft-card fade-up">
+      <Card
+        title={`近 ${days} 天销售趋势`}
+        className="mt-6 soft-card fade-up"
+        extra={
+          <Segmented
+            value={days}
+            onChange={(v) => setDays(v as number)}
+            options={[
+              { label: "7 天", value: 7 },
+              { label: "30 天", value: 30 },
+              { label: "90 天", value: 90 },
+            ]}
+          />
+        }
+      >
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={trend.map((t) => ({ date: t.date, 金额: Number(t.amount) }))}>
             <CartesianGrid strokeDasharray="3 3" stroke="#EEF0F7" />
@@ -98,6 +116,23 @@ export default function MerchantDashboard() {
             <YAxis stroke="#94A3B8" />
             <Tooltip />
             <Line type="monotone" dataKey="金额" stroke="#4F46E5" strokeWidth={2.5} dot={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      </Card>
+
+      <Card title="客单价（AOV）趋势" className="mt-6 soft-card fade-up">
+        <ResponsiveContainer width="100%" height={260}>
+          <LineChart
+            data={trend.map((t) => ({
+              date: t.date,
+              客单价: t.orders > 0 ? Number((Number(t.amount) / t.orders).toFixed(2)) : 0,
+            }))}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="#EEF0F7" />
+            <XAxis dataKey="date" stroke="#94A3B8" />
+            <YAxis stroke="#94A3B8" />
+            <Tooltip />
+            <Line type="monotone" dataKey="客单价" stroke="#10B981" strokeWidth={2.5} dot={false} />
           </LineChart>
         </ResponsiveContainer>
       </Card>

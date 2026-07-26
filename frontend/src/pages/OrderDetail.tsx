@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { AxiosError } from "axios";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   Card,
@@ -22,6 +23,8 @@ import {
   getLogistics,
   addLogistics,
   OrderOut,
+  OrderStatus,
+  LogisticsEvent,
 } from "../api";
 import { money, orderStatusMeta, nextActions, actionLabel } from "../utils/format";
 import { useAuth } from "../store/auth";
@@ -39,7 +42,9 @@ export default function OrderDetail() {
   const [refundOpen, setRefundOpen] = useState(false);
   const [refundReason, setRefundReason] = useState("");
   const [logOpen, setLogOpen] = useState(false);
-  const [logData, setLogData] = useState<{ tracking_no?: string; events: any[] }>({ events: [] });
+  const [logData, setLogData] = useState<{ tracking_no?: string; events: LogisticsEvent[] }>({
+    events: [],
+  });
   const [logTrack, setLogTrack] = useState("");
   const [logDesc, setLogDesc] = useState("");
 
@@ -58,15 +63,16 @@ export default function OrderDetail() {
     load();
   }, [id]);
 
-  const doAction = async (status: any) => {
+  const doAction = async (status: OrderStatus) => {
     if (!order) return;
     setActing(true);
     try {
       await transitionOrder(order.id, status);
       message.success("操作成功");
       load();
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "操作失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "操作失败");
     } finally {
       setActing(false);
     }
@@ -88,8 +94,9 @@ export default function OrderDetail() {
       setContent("");
       setRating(5);
       load();
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "评价失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "评价失败");
     }
   };
 
@@ -101,8 +108,9 @@ export default function OrderDetail() {
       setRefundOpen(false);
       setRefundReason("");
       load();
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "申请失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "申请失败");
     }
   };
 
@@ -112,8 +120,9 @@ export default function OrderDetail() {
       await reviewRefund(order.id, approve);
       message.success(approve ? "已同意退款" : "已拒绝退款");
       load();
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "操作失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "操作失败");
     }
   };
 
@@ -123,8 +132,9 @@ export default function OrderDetail() {
       const d = await getLogistics(order.id);
       setLogData(d);
       setLogOpen(true);
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "获取物流失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "获取物流失败");
     }
   };
 
@@ -140,8 +150,9 @@ export default function OrderDetail() {
       setLogDesc("");
       message.success("物流已更新");
       load();
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "录入失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "录入失败");
     }
   };
 

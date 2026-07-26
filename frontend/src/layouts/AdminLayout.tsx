@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Outlet, useNavigate, Link, useLocation } from "react-router-dom";
-import { Layout, Menu, Button, Dropdown, Tooltip, Input } from "antd";
+import { Layout, Menu, Button, Dropdown, Tooltip, Input, Badge } from "antd";
 import {
   SafetyCertificateOutlined,
   BellOutlined,

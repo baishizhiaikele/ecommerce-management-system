@@ -27,6 +27,8 @@ class Product(Base):
     stock = Column(Integer, default=0, nullable=False)
     sales_count = Column(Integer, default=0, nullable=False, server_default="0")
     image_url = Column(String(512))
+    images = Column(Text)  # JSON 数组：附加图 URL 列表（首页/详情多图展示）
+    specs = Column(Text)   # JSON 对象：规格参数（品牌/材质等）
     status = Column(SAEnum(ProductStatus), default=ProductStatus.DRAFT, nullable=False)
     ai_title = Column(String(200))
     ai_copy = Column(Text)

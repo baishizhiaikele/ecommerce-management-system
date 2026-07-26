@@ -66,7 +66,8 @@ async def _on_order_refunded(order_id: str, buyer_id: str) -> None:
         order = await s.get(Order, order_id)
         if not order:
             return
-        revert = int(float(order.total_amount) * POINTS_PER_YUAN)
+        refund_amt = float(order.refund_amount or order.total_amount or 0)
+        revert = int(refund_amt * POINTS_PER_YUAN)
         if revert > 0:
             await add_points(s, buyer_id, "refund", -revert, f"订单 {order.order_no} 退款回收积分")
         await notify(

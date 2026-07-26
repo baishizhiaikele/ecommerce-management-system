@@ -1,0 +1,139 @@
+import { useEffect, useState } from "react";
+import type { AxiosError } from "axios";
+import { Card, Button, Modal, Form, Input, Switch, Popconfirm, message, Empty } from "antd";
+import { Plus, Edit, Delete, MapPin } from "lucide-react";
+import { listAddresses, createAddress, updateAddress, deleteAddress, AddressOut } from "../api";
+
+export default function AddressBook() {
+  const [list, setList] = useState<AddressOut[]>([]);
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<AddressOut | null>(null);
+  const [form] = Form.useForm();
+
+  const load = async () => {
+    try {
+      setList(await listAddresses());
+    } catch {
+      /* 忽略 */
+    }
+  };
+  useEffect(() => {
+    load();
+  }, []);
+
+  const openAdd = () => {
+    setEditing(null);
+    form.resetFields();
+    setOpen(true);
+  };
+  const openEdit = (a: AddressOut) => {
+    setEditing(a);
+    form.setFieldsValue(a);
+    setOpen(true);
+  };
+  const submit = async () => {
+    const v = await form.validateFields();
+    try {
+      if (editing) await updateAddress(editing.id, v);
+      else await createAddress(v);
+      message.success("已保存");
+      setOpen(false);
+      load();
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      if (err.response?.status !== 422) message.error(err.response?.data?.detail || "保存失败");
+    }
+  };
+  const del = async (id: string) => {
+    try {
+      await deleteAddress(id);
+      message.success("已删除");
+      load();
+    } catch {
+      message.error("删除失败");
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold m-0">收货地址</h2>
+        <Button type="primary" icon={<Plus size={16} />} onClick={openAdd}>
+          新增地址
+        </Button>
+      </div>
+
+      {list.length === 0 ? (
+        <Empty className="py-16" description="还没有收货地址" />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {list.map((a) => (
+            <Card key={a.id} className="soft-card">
+              <div className="flex items-start gap-2">
+                <MapPin className="text-[#4F46E5] mt-1" size={18} />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">{a.receiver}</span>
+                    <span className="text-slate-400 text-sm">{a.phone}</span>
+                    {a.is_default && <Tag color="green">默认</Tag>}
+                  </div>
+                  <div className="text-slate-500 text-sm mt-1">
+                    {a.province}
+                    {a.city}
+                    {a.district}
+                    {a.detail}
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 mt-3">
+                <Button size="small" icon={<Edit size={14} />} onClick={() => openEdit(a)}>
+                  编辑
+                </Button>
+                <Popconfirm title="确认删除该地址？" onConfirm={() => del(a.id)}>
+                  <Button size="small" danger icon={<Delete size={14} />}>
+                    删除
+                  </Button>
+                </Popconfirm>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <Modal
+        title={editing ? "编辑地址" : "新增地址"}
+        open={open}
+        onCancel={() => setOpen(false)}
+        onOk={submit}
+        okText="保存"
+        destroyOnClose
+      >
+        <Form form={form} layout="vertical" className="mt-4">
+          <Form.Item name="receiver" label="收货人" rules={[{ required: true, message: "请输入收货人" }]}>
+            <Input placeholder="收货人姓名" />
+          </Form.Item>
+          <Form.Item name="phone" label="手机号" rules={[{ required: true, message: "请输入手机号" }]}>
+            <Input placeholder="11 位手机号" />
+          </Form.Item>
+          <div className="grid grid-cols-3 gap-2">
+            <Form.Item name="province" label="省" rules={[{ required: true, message: "省" }]}>
+              <Input placeholder="省" />
+            </Form.Item>
+            <Form.Item name="city" label="市" rules={[{ required: true, message: "市" }]}>
+              <Input placeholder="市" />
+            </Form.Item>
+            <Form.Item name="district" label="区/县" rules={[{ required: true, message: "区" }]}>
+              <Input placeholder="区/县" />
+            </Form.Item>
+          </div>
+          <Form.Item name="detail" label="详细地址" rules={[{ required: true, message: "请输入详细地址" }]}>
+            <Input.TextArea rows={2} placeholder="街道、门牌号等" />
+          </Form.Item>
+          <Form.Item name="is_default" label="设为默认地址" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </div>
+  );
+}

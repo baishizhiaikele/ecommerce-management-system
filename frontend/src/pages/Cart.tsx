@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { AxiosError } from "axios";
 import { useNavigate } from "react-router-dom";
 import {
   Table,
@@ -65,16 +66,18 @@ export default function Cart() {
     try {
       await updateCartItem(id, q);
       load();
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "更新失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "更新失败");
     }
   };
   const remove = async (id: string) => {
     try {
       await removeCartItem(id);
       load();
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "删除失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "删除失败");
     }
   };
   const onCheckout = async () => {
@@ -91,8 +94,9 @@ export default function Cart() {
       clear();
       message.success("下单成功");
       navigate(`/orders/${order.id}`);
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "下单失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "下单失败");
     } finally {
       setSubmitting(false);
     }

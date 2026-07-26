@@ -142,6 +142,9 @@ async def request_refund(
     if order.status not in (OrderStatus.PAID, OrderStatus.SHIPPED):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="当前订单状态不可申请退款")
     order.refund_reason = data.reason
+    order.refund_amount = (
+        data.refund_amount if data.refund_amount is not None else float(order.total_amount)
+    )
     order = await order_service.transition_status(
         db, order=order, target=OrderStatus.REFUND_REQUESTED, actor_id=user.id, role="buyer"
     )
@@ -183,6 +186,30 @@ async def add_logistics(
         order.tracking_no = data.tracking_no
     trace = json.loads(order.logistics or "[]")
     trace.append(data.event.model_dump())
+    order.logistics = json.dumps(trace, ensure_ascii=False)
+    await db.commit()
+    return {"tracking_no": order.tracking_no, "events": trace}
+
+
+@router.post("/{order_id}/return-logistics", response_model=dict)
+async def return_logistics(
+    order_id: str,
+    data: LogisticsUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """买家在退款/退货中填写退货物流单号，便于商家收货后退款。"""
+    order = await order_service.get_order(db, order_id, user_id=user.id, role=user.role.value)
+    if order.status not in (OrderStatus.REFUND_REQUESTED, OrderStatus.REFUNDED):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="仅退款/退货中订单可填写退货物流"
+        )
+    trace = json.loads(order.logistics or "[]")
+    event = data.event.model_dump()
+    event["type"] = "return"
+    trace.append(event)
+    if data.tracking_no:
+        order.tracking_no = data.tracking_no
     order.logistics = json.dumps(trace, ensure_ascii=False)
     await db.commit()
     return {"tracking_no": order.tracking_no, "events": trace}

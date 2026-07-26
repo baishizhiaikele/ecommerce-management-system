@@ -16,6 +16,7 @@ class OrderStatus(str, enum.Enum):
     REFUND_REQUESTED = "refund_requested"
     REFUND_REJECTED = "refund_rejected"
     REFUNDED = "refunded"
+    CANCELLED = "cancelled"
 
 
 class Order(Base):
@@ -29,6 +30,7 @@ class Order(Base):
     discount_amount = Column(Numeric(12, 2), default=0, nullable=False, server_default="0")
     address = Column(Text)
     refund_reason = Column(Text)
+    refund_amount = Column(Numeric(12, 2), nullable=False, default=0)
     tracking_no = Column(String(60))
     logistics = Column(Text)  # JSON 字符串，物流轨迹数组
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
@@ -49,9 +51,11 @@ class OrderItem(Base):
     __tablename__ = "order_items"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    order_id = Column(String(36), ForeignKey("orders.id"), nullable=False)
-    product_id = Column(String(36), ForeignKey("products.id"), nullable=False)
+    order_id = Column(String(36), ForeignKey("orders.id"), nullable=False, index=True)
+    product_id = Column(String(36), ForeignKey("products.id"), nullable=False, index=True)
+    variant_id = Column(String(36), ForeignKey("product_variants.id"), nullable=True, index=True)
     quantity = Column(Integer, nullable=False)
     price = Column(Numeric(12, 2), nullable=False)
+    variant_info = Column(Text)
 
     order = relationship("Order", back_populates="items")

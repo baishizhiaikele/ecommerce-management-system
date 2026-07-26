@@ -45,8 +45,8 @@ npm run dev
 
 ## 角色与权限
 
-- **buyer**：浏览、搜索（排序/价格/库存）、加购、下单（优惠券+积分抵扣）、收藏、评价、积分成长、通知中心、申请退款、转人工工单、逛店铺、个性化推荐
-- **merchant**：商品管理、AI 店长、AI 营销文案（小红书/朋友圈/抖音）、AI 智能定价、发货、录入物流、客服工单、商家数据看板、订单报表 CSV 导出
+- **buyer**：浏览（热搜/搜索历史）、SKU 规格选择加购、加购、下单（优惠券+积分抵扣）、收藏、关注店铺、评价/回复、积分成长、通知中心（WebSocket 实时推送）、申请退款、转人工工单、逛店铺、促销活动专区、个性化推荐
+- **merchant**：商品管理（含多规格 SKU 管理）、库存管理（流水/低库存预警/盘点）、AI 店长、AI 营销文案（小红书/朋友圈/抖音）、AI 智能定价、营销活动创建、评价管理（回复/置顶/删除/分布）、发货、录入物流、客服工单、商家数据看板（时间范围 + 客单价趋势）、订单报表 CSV 导出
 - **admin**：商品审核、用户管理、平台仪表板、审计日志、审计可视化看板
 
 ## 接口一览（前缀 `/api`）
@@ -73,10 +73,17 @@ npm run dev
 | 积分 | GET /points/history | 积分明细；下单完成自动发放 |
 | 推荐 | GET /recommendations | 个性化「猜你喜欢」 |
 | 店铺 | GET /shops, GET /shops/{id} | 多商家店铺（Marketplace） |
+| 库存 | GET /inventory/summary, /inventory/low-stock, /inventory/logs, POST /inventory/adjust | 商家库存流水与盘点 |
+| 规格 | GET /merchant/products/{id}/variants, POST/PUT/DELETE /merchant/products/variants/... | 商品多规格 SKU |
+| 关注 | POST/DELETE /follow, GET /follow/status, /count, GET /follow/following | 关注 / 取关店铺 |
+| 搜索 | GET /search/hot, POST /search/record | 热搜词与记录 |
+| 营销 | GET /promotions, POST /promotions(商家), GET /promotions/mine, DELETE /promotions/{id} | 秒杀/折扣/满减活动 |
+| 评价管理 | GET /products/merchant/reviews, POST /reviews/{id}/reply, /pin, DELETE /reviews/{id}, GET /reviews/distribution | 商家评价运营 |
+| 实时通知 | WS /ws/notifications | WebSocket 推送未读通知 |
 | 商家 | GET /merchant/dashboard/stats, GET /merchant/products, GET /merchant/reports/orders(CSV) | 商家数据 + 报表 |
 | 管理员 | GET /admin/users, PATCH /admin/users/{id}, GET /admin/products, GET /admin/dashboard/stats, GET /admin/audit-logs, GET /admin/audit-stats | 平台管理 + 审计看板 |
 
-> 完整接口定义见 `PLAN.md` / `PLAN_ADDITIONS.md` 与运行后的 `/docs` (Swagger)。
+> 完整接口与模块规划见 `PLAN.md`，运行后访问 `/docs` 查看 Swagger。
 
 ## 部署
 

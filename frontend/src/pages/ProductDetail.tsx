@@ -1,138 +1,159 @@
-import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import {
-  Card,
+  Row,
+  Col,
   Button,
   InputNumber,
-  Spin,
   Tag,
   Divider,
-  List,
-  Rate,
-  Modal,
-  Input,
   message,
+  Spin,
+  Rate,
+  Tabs,
+  Empty,
+  Popconfirm,
+  Tooltip,
 } from "antd";
-import { HeartOutlined, HeartFilled } from "@ant-design/icons";
-import { Sparkles, MessageSquareText } from "lucide-react";
-import { useCart } from "../store/cart";
 import {
-  getProduct,
-  listProductReviews,
-  addCartItem,
-  chat,
-  createTicket,
-  isFavorited,
-  addFavorite,
-  removeFavorite,
-  ProductOut,
-  ReviewOut,
-} from "../api";
-import { money, sentimentMeta } from "../utils/format";
-import ProductImage from "../components/ProductImage";
+  ShoppingCartOutlined,
+  HeartOutlined,
+  HeartFilled,
+  RobotOutlined,
+  MessageOutlined,
+} from "@ant-design/icons";
+import { getProduct, listProductReviews, listVariants, addCartItem, type ProductOut, type ReviewOut, type VariantOut } from "../api";
+import { money, productStatusMeta } from "../utils/format";
+import { useAuth } from "../store/auth";
+import { useCart } from "../store/cart";
+import { useI18n } from "../i18n";
+import EmptyState from "../components/EmptyState";
+import ProductReviews from "../components/ProductReviews";
+import ProductChat from "../components/ProductChat";
 
 export default function ProductDetail() {
-  const { id } = useParams();
+  const { id = "" } = useParams();
   const navigate = useNavigate();
-  const add = useCart((s) => s.add);
+  const user = useAuth((s) => s.user);
+  const { t } = useI18n();
   const [p, setP] = useState<ProductOut | null>(null);
   const [reviews, setReviews] = useState<ReviewOut[]>([]);
+  const [variants, setVariants] = useState<VariantOut[]>([]);
+  const [selected, setSelected] = useState<Record<string, string>>({});
   const [qty, setQty] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [faved, setFaved] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
-  const [needsHuman, setNeedsHuman] = useState(false);
-  const [ticketOpen, setTicketOpen] = useState(false);
-  const [ticketMsg, setTicketMsg] = useState("");
-  const [msgs, setMsgs] = useState<{ role: string; content: string }[]>([]);
-  const [convId, setConvId] = useState<string>();
-  const [input, setInput] = useState("");
-  const [sending, setSending] = useState(false);
 
   const load = async () => {
-    if (!id) return;
     setLoading(true);
     try {
-      const [prod, rev] = await Promise.all([getProduct(id), listProductReviews(id)]);
+      const [prod, rv, vs] = await Promise.all([
+        getProduct(id),
+        listProductReviews(id),
+        listVariants(id).catch(() => [] as VariantOut[]),
+      ]);
       setP(prod);
-      setReviews(rev);
-      if (prod) setFaved(await isFavorited(prod.id).then((d) => d.favorited));
+      setReviews(rv);
+      setVariants(vs);
     } catch {
-      /* 忽略 */
+      message.error("加载失败");
     } finally {
       setLoading(false);
     }
   };
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  const toggleFav = async () => {
-    if (!p) return;
-    try {
-      if (faved) {
-        await removeFavorite(p.id);
-        setFaved(false);
-        message.success("已取消收藏");
-      } else {
-        await addFavorite(p.id);
-        setFaved(true);
-        message.success("已加入收藏");
+  // 由变体推导规格分组
+  const specGroups = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const v of variants) {
+      for (const [k, val] of Object.entries(v.specs || {})) {
+        if (!map.has(k)) map.set(k, []);
+        if (!map.get(k)!.includes(val)) map.get(k)!.push(val);
       }
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "操作失败");
     }
-  };
+    return Array.from(map.entries()).map(([key, values]) => ({ key, values }));
+  }, [variants]);
 
-  const onAdd = async () => {
-    if (!p) return;
+  // 默认选中第一个变体的规格组合
+  useEffect(() => {
+    if (variants.length && Object.keys(selected).length === 0) {
+      setSelected({ ...(variants[0].specs || {}) });
+    }
+  }, [variants, selected]);
+
+  // 匹配当前选中的变体
+  const matchedVariant = useMemo(() => {
+    if (!variants.length) return null;
+    return (
+      variants.find((v) =>
+        Object.entries(selected).every(([k, val]) => (v.specs || {})[k] === val)
+      ) || null
+    );
+  }, [variants, selected]);
+
+  const displayPrice = useMemo(() => {
+    const base = Number(p?.price || 0);
+    return base + (matchedVariant ? Number(matchedVariant.price_delta || 0) : 0);
+  }, [p, matchedVariant]);
+
+  const stock = matchedVariant ? matchedVariant.stock : p?.stock ?? 0;
+
+  if (loading) return <div className="text-center py-20"><Spin /></div>;
+  if (!p) return <EmptyState title="商品不存在" description="可能已下架" />;
+
+  const addToCart = async () => {
+    if (!user) {
+      message.warning("请先登录");
+      navigate("/login");
+      return;
+    }
+    if (variants.length && !matchedVariant) {
+      message.warning("请选择完整规格");
+      return;
+    }
     try {
-      await addCartItem({ product_id: p.id, quantity: qty });
-      add({
+      await addCartItem({ product_id: p.id, quantity: qty, variant_id: matchedVariant?.id });
+      useCart.getState().add({
         product_id: p.id,
         name: p.name,
-        price: Number(p.price),
+        price: displayPrice,
         quantity: qty,
-        image_url: p.image_url || undefined,
+        image_url: matchedVariant?.image_url || p.image_url,
       });
       message.success("已加入购物车");
     } catch (e: any) {
-      message.error(e.response?.data?.detail || "加入失败");
+      message.error(e?.response?.data?.detail || "加入购物车失败");
     }
   };
 
-  const sendMsg = async () => {
-    if (!input.trim() || !p) return;
-    setMsgs((m) => [...m, { role: "user", content: input }]);
-    setInput("");
-    setSending(true);
+  const buyNow = async () => {
+    if (!user) {
+      message.warning("请先登录");
+      navigate("/login");
+      return;
+    }
+    if (variants.length && !matchedVariant) {
+      message.warning("请选择完整规格");
+      return;
+    }
     try {
-      const r = await chat({ product_id: p.id, message: input, conversation_id: convId });
-      setConvId(r.conversation_id);
-      setMsgs((m) => [...m, { role: "ai", content: r.reply }]);
-      setNeedsHuman(!!r.needs_human);
+      await addCartItem({ product_id: p.id, quantity: qty, variant_id: matchedVariant?.id });
+      useCart.getState().add({
+        product_id: p.id,
+        name: p.name,
+        price: displayPrice,
+        quantity: qty,
+        image_url: matchedVariant?.image_url || p.image_url,
+      });
+      navigate("/cart");
     } catch (e: any) {
-      message.error(e.response?.data?.detail || "对话失败");
-    } finally {
-      setSending(false);
+      message.error(e?.response?.data?.detail || "下单失败");
     }
   };
-
-  const submitTicket = async () => {
-    if (!ticketMsg.trim() || !p) return;
-    try {
-      await createTicket({ product_id: p.id, message: ticketMsg, subject: `咨询：${p.name}` });
-      message.success("工单已提交，商家会尽快回复");
-      setTicketOpen(false);
-      setTicketMsg("");
-      setNeedsHuman(false);
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "提交失败");
-    }
-  };
-
-  if (loading) return <div className="text-center py-20"><Spin /></div>;
-  if (!p) return <div className="text-center py-20">商品不存在</div>;
 
   const avgRating =
     reviews.length > 0
@@ -141,143 +162,124 @@ export default function ProductDetail() {
 
   return (
     <div className="space-y-6">
-      <Button type="link" onClick={() => navigate(-1)} className="!pl-0">
-        ← 返回
-      </Button>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="rounded-3xl overflow-hidden shadow-sm border border-[#EEF0F3]">
-          <ProductImage name={p.name} image_url={p.image_url} height={360} rounded={0} />
-        </div>
-        <Card className="soft-card fade-up" styles={{ body: { padding: 24 } }}>
-          <h1 className="text-2xl font-bold tracking-tight m-0">{p.name}</h1>
-          <div className="flex items-end gap-3 my-4">
-            <div className="text-[#4F46E5] font-bold leading-none">
-              <span className="text-xl align-top mr-0.5">¥</span>
-              <span className="text-4xl">{money(p.price)}</span>
-            </div>
-            <Tag color={p.stock > 0 ? "green" : "red"} className="mb-1">
-              {p.stock > 0 ? `库存 ${p.stock}` : "缺货"}
-            </Tag>
+      <Row gutter={[32, 24]}>
+        <Col xs={24} md={10}>
+          <div className="aspect-square rounded-2xl overflow-hidden bg-slate-100 flex items-center justify-center">
+            {p.image_url ? (
+              <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
+            ) : (
+              <EmptyState title="暂无图片" />
+            )}
           </div>
-          {(p.ai_title || p.ai_copy || p.ai_price_suggestion != null) && (
-            <div className="gradient-border p-4 space-y-1.5 text-sm mb-4">
-              <div className="flex items-center gap-1.5 text-[#4F46E5] font-semibold">
-                <Sparkles size={14} /> AI 智能优化
-              </div>
-              {p.ai_title && <div className="text-slate-600">标题：{p.ai_title}</div>}
-              {p.ai_copy && <div className="text-slate-600">文案：{p.ai_copy}</div>}
-              {p.ai_price_suggestion != null && (
-                <div className="text-slate-600">建议价：¥{money(p.ai_price_suggestion)}</div>
+        </Col>
+        <Col xs={24} md={14}>
+          <h1 className="text-2xl font-extrabold text-slate-800">{p.name}</h1>
+          <div className="flex items-center gap-3 mt-2 text-slate-500 text-sm">
+            <Rate disabled allowHalf value={avgRating} style={{ fontSize: 16 }} />
+            <span>{reviews.length} 条评价</span>
+            <span>已售 {p.sales_count}</span>
+          </div>
+
+          <div className="mt-4 px-4 py-3 rounded-xl bg-[#4F46E5]/5 border border-[#4F46E5]/10">
+            <span className="text-slate-400 line-through mr-2">¥{money(Number(p.price))}</span>
+            <span className="text-3xl font-extrabold brand-gradient-text">
+              ¥{money(displayPrice)}
+            </span>
+            {matchedVariant && Number(matchedVariant.price_delta) !== 0 && (
+              <Tag color={Number(matchedVariant.price_delta) > 0 ? "red" : "green"} className="ml-2">
+                {Number(matchedVariant.price_delta) > 0 ? "+" : ""}¥{money(Number(matchedVariant.price_delta))}
+              </Tag>
+            )}
+          </div>
+
+          {/* 规格选择 */}
+          {specGroups.length > 0 && (
+            <div className="mt-4 space-y-3">
+              {specGroups.map((g) => (
+                <div key={g.key} className="flex items-start gap-3">
+                  <span className="text-slate-500 w-16 shrink-0 pt-1">{g.key}</span>
+                  <div className="flex flex-wrap gap-2">
+                    {g.values.map((val) => {
+                      const active = selected[g.key] === val;
+                      return (
+                        <Button
+                          key={val}
+                          type={active ? "primary" : "default"}
+                          shape="round"
+                          onClick={() => setSelected((s) => ({ ...s, [g.key]: val }))}
+                        >
+                          {val}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+              {matchedVariant?.sku_code && (
+                <div className="text-xs text-slate-400">SKU：{matchedVariant.sku_code}</div>
               )}
             </div>
           )}
-          <Divider className="!my-5" />
-          <div className="flex items-center gap-3 flex-wrap">
-            <InputNumber min={1} max={p.stock || 1} value={qty} onChange={(v) => setQty(v || 1)} />
-            <Button type="primary" size="large" disabled={p.stock <= 0} onClick={onAdd}>
-              加入购物车
-            </Button>
+
+          <div className="mt-4 flex items-center gap-3">
+            <span className="text-slate-500">数量</span>
+            <InputNumber min={1} max={Math.max(stock, 1)} value={qty} onChange={(v) => setQty(v || 1)} />
+            <span className="text-slate-400 text-sm">
+              库存 {stock} 件
+            </span>
+          </div>
+
+          <Divider />
+
+          <div className="flex flex-wrap gap-3">
             <Button
+              type="primary"
               size="large"
-              icon={faved ? <HeartFilled style={{ color: "#EF4444" }} /> : <HeartOutlined />}
-              onClick={toggleFav}
+              icon={<ShoppingCartOutlined />}
+              onClick={addToCart}
+              disabled={stock <= 0}
             >
-              {faved ? "已收藏" : "收藏"}
+              {t("addToCart")}
             </Button>
-            <Button size="large" icon={<MessageSquareText size={16} />} onClick={() => setChatOpen(true)}>
-              咨询 AI 客服
+            <Button size="large" onClick={buyNow} disabled={stock <= 0}>
+              {t("buyNow")}
             </Button>
+            <Tooltip title="AI 智能客服">
+              <Button size="large" icon={<RobotOutlined />} onClick={() => setChatOpen(true)}>
+                {t("askAI")}
+              </Button>
+            </Tooltip>
           </div>
-        </Card>
-      </div>
 
-      {p.description && (
-        <Card className="soft-card" styles={{ body: { padding: 20 } }}>
-          <div className="section-title"><span className="st-text">商品详情</span></div>
-          <div className="text-slate-600 whitespace-pre-wrap leading-relaxed">{p.description}</div>
-        </Card>
-      )}
-
-      <Card className="soft-card" styles={{ body: { padding: 20 } }}>
-          <div className="section-title">
-            <span className="st-text">用户评价（{reviews.length}）</span>
-            {reviews.length > 0 && (
-              <span className="ml-auto flex items-center gap-1.5 text-sm text-slate-400">
-                <Rate disabled value={avgRating} style={{ fontSize: 14 }} />
-                {avgRating.toFixed(1)}
-              </span>
-            )}
+          <div className="mt-4">
+            <Tag color={productStatusMeta[p.status].color}>{productStatusMeta[p.status].label}</Tag>
           </div>
-        <List
-          dataSource={reviews}
-          locale={{ emptyText: "暂无评价" }}
-          renderItem={(r) => (
-            <List.Item className="!px-0">
-              <div className="w-full">
-                <div className="flex items-center gap-2">
-                  <Rate disabled value={r.rating} />
-                  <Tag color={sentimentMeta[r.sentiment].color}>{sentimentMeta[r.sentiment].label}</Tag>
-                </div>
-                <div className="text-slate-600 mt-1.5">{r.content}</div>
+        </Col>
+      </Row>
+
+      <Tabs
+        defaultActiveKey="desc"
+        items={[
+          {
+            key: "desc",
+            label: "商品详情",
+            children: (
+              <div className="prose max-w-none text-slate-600 whitespace-pre-wrap py-2">
+                {p.description || "暂无描述"}
               </div>
-            </List.Item>
-          )}
-        />
-      </Card>
+            ),
+          },
+          {
+            key: "reviews",
+            label: `评价 (${reviews.length})`,
+            children: <ProductReviews productId={p.id} reviews={reviews} />,
+          },
+        ]}
+      />
 
-      <Modal title="AI 智能客服" open={chatOpen} onCancel={() => setChatOpen(false)} footer={null}>
-        <div className="h-80 overflow-auto mb-3 space-y-2">
-          {msgs.length === 0 && (
-            <div className="text-slate-400 text-center mt-10">向 AI 客服提问吧～</div>
-          )}
-          {msgs.map((m, i) => (
-            <div key={i} className={m.role === "user" ? "text-right" : "text-left"}>
-              <span
-                className={`inline-block px-3 py-2 rounded-2xl ${
-                  m.role === "user" ? "bg-[#4F46E5] text-white" : "bg-slate-100 text-slate-700"
-                }`}
-              >
-                {m.content}
-              </span>
-            </div>
-          ))}
-        </div>
-        <div className="flex gap-2">
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onPressEnter={sendMsg}
-            placeholder="输入你的问题…"
-            disabled={sending}
-          />
-          <Button type="primary" loading={sending} onClick={sendMsg}>
-            发送
-          </Button>
-        </div>
-        {needsHuman && (
-          <div className="mt-3 flex items-center justify-between rounded-xl bg-amber-50 px-3 py-2">
-            <span className="text-amber-700 text-sm">该问题建议转人工客服处理</span>
-            <Button size="small" type="primary" onClick={() => setTicketOpen(true)}>
-              提交工单
-            </Button>
-          </div>
-        )}
-      </Modal>
-
-      <Modal
-        title="提交人工客服工单"
-        open={ticketOpen}
-        onCancel={() => setTicketOpen(false)}
-        onOk={submitTicket}
-        okText="提交"
-      >
-        <Input.TextArea
-          rows={4}
-          placeholder="请描述您的问题，商家会尽快回复"
-          value={ticketMsg}
-          onChange={(e) => setTicketMsg(e.target.value)}
-        />
-      </Modal>
+      {chatOpen && (
+        <ProductChat productId={p.id} productName={p.name} onClose={() => setChatOpen(false)} />
+      )}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { AxiosError } from "axios";
 import { useNavigate } from "react-router-dom";
 import { Card, Button, Spin, Tag, Popconfirm, message } from "antd";
 import { HeartFilled, ShoppingCartOutlined } from "@ant-design/icons";
@@ -32,8 +33,9 @@ export default function Favorites() {
       await removeFavorite(id);
       setItems((s) => s.filter((p) => p.id !== id));
       message.success("已取消收藏");
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "操作失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "操作失败");
     }
   };
 
@@ -48,8 +50,9 @@ export default function Favorites() {
         image_url: p.image_url || undefined,
       });
       message.success("已加入购物车");
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || "操作失败");
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "操作失败");
     }
   };
 
