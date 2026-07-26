@@ -84,6 +84,6 @@ try/
   - 商家端：数据看板（销售额 / 订单 / 库存统计 + 7 天销售趋势图）、商品管理（CRUD + AI 店长一键生成标题 / 文案 / 定价建议）
   - 管理员端：平台仪表板、商品审核（通过 / 驳回）、用户管理（启用禁用 / 角色调整）、负面评价预警、审计日志
 
-- [x] pytest 接口测试（18 项全绿：认证 / 商城主流程 / RBAC 越权）
+- [x] pytest 接口测试（27 项全绿：认证 / 商城主流程 / RBAC 越权）
 - [x] Playwright 端到端冒烟测试（playwright.config.ts + e2e/smoke.spec.ts，覆盖鉴权重定向 / 买家 / 管理员登录）
 - [x] Docker / render.yaml 部署配置与文档（多阶段 Dockerfile + render.yaml 单服务同源托管 + README 部署章节）

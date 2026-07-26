@@ -37,6 +37,13 @@ blob-report/
 backend/*.txt
 !backend/requirements.txt
 backend/t_*.json
+backend/uploads/
+*.csv
+
+# ---- 端到端测试输出 ----
+e2e_out.txt
+e2e_test.db
+e2e_check.db
 
 # ---- 前端调试 / 测试临时输出 ----
 frontend/e2e_out.txt
@@ -46,3 +53,8 @@ frontend/*.log
 .env
 .env.*
 !.env.example
+# slowapi 的限流配置占位文件（空文件，用于在本地/CI 消除「Config file not found」警告，需纳入版本管理）
+!backend/.slowapi-placeholder.env
+
+# ---- 工具 / 本地数据（不纳入版本管理）----
+.codebuddy/
