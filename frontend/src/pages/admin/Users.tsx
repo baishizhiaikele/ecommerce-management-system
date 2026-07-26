@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Table, Tag, message, Card, Select, Switch, Spin } from "antd";
+import EmptyState from "../../components/EmptyState";
 import { adminListUsers, adminUpdateUser, UserOut, Role } from "../../api";
 
 export default function AdminUsers() {
@@ -39,7 +40,7 @@ export default function AdminUsers() {
   };
 
   return (
-    <Card title="用户管理">
+    <Card title="用户管理" className="soft-card">
       {loading ? (
         <div className="text-center py-10">
           <Spin />
@@ -49,6 +50,9 @@ export default function AdminUsers() {
           rowKey="id"
           dataSource={items}
           pagination={false}
+          locale={{
+            emptyText: <EmptyState title="暂无用户" description="平台还没有注册用户" />,
+          }}
           columns={[
             { title: "用户名", dataIndex: "username" },
             { title: "邮箱", dataIndex: "email" },

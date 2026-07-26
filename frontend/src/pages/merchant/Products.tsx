@@ -10,10 +10,10 @@ import {
   Input,
   Select,
   Popconfirm,
-  Empty,
   Spin,
   Card,
 } from "antd";
+import EmptyState from "../../components/EmptyState";
 import { PlusOutlined, RobotOutlined } from "@ant-design/icons";
 import {
   myProducts,
@@ -21,6 +21,8 @@ import {
   updateProduct,
   deleteProduct,
   aiGenerateProduct,
+  aiMarketing,
+  aiPriceAdvice,
   listCategories,
   ProductOut,
   CategoryOut,
@@ -123,6 +125,61 @@ export default function MerchantProducts() {
     }
   };
 
+  // ---- AI 营销文案 ----
+  const [mkOpen, setMkOpen] = useState(false);
+  const [mkCopy, setMkCopy] = useState("");
+  const [mkPlatform, setMkPlatform] = useState("小红书");
+  const [mkLoading, setMkLoading] = useState(false);
+  const [mkTarget, setMkTarget] = useState("");
+  const runMarketing = (id: string) => {
+    setMkTarget(id);
+    setMkCopy("");
+    setMkOpen(true);
+  };
+  const genMarketing = async () => {
+    setMkLoading(true);
+    try {
+      const r = await aiMarketing(mkTarget, mkPlatform);
+      setMkCopy(r.content);
+    } catch (e: any) {
+      message.error(e.response?.data?.detail || "生成失败");
+    } finally {
+      setMkLoading(false);
+    }
+  };
+
+  // ---- AI 智能定价 ----
+  const [prOpen, setPrOpen] = useState(false);
+  const [prResult, setPrResult] = useState<{ suggested_price: number; reason: string } | null>(null);
+  const [prLoading, setPrLoading] = useState(false);
+  const [prTarget, setPrTarget] = useState("");
+  const runPrice = (id: string) => {
+    setPrTarget(id);
+    setPrResult(null);
+    setPrOpen(true);
+  };
+  const genPrice = async () => {
+    setPrLoading(true);
+    try {
+      const r = await aiPriceAdvice(prTarget);
+      setPrResult(r);
+    } catch (e: any) {
+      message.error(e.response?.data?.detail || "生成失败");
+    } finally {
+      setPrLoading(false);
+    }
+  };
+  const applyPriceAdvice = async () => {
+    try {
+      await updateProduct(prTarget, { price: prResult!.suggested_price });
+      message.success("已应用建议价");
+      setPrOpen(false);
+      load();
+    } catch (e: any) {
+      message.error(e.response?.data?.detail || "应用失败");
+    }
+  };
+
   if (loading) return <div className="text-center py-20"><Spin /></div>;
 
   return (
@@ -135,7 +192,10 @@ export default function MerchantProducts() {
       }
     >
       {items.length === 0 ? (
-        <Empty description="还没有商品，点击右上角新建" />
+        <EmptyState
+          title="还没有商品"
+          description="点击右上角「新建商品」开始上架你的第一个商品"
+        />
       ) : (
         <Table
           rowKey="id"
@@ -164,6 +224,12 @@ export default function MerchantProducts() {
                   </Button>
                   <Button type="link" icon={<RobotOutlined />} onClick={() => runAI(r.id)}>
                     AI 店长
+                  </Button>
+                  <Button type="link" onClick={() => runMarketing(r.id)}>
+                    营销文案
+                  </Button>
+                  <Button type="link" onClick={() => runPrice(r.id)}>
+                    智能定价
                   </Button>
                   <Popconfirm title="确认删除？" onConfirm={() => remove(r.id)}>
                     <Button type="link" danger>
@@ -238,6 +304,64 @@ export default function MerchantProducts() {
               <b>建议价：</b>¥{money(aiResult.price_suggestion)}
             </div>
           </div>
+        )}
+      </Modal>
+
+      <Modal
+        title="AI 营销文案"
+        open={mkOpen}
+        onCancel={() => setMkOpen(false)}
+        footer={[
+          <Button key="gen" type="primary" loading={mkLoading} onClick={genMarketing}>
+            一键生成
+          </Button>,
+          <Button key="close" onClick={() => setMkOpen(false)}>
+            关闭
+          </Button>,
+        ]}
+      >
+        <div className="space-y-3">
+          <div>
+            <span className="text-slate-500 mr-2">投放平台</span>
+            <Select
+              value={mkPlatform}
+              style={{ width: 160 }}
+              onChange={setMkPlatform}
+              options={[
+                { value: "小红书", label: "小红书" },
+                { value: "朋友圈", label: "朋友圈" },
+                { value: "抖音", label: "抖音" },
+              ]}
+            />
+          </div>
+          {mkCopy && (
+            <div className="bg-slate-50 rounded-lg p-3 whitespace-pre-wrap text-slate-700">
+              {mkCopy}
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      <Modal
+        title="AI 智能定价"
+        open={prOpen}
+        onCancel={() => setPrOpen(false)}
+        footer={[
+          <Button key="gen" type="primary" loading={prLoading} onClick={genPrice}>
+            分析建议价
+          </Button>,
+          <Button key="apply" type="primary" disabled={!prResult} onClick={applyPriceAdvice}>
+            应用
+          </Button>,
+        ]}
+      >
+        {prResult ? (
+          <div className="space-y-2">
+            <div className="text-2xl font-bold text-[#6366F1]">¥{money(prResult.suggested_price)}</div>
+            <div className="text-slate-600">{prResult.reason}</div>
+          </div>
+        ) : (
+          <div className="text-slate-400">点击「分析建议价」获取 AI 定价建议</div>
         )}
       </Modal>
     </Card>

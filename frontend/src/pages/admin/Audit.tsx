@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Table, Card, Spin, Tag } from "antd";
+import EmptyState from "../../components/EmptyState";
 import { adminAuditLogs, AuditLogOut } from "../../api";
 
 export default function AdminAudit() {
@@ -13,11 +14,14 @@ export default function AdminAudit() {
   }, []);
   if (loading) return <div className="text-center py-10"><Spin /></div>;
   return (
-    <Card title="审计日志">
+    <Card title="审计日志" className="soft-card">
       <Table
         rowKey="id"
         dataSource={items}
         pagination={{ pageSize: 20 }}
+        locale={{
+          emptyText: <EmptyState title="暂无审计日志" description="系统关键操作记录会显示在这里" />,
+        }}
         columns={[
           {
             title: "时间",

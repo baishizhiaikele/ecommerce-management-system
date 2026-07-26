@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { List, Tag, Card, Spin, Rate, Empty, Button } from "antd";
+import { List, Tag, Card, Spin, Rate, Button } from "antd";
+import EmptyState from "../../components/EmptyState";
 import { adminNegativeReviews, ReviewOut } from "../../api";
 import { sentimentMeta } from "../../utils/format";
 import { useNavigate } from "react-router-dom";
@@ -19,7 +20,11 @@ export default function AdminReviews() {
     <Card title="负面评价预警">
       <List
         dataSource={items}
-        locale={{ emptyText: <Empty description="暂无负面评价" /> }}
+        locale={{
+          emptyText: (
+            <EmptyState title="暂无负面评价" description="当前没有需要关注的负面评价，保持得很好" />
+          ),
+        }}
         renderItem={(r) => (
           <List.Item
             actions={[

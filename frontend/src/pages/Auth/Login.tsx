@@ -12,7 +12,7 @@ export default function Login() {
   const [mode, setMode] = useState<Mode>("login");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { setTokens, setUser } = useAuth();
+  const { setUser } = useAuth();
   const [form] = Form.useForm();
 
   const onFinish = async (values: any) => {
@@ -25,7 +25,7 @@ export default function Login() {
           : { username: values.username, email: values.email, password: values.password, role: values.role || "buyer" };
       const { data } = await api.post(url, payload);
       if (mode === "login") {
-        setTokens(data.access_token, data.refresh_token);
+        // 令牌已写入 HttpOnly Cookie（S4），直接拉取当前用户
         const me = await api.get("/auth/me");
         setUser(me.data);
         navigate(homeForRole(me.data.role));
@@ -43,7 +43,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex">
-      <div className="hidden md:flex md:w-1/2 items-center justify-center bg-gradient-to-br from-[#4F46E5] via-[#6366F1] to-[#06B6D4] relative overflow-hidden">
+      <div className="hidden md:flex md:w-1/2 items-center justify-center bg-gradient-to-br from-[#6366F1] via-[#818CF8] to-[#22D3EE] relative overflow-hidden">
         <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_30%_30%,white,transparent_40%),radial-gradient(circle_at_70%_70%,white,transparent_40%)]" />
         <div className="relative text-white px-12">
           <div className="flex items-center gap-2 text-2xl font-bold mb-4">
@@ -104,7 +104,7 @@ export default function Login() {
                   />
                 </Form.Item>
               )}
-              <Button type="primary" htmlType="submit" block loading={loading} className="bg-[#4F46E5]">
+              <Button type="primary" htmlType="submit" block loading={loading} className="bg-[#6366F1]">
                 {mode === "login" ? "登录" : "注册并登录"}
               </Button>
             </Form>

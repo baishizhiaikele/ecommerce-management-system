@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Table, Button, Tag, message, Card, Select, Popconfirm, Spin } from "antd";
+import EmptyState from "../../components/EmptyState";
 import { adminListProducts, setProductStatus, ProductOut, ProductStatus } from "../../api";
 import { money, productStatusMeta } from "../../utils/format";
 
@@ -43,6 +44,7 @@ export default function AdminProducts() {
   return (
     <Card
       title="商品审核"
+      className="soft-card"
       extra={
         <Select
           value={filter}
@@ -67,6 +69,14 @@ export default function AdminProducts() {
           rowKey="id"
           dataSource={items}
           pagination={false}
+          locale={{
+            emptyText: (
+              <EmptyState
+                title="暂无商品"
+                description="切换上方筛选条件，或等待商家提交新的待审商品"
+              />
+            ),
+          }}
           columns={[
             { title: "名称", dataIndex: "name" },
             { title: "价格", dataIndex: "price", render: (v) => `¥${money(v)}` },

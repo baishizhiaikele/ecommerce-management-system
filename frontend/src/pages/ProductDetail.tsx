@@ -13,8 +13,20 @@ import {
   Input,
   message,
 } from "antd";
+import { HeartOutlined, HeartFilled } from "@ant-design/icons";
 import { useCart } from "../store/cart";
-import { getProduct, listProductReviews, addCartItem, chat, ProductOut, ReviewOut } from "../api";
+import {
+  getProduct,
+  listProductReviews,
+  addCartItem,
+  chat,
+  createTicket,
+  isFavorited,
+  addFavorite,
+  removeFavorite,
+  ProductOut,
+  ReviewOut,
+} from "../api";
 import { money, sentimentMeta } from "../utils/format";
 
 export default function ProductDetail() {
@@ -25,7 +37,11 @@ export default function ProductDetail() {
   const [reviews, setReviews] = useState<ReviewOut[]>([]);
   const [qty, setQty] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [faved, setFaved] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [needsHuman, setNeedsHuman] = useState(false);
+  const [ticketOpen, setTicketOpen] = useState(false);
+  const [ticketMsg, setTicketMsg] = useState("");
   const [msgs, setMsgs] = useState<{ role: string; content: string }[]>([]);
   const [convId, setConvId] = useState<string>();
   const [input, setInput] = useState("");
@@ -38,6 +54,7 @@ export default function ProductDetail() {
       const [prod, rev] = await Promise.all([getProduct(id), listProductReviews(id)]);
       setP(prod);
       setReviews(rev);
+      if (prod) setFaved(await isFavorited(prod.id).then((d) => d.favorited));
     } catch {
       /* 忽略 */
     } finally {
@@ -47,6 +64,23 @@ export default function ProductDetail() {
   useEffect(() => {
     load();
   }, [id]);
+
+  const toggleFav = async () => {
+    if (!p) return;
+    try {
+      if (faved) {
+        await removeFavorite(p.id);
+        setFaved(false);
+        message.success("已取消收藏");
+      } else {
+        await addFavorite(p.id);
+        setFaved(true);
+        message.success("已加入收藏");
+      }
+    } catch (e: any) {
+      message.error(e.response?.data?.detail || "操作失败");
+    }
+  };
 
   const onAdd = async () => {
     if (!p) return;
@@ -74,10 +108,24 @@ export default function ProductDetail() {
       const r = await chat({ product_id: p.id, message: input, conversation_id: convId });
       setConvId(r.conversation_id);
       setMsgs((m) => [...m, { role: "ai", content: r.reply }]);
+      setNeedsHuman(!!r.needs_human);
     } catch (e: any) {
       message.error(e.response?.data?.detail || "对话失败");
     } finally {
       setSending(false);
+    }
+  };
+
+  const submitTicket = async () => {
+    if (!ticketMsg.trim() || !p) return;
+    try {
+      await createTicket({ product_id: p.id, message: ticketMsg, subject: `咨询：${p.name}` });
+      message.success("工单已提交，商家会尽快回复");
+      setTicketOpen(false);
+      setTicketMsg("");
+      setNeedsHuman(false);
+    } catch (e: any) {
+      message.error(e.response?.data?.detail || "提交失败");
     }
   };
 
@@ -90,24 +138,39 @@ export default function ProductDetail() {
         ← 返回
       </Button>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-2">
-        <div className="h-72 rounded-2xl bg-gradient-to-br from-indigo-100 to-cyan-100 flex items-center justify-center text-6xl">
+        <div className="h-72 rounded-2xl bg-gradient-to-br from-[#EEF0FF] to-[#E6FBFF] shadow-sm flex items-center justify-center text-6xl transition-transform duration-300 hover:scale-[1.03]">
           🛍️
         </div>
-        <div>
-          <h1 className="text-2xl font-bold">{p.name}</h1>
-          <div className="text-3xl font-bold text-[#4F46E5] my-3">¥{money(p.price)}</div>
-          <Tag color={p.stock > 0 ? "green" : "red"}>
-            {p.stock > 0 ? `库存 ${p.stock}` : "缺货"}
-          </Tag>
-          {p.ai_title && <div className="mt-3 text-slate-600">AI 标题：{p.ai_title}</div>}
-          {p.ai_copy && <div className="mt-1 text-slate-600">AI 文案：{p.ai_copy}</div>}
-          {p.ai_price_suggestion != null && (
-            <div className="mt-1 text-slate-600">AI 建议价：¥{money(p.ai_price_suggestion)}</div>
+        <div className="fade-up">
+          <h1 className="text-2xl font-bold tracking-tight">{p.name}</h1>
+          <div className="flex items-end gap-3 my-3">
+            <div className="text-[#6366F1] font-bold leading-none">
+              <span className="text-xl align-top mr-0.5">¥</span>
+              <span className="text-4xl">{money(p.price)}</span>
+            </div>
+            <Tag color={p.stock > 0 ? "green" : "red"} className="mb-1">
+              {p.stock > 0 ? `库存 ${p.stock}` : "缺货"}
+            </Tag>
+          </div>
+          {(p.ai_title || p.ai_copy || p.ai_price_suggestion != null) && (
+            <div className="bg-[#F7F8FC] rounded-xl p-3 space-y-1 text-sm">
+              {p.ai_title && <div className="text-slate-600">AI 标题：{p.ai_title}</div>}
+              {p.ai_copy && <div className="text-slate-600">AI 文案：{p.ai_copy}</div>}
+              {p.ai_price_suggestion != null && (
+                <div className="text-slate-600">AI 建议价：¥{money(p.ai_price_suggestion)}</div>
+              )}
+            </div>
           )}
-          <div className="mt-4 flex items-center gap-3">
+          <div className="mt-5 flex items-center gap-3 flex-wrap">
             <InputNumber min={1} max={p.stock || 1} value={qty} onChange={(v) => setQty(v || 1)} />
             <Button type="primary" disabled={p.stock <= 0} onClick={onAdd}>
               加入购物车
+            </Button>
+            <Button
+              icon={faved ? <HeartFilled style={{ color: "#EF4444" }} /> : <HeartOutlined />}
+              onClick={toggleFav}
+            >
+              {faved ? "已收藏" : "收藏"}
             </Button>
             <Button onClick={() => setChatOpen(true)}>咨询 AI 客服</Button>
           </div>
@@ -115,7 +178,7 @@ export default function ProductDetail() {
       </div>
 
       {p.description && <Divider />}
-      {p.description && <div className="text-slate-600 whitespace-pre-wrap">{p.description}</div>}
+      {p.description && <div className="bg-[#F7F8FC] rounded-xl p-4 text-slate-600 whitespace-pre-wrap">{p.description}</div>}
 
       <Divider orientation="left">用户评价</Divider>
       <List
@@ -144,7 +207,7 @@ export default function ProductDetail() {
               <span
                 className={`inline-block px-3 py-2 rounded-2xl ${
                   m.role === "user"
-                    ? "bg-[#4F46E5] text-white"
+                    ? "bg-[#6366F1] text-white"
                     : "bg-slate-100 text-slate-700"
                 }`}
               >
@@ -165,6 +228,29 @@ export default function ProductDetail() {
             发送
           </Button>
         </div>
+        {needsHuman && (
+          <div className="mt-3 flex items-center justify-between rounded-xl bg-amber-50 px-3 py-2">
+            <span className="text-amber-700 text-sm">该问题建议转人工客服处理</span>
+            <Button size="small" type="primary" onClick={() => setTicketOpen(true)}>
+              提交工单
+            </Button>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        title="提交人工客服工单"
+        open={ticketOpen}
+        onCancel={() => setTicketOpen(false)}
+        onOk={submitTicket}
+        okText="提交"
+      >
+        <Input.TextArea
+          rows={4}
+          placeholder="请描述您的问题，商家会尽快回复"
+          value={ticketMsg}
+          onChange={(e) => setTicketMsg(e.target.value)}
+        />
       </Modal>
     </div>
   );
