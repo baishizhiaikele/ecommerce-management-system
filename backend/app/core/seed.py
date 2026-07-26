@@ -3,6 +3,7 @@ from sqlalchemy import select
 from app.core.security import hash_password
 from app.db.session import SessionLocal
 from app.models.catalog import Category
+from app.models.coupon import Coupon, CouponType, UserCoupon
 from app.models.product import Product, ProductStatus
 from app.models.user import Role, User
 
@@ -66,4 +67,24 @@ async def seed_demo() -> None:
                     status=ProductStatus.ACTIVE,
                 )
             )
+
+        # 演示优惠券：新人满 100 减 20
+        coupon = Coupon(
+            name="新人专享券（满100减20）",
+            type=CouponType.FULL_REDUCE,
+            threshold=100,
+            value=20,
+            total=100,
+        )
+        db.add(coupon)
+        await db.flush()
+        db.add(UserCoupon(user_id=users["buyer"].id, coupon_id=coupon.id))
+
         await db.commit()
+
+
+if __name__ == "__main__":
+    import asyncio
+
+    asyncio.run(seed_demo())
+    print("种子数据写入完成")

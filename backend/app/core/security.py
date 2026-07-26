@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 
+from fastapi import Response
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
@@ -50,3 +51,26 @@ def is_token_type(token: str, expected: str) -> bool:
         return payload.get("type") == expected
     except JWTError:
         return False
+
+
+def set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
+    """将令牌写入 HttpOnly Cookie（S4）：降低 XSS 直接盗用风险。"""
+    secure = bool(settings.FRONTEND_ORIGINS and settings.FRONTEND_ORIGINS[0].startswith("https"))
+    common = {"httponly": True, "samesite": "lax", "secure": secure, "path": "/"}
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        **common,
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+        **common,
+    )
+
+
+def clear_auth_cookies(response: Response) -> None:
+    for key in ("access_token", "refresh_token"):
+        response.delete_cookie(key, path="/")

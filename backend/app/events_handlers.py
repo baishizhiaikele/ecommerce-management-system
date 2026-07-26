@@ -1,9 +1,14 @@
 from app.db.session import SessionLocal
 from app.events import bus
+from app.models.notification import Notification, NotificationType
+from app.models.order import Order
 from app.models.product import Product
 from app.models.review import Review, Sentiment
+from app.models.user import User
 from app.services.ai_service import ai_service
 from app.services.audit_service import record
+from app.services.notification_service import notify
+from app.services.points_service import POINTS_PER_YUAN, add_points
 
 
 async def _on_review_created(review_id: str) -> None:
@@ -14,6 +19,18 @@ async def _on_review_created(review_id: str) -> None:
         label = await ai_service.analyze_sentiment(review.content)
         review.sentiment = Sentiment(label)
         await record(s, None, "review.sentiment", "review", review.id, label)
+        # 差评预警：通知商家
+        if label == "negative":
+            product = await s.get(Product, review.product_id)
+            if product:
+                await notify(
+                    s,
+                    product.merchant_id,
+                    NotificationType.REVIEW_ALERT,
+                    "收到差评预警",
+                    f"商品「{product.name}」出现差评，请及时关注并处理。",
+                    review.id,
+                )
         await s.commit()
 
 
@@ -25,6 +42,60 @@ async def _on_product_out_of_stock(product_id: str) -> None:
         await s.commit()
 
 
+async def _on_order_completed(order_id: str, buyer_id: str) -> None:
+    async with SessionLocal() as s:
+        order = await s.get(Order, order_id)
+        if not order:
+            return
+        earned = int(float(order.total_amount) * POINTS_PER_YUAN)
+        if earned > 0:
+            await add_points(s, buyer_id, "order_complete", earned, f"订单 {order.order_no} 完成奖励")
+        await notify(
+            s,
+            buyer_id,
+            NotificationType.POINTS,
+            "订单已完成",
+            f"订单 {order.order_no} 交易完成，获得 {earned} 积分，期待您的评价～",
+            order.id,
+        )
+        await s.commit()
+
+
+async def _on_order_refunded(order_id: str, buyer_id: str) -> None:
+    async with SessionLocal() as s:
+        order = await s.get(Order, order_id)
+        if not order:
+            return
+        revert = int(float(order.total_amount) * POINTS_PER_YUAN)
+        if revert > 0:
+            await add_points(s, buyer_id, "refund", -revert, f"订单 {order.order_no} 退款回收积分")
+        await notify(
+            s,
+            buyer_id,
+            NotificationType.ORDER,
+            "退款已处理",
+            f"订单 {order.order_no} 的退款已完成。",
+            order.id,
+        )
+        await s.commit()
+
+
+async def _on_coupon_claimed(user_id: str, coupon_id: str) -> None:
+    async with SessionLocal() as s:
+        await notify(
+            s,
+            user_id,
+            NotificationType.COUPON,
+            "优惠券到账",
+            "您领取的优惠券已存入「我的卡券」，结算时可用。",
+            coupon_id,
+        )
+        await s.commit()
+
+
 def register_handlers() -> None:
     bus.subscribe("review.created", _on_review_created)
     bus.subscribe("product.out_of_stock", _on_product_out_of_stock)
+    bus.subscribe("order.completed", _on_order_completed)
+    bus.subscribe("order.refunded", _on_order_refunded)
+    bus.subscribe("coupon.claimed", _on_coupon_claimed)

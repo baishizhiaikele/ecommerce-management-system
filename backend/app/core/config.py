@@ -1,3 +1,4 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -7,11 +8,17 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "AI 全托管小店"
     API_V1_PREFIX: str = "/api"
     DATABASE_URL: str = "sqlite+aiosqlite:///./ai_shop.db"
-    SECRET_KEY: str = "dev-secret-change-me"
+    # 安全（S1）：不再提供弱默认密钥；生产必须通过环境变量注入，缺失则在启动时失败
+    SECRET_KEY: str = Field(
+        ...,
+        description="JWT 签名密钥，生产环境必须通过环境变量注入，禁止使用弱默认值",
+    )
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     FRONTEND_ORIGINS: list[str] = ["http://localhost:5173"]
+    # 测试环境下关闭限流，避免影响 pytest 套件
+    TESTING: bool = False
 
     AI_API_KEY: str = ""
     AI_BASE_URL: str = "https://api.openai.com/v1"

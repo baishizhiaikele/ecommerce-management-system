@@ -8,8 +8,18 @@ ALLOWED_TRANSITIONS: dict[OrderStatus, list[tuple[OrderStatus, list[Role]]]] = {
         (OrderStatus.SHIPPED, [Role.MERCHANT]),
         (OrderStatus.REFUND_REQUESTED, [Role.BUYER]),
     ],
-    OrderStatus.SHIPPED: [(OrderStatus.COMPLETED, [Role.BUYER])],
-    OrderStatus.REFUND_REQUESTED: [(OrderStatus.REFUNDED, [Role.MERCHANT, Role.ADMIN])],
+    OrderStatus.SHIPPED: [
+        (OrderStatus.COMPLETED, [Role.BUYER]),
+        (OrderStatus.REFUND_REQUESTED, [Role.BUYER]),
+    ],
+    OrderStatus.REFUND_REQUESTED: [
+        (OrderStatus.REFUNDED, [Role.MERCHANT, Role.ADMIN]),
+        (OrderStatus.REFUND_REJECTED, [Role.MERCHANT, Role.ADMIN]),
+    ],
+    OrderStatus.REFUND_REJECTED: [
+        (OrderStatus.REFUND_REQUESTED, [Role.BUYER]),
+        (OrderStatus.COMPLETED, [Role.BUYER]),
+    ],
 }
 
 
