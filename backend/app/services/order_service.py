@@ -18,6 +18,7 @@ from app.services.audit_service import record
 from app.services.coupon_service import compute_discount, find_usable_user_coupon, use_coupon
 from app.services.inventory_service import record_cancel_return, record_sale
 from app.services.points_service import POINTS_REDEEM_RATE, add_points
+from app.services.shipping_service import compute_freight
 from app.events import bus
 
 
@@ -67,6 +68,7 @@ async def checkout(
     pmap = {p.id: p for p in locked}
 
     total = 0.0
+    merchant_subtotals: dict[str, float] = {}
     out_of_stock: list[str] = []
     for item in cart_rows:
         product = pmap.get(item.product_id)
@@ -99,6 +101,9 @@ async def checkout(
         if product.stock == 0:
             out_of_stock.append(product.id)
         total += unit_price * item.quantity
+        merchant_subtotals[product.merchant_id] = (
+            merchant_subtotals.get(product.merchant_id, 0.0) + unit_price * item.quantity
+        )
         variant_info = None
         if variant is not None:
             variant_info = json.dumps(
@@ -133,7 +138,14 @@ async def checkout(
             discount += points_used / POINTS_REDEEM_RATE
             await add_points(db, buyer.id, PointAction.REDEEM, -points_used, "下单积分抵扣")
 
-    order.total_amount = round(max(subtotal - discount, 0.0), 2)
+    # 运费：按各商家默认模板分别计运费后累加（无模板则包邮）
+    freight = 0.0
+    for mid, msub in merchant_subtotals.items():
+        freight += await compute_freight(db, mid, msub)
+    freight = round(freight, 2)
+
+    order.freight = freight
+    order.total_amount = round(max(subtotal - discount, 0.0) + freight, 2)
     order.discount_amount = round(discount, 2)
     for item in cart_rows:
         await db.delete(item)

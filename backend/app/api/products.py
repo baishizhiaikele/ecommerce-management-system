@@ -1,6 +1,9 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import hashlib
+import json
+
 from app.core.deps import get_merchant_product, require_role
 from app.db.session import get_db
 from app.models.product import Product
@@ -18,6 +21,7 @@ from app.schemas.product import (
     ProductUpdate,
 )
 from app.services import product_service
+from app.core.cache import cache_get, cache_set, cache_delete_prefix
 
 router = APIRouter(prefix="/products", tags=["products"])
 
@@ -35,6 +39,23 @@ async def list_products(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> list[Product]:
+    raw_params = {
+        "category_id": category_id,
+        "keyword": keyword,
+        "sort": sort,
+        "min_price": min_price,
+        "max_price": max_price,
+        "in_stock": in_stock,
+        "merchant_id": merchant_id,
+        "page": page,
+        "page_size": page_size,
+    }
+    cache_key = "products:list:" + hashlib.md5(
+        json.dumps(raw_params, sort_keys=True, default=str).encode()
+    ).hexdigest()
+    cached = await cache_get(cache_key)
+    if cached is not None:
+        return cached
     items, _ = await product_service.list_products(
         db,
         category_id=category_id,
@@ -47,12 +68,18 @@ async def list_products(
         page=page,
         page_size=page_size,
     )
+    await cache_set(cache_key, [ProductOut.model_validate(it).model_dump() for it in items], ttl=60)
     return items
 
 
 @router.get("/{product_id}", response_model=ProductOut)
 async def get_product(product_id: str, db: AsyncSession = Depends(get_db)) -> Product:
-    return await product_service.get_product(db, product_id)
+    cached = await cache_get(f"products:detail:{product_id}")
+    if cached is not None:
+        return cached
+    product = await product_service.get_product(db, product_id)
+    await cache_set(f"products:detail:{product_id}", ProductOut.model_validate(product).model_dump(), ttl=60)
+    return product
 
 
 @router.post("", response_model=ProductOut, status_code=201)
@@ -61,7 +88,9 @@ async def create_product(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role(Role.MERCHANT)),
 ) -> Product:
-    return await product_service.create_product(db, merchant_id=user.id, data=data)
+    product = await product_service.create_product(db, merchant_id=user.id, data=data)
+    await cache_delete_prefix("products:")
+    return product
 
 
 @router.put("/{product_id}", response_model=ProductOut)
@@ -72,9 +101,11 @@ async def update_product(
     user: User = Depends(require_role(Role.MERCHANT)),
 ) -> Product:
     product = await product_service.get_product(db, product_id)
-    return await product_service.update_product(
+    product = await product_service.update_product(
         db, product=product, merchant_id=user.id, data=data
     )
+    await cache_delete_prefix("products:")
+    return product
 
 
 @router.delete("/{product_id}", status_code=204)
@@ -85,6 +116,7 @@ async def delete_product(
 ) -> None:
     product = await product_service.get_product(db, product_id)
     await product_service.delete_product(db, product=product, merchant_id=user.id)
+    await cache_delete_prefix("products:")
 
 
 @router.post("/{product_id}/ai-generate", response_model=AIGenerateResult)
@@ -106,7 +138,9 @@ async def set_status(
     user: User = Depends(require_role(Role.ADMIN)),
 ) -> Product:
     product = await product_service.get_product(db, product_id)
-    return await product_service.set_status(db, product=product, admin_id=user.id, data=data)
+    product = await product_service.set_status(db, product=product, admin_id=user.id, data=data)
+    await cache_delete_prefix("products:")
+    return product
 
 
 @router.post("/{product_id}/ai-marketing", response_model=MarketingResult)

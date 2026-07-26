@@ -7,14 +7,20 @@ from app.db.session import get_db
 from app.models.catalog import Category
 from app.models.user import Role, User
 from app.schemas.product import CategoryCreate, CategoryOut
+from app.core.cache import cache_get, cache_set, cache_delete
 
 router = APIRouter(prefix="/categories", tags=["categories"])
 
 
 @router.get("", response_model=list[CategoryOut])
 async def list_categories(db: AsyncSession = Depends(get_db)) -> list[Category]:
+    cached = await cache_get("categories:list")
+    if cached is not None:
+        return cached
     rows = await db.scalars(select(Category).order_by(Category.name))
-    return list(rows)
+    rows = list(rows)
+    await cache_set("categories:list", [CategoryOut.model_validate(r).model_dump() for r in rows], ttl=300)
+    return rows
 
 
 @router.post("", response_model=CategoryOut, status_code=201)
@@ -31,4 +37,5 @@ async def create_category(
     db.add(category)
     await db.commit()
     await db.refresh(category)
+    await cache_delete("categories:list")
     return category

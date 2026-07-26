@@ -27,6 +27,7 @@ class OrderOut(BaseModel):
     status: OrderStatus
     total_amount: Decimal
     discount_amount: Decimal = Decimal("0")
+    freight: Decimal = Decimal("0")
     refund_amount: Decimal = Decimal("0")
     refund_reason: Optional[str] = None
     address: Optional[str]

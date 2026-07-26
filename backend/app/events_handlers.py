@@ -7,6 +7,7 @@ from app.models.review import Review, Sentiment
 from app.models.user import User
 from app.services.ai_service import ai_service
 from app.services.audit_service import record
+from app.services.favorite_service import list_user_ids_by_product
 from app.services.notification_service import notify
 from app.services.points_service import POINTS_PER_YUAN, add_points
 
@@ -94,9 +95,28 @@ async def _on_coupon_claimed(user_id: str, coupon_id: str) -> None:
         await s.commit()
 
 
+async def _on_product_price_changed(product_id: str, old_price: float, new_price: float) -> None:
+    async with SessionLocal() as s:
+        product = await s.get(Product, product_id)
+        if not product:
+            return
+        user_ids = await list_user_ids_by_product(s, product_id)
+        for uid in user_ids:
+            await notify(
+                s,
+                uid,
+                NotificationType.PRICE_DROP,
+                "降价提醒",
+                f"您收藏的商品「{product.name}」降价啦：¥{old_price:.2f} → ¥{new_price:.2f}",
+                product.id,
+            )
+        await s.commit()
+
+
 def register_handlers() -> None:
     bus.subscribe("review.created", _on_review_created)
     bus.subscribe("product.out_of_stock", _on_product_out_of_stock)
     bus.subscribe("order.completed", _on_order_completed)
     bus.subscribe("order.refunded", _on_order_refunded)
     bus.subscribe("coupon.claimed", _on_coupon_claimed)
+    bus.subscribe("product.price_changed", _on_product_price_changed)

@@ -40,6 +40,7 @@ from app.api.shops import router as shops_router
 from app.api.support import router as support_router
 from app.api.upload import UPLOAD_DIR
 from app.api.ws import router as ws_router
+from app.api.shipping import router as shipping_router
 from app.core.config import settings
 from app.core.seed import seed_demo
 from app.events_handlers import register_handlers
@@ -156,6 +157,7 @@ app.include_router(search_router, prefix=settings.API_V1_PREFIX)
 app.include_router(variant_router, prefix=settings.API_V1_PREFIX)
 app.include_router(follow_router, prefix=settings.API_V1_PREFIX)
 app.include_router(ws_router, prefix=settings.API_V1_PREFIX)
+app.include_router(shipping_router, prefix=settings.API_V1_PREFIX)
 
 
 # ---- 上传文件静态服务（开发/生产均生效）----

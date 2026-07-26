@@ -28,6 +28,7 @@ class Order(Base):
     status = Column(SAEnum(OrderStatus), default=OrderStatus.PENDING_PAYMENT, nullable=False)
     total_amount = Column(Numeric(12, 2), nullable=False, default=0)
     discount_amount = Column(Numeric(12, 2), default=0, nullable=False, server_default="0")
+    freight = Column(Numeric(12, 2), default=0, nullable=False, server_default="0")
     address = Column(Text)
     refund_reason = Column(Text)
     refund_amount = Column(Numeric(12, 2), nullable=False, default=0)

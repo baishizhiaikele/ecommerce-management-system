@@ -23,6 +23,7 @@ async def _expand_category(db: AsyncSession, pid: str) -> list:
 
     return [pid, *_desc(pid)]
 from app.schemas.product import ProductCreate, ProductStatusUpdate, ProductUpdate
+from app.events import bus
 from app.services.ai_service import ai_service
 from app.services.audit_service import record
 
@@ -137,11 +138,21 @@ async def update_product(
 ) -> Product:
     if product.merchant_id != merchant_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="只能修改自己的商品")
-    for field, value in data.model_dump(exclude_unset=True).items():
+    raw = data.model_dump(exclude_unset=True)
+    old_price = product.price
+    for field, value in raw.items():
         setattr(product, field, value)
     await record(db, merchant_id, "product.update", "product", product.id, product.name)
     await db.commit()
     await db.refresh(product)
+    # 降价提醒：价格下降时发布事件，由事件总线通知收藏该商品的用户
+    if "price" in raw and product.price < old_price:
+        await bus.publish(
+            "product.price_changed",
+            product_id=product.id,
+            old_price=old_price,
+            new_price=product.price,
+        )
     return product
 
 

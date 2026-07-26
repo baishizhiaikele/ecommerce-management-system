@@ -52,3 +52,11 @@ async def is_favorited(db: AsyncSession, user_id: str, product_id: str) -> bool:
         )
     )
     return fav is not None
+
+
+async def list_user_ids_by_product(db: AsyncSession, product_id: str) -> list[str]:
+    """返回收藏了某商品的所有用户 id（用于降价等事件通知）。"""
+    rows = await db.scalars(
+        select(Favorite.user_id).where(Favorite.product_id == product_id)
+    )
+    return list(rows)

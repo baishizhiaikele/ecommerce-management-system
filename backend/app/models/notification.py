@@ -13,6 +13,7 @@ class NotificationType(str, enum.Enum):
     COUPON = "coupon"
     POINTS = "points"
     REVIEW_ALERT = "review_alert"
+    PRICE_DROP = "price_drop"
     SYSTEM = "system"
 
 

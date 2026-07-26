@@ -3,6 +3,7 @@ from app.models.catalog import Category
 from app.models.content import Address, Banner, Promotion
 from app.models.product import Product, ProductStatus
 from app.models.reward import RedemptionItem, RedemptionRecord
+from app.models.shipping import ShippingTemplate
 from app.models.order import Order, OrderItem, OrderStatus
 from app.models.cart import CartItem
 from app.models.review import Review, Sentiment
@@ -26,6 +27,7 @@ __all__ = [
     "Address",
     "RedemptionItem",
     "RedemptionRecord",
+    "ShippingTemplate",
     "Product",
     "ProductStatus",
     "Order",
