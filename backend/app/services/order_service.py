@@ -9,8 +9,12 @@ from app.models.cart import CartItem
 from app.models.order import Order, OrderItem, OrderStatus
 from app.models.product import Product, ProductStatus
 from app.models.sequence import OrderSequence
+from app.models.user import User
+from app.models.points import PointAction
 from app.state_machine import can_transition
 from app.services.audit_service import record
+from app.services.coupon_service import compute_discount, find_usable_user_coupon, use_coupon
+from app.services.points_service import POINTS_REDEEM_RATE, add_points
 from app.events import bus
 
 
@@ -25,9 +29,16 @@ async def _next_order_no(db: AsyncSession) -> str:
     return f"ORD-{day}-{seq.value:04d}"
 
 
-async def checkout(db: AsyncSession, *, buyer_id: str, address: str) -> Order:
+async def checkout(
+    db: AsyncSession,
+    *,
+    buyer: User,
+    address: str,
+    coupon_id: str | None = None,
+    use_points: bool = False,
+) -> Order:
     cart_rows = list(
-        await db.scalars(select(CartItem).where(CartItem.user_id == buyer_id))
+        await db.scalars(select(CartItem).where(CartItem.user_id == buyer.id))
     )
     if not cart_rows:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="购物车为空")
@@ -35,17 +46,27 @@ async def checkout(db: AsyncSession, *, buyer_id: str, address: str) -> Order:
     order_no = await _next_order_no(db)
     order = Order(
         order_no=order_no,
-        buyer_id=buyer_id,
+        buyer_id=buyer.id,
         status=OrderStatus.PENDING_PAYMENT,
         address=address,
     )
     db.add(order)
     await db.flush()
 
+    # S3：一次性加行锁（FOR UPDATE）取出本次下单涉及的全部商品，既消除 N+1（P1），
+    # 又避免并发下单同时读到同一库存值导致的超卖
+    product_ids = [it.product_id for it in cart_rows]
+    locked = list(
+        await db.scalars(
+            select(Product).where(Product.id.in_(product_ids)).with_for_update()
+        )
+    )
+    pmap = {p.id: p for p in locked}
+
     total = 0.0
     out_of_stock: list[str] = []
     for item in cart_rows:
-        product = await db.get(Product, item.product_id)
+        product = pmap.get(item.product_id)
         if not product or product.status != ProductStatus.ACTIVE:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -69,10 +90,30 @@ async def checkout(db: AsyncSession, *, buyer_id: str, address: str) -> Order:
             )
         )
 
-    order.total_amount = round(total, 2)
+    subtotal = round(total, 2)
+    discount = 0.0
+    # 优惠券抵扣
+    if coupon_id:
+        uc = await find_usable_user_coupon(db, buyer.id, coupon_id)
+        if not uc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="优惠券不可用")
+        coupon_discount = compute_discount(uc.coupon, subtotal)
+        if coupon_discount <= 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="优惠券不满足使用条件")
+        discount += coupon_discount
+        await use_coupon(db, uc)
+    # 积分抵扣（100 积分抵 1 元）
+    if use_points and buyer.points:
+        points_used = min(buyer.points, int(subtotal * 100))
+        if points_used:
+            discount += points_used / POINTS_REDEEM_RATE
+            await add_points(db, buyer.id, PointAction.REDEEM, -points_used, "下单积分抵扣")
+
+    order.total_amount = round(max(subtotal - discount, 0.0), 2)
+    order.discount_amount = round(discount, 2)
     for item in cart_rows:
         await db.delete(item)
-    await record(db, buyer_id, "order.checkout", "order", order.id, order.order_no)
+    await record(db, buyer.id, "order.checkout", "order", order.id, order.order_no)
     await db.commit()
     await db.refresh(order)
     # 解耦的库存告警：库存归零时广播事件，由事件处理器异步记录
@@ -113,9 +154,11 @@ async def get_order(db: AsyncSession, order_id: str, *, user_id: str, role: str)
         return order
     if order.buyer_id != user_id:
         if role == "merchant":
-            merchant_items = [
-                it for it in order.items if (await db.get(Product, it.product_id)).merchant_id == user_id
-            ]
+            merchant_items = []
+            for it in order.items:
+                product = await db.get(Product, it.product_id)
+                if product and product.merchant_id == user_id:
+                    merchant_items.append(it)
             if not merchant_items:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权查看该订单")
             return order
@@ -139,13 +182,24 @@ async def transition_status(
         order.shipped_at = now
     elif target == OrderStatus.COMPLETED:
         order.completed_at = now
+        for it in order.items:
+            product = await db.get(Product, it.product_id)
+            if product:
+                product.sales_count = (product.sales_count or 0) + it.quantity
     elif target == OrderStatus.REFUNDED:
         for it in order.items:
             product = await db.get(Product, it.product_id)
             if product:
                 product.stock += it.quantity
+                product.sales_count = max((product.sales_count or 0) - it.quantity, 0)
 
     await record(db, actor_id, f"order.{target.value}", "order", order.id, order.order_no)
     await db.commit()
     await db.refresh(order)
+
+    # 解耦：完成后发积分 / 通知；退款后回收积分
+    if target == OrderStatus.COMPLETED:
+        await bus.publish("order.completed", order_id=order.id, buyer_id=order.buyer_id)
+    elif target == OrderStatus.REFUNDED:
+        await bus.publish("order.refunded", order_id=order.id, buyer_id=order.buyer_id)
     return order

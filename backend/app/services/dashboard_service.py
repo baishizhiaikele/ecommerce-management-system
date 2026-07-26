@@ -13,43 +13,73 @@ from app.schemas.dashboard import AdminStats, MerchantStats
 
 
 async def merchant_stats(db: AsyncSession, merchant_id: str) -> MerchantStats:
-    products = list(
-        await db.scalars(select(Product).where(Product.merchant_id == merchant_id))
+    # P2：统计下推到数据库，避免把全表对象拉到 Python 内存中计数
+    product_count = await db.scalar(select(func.count(Product.id)).where(Product.merchant_id == merchant_id))
+    active_product_count = await db.scalar(
+        select(func.count(Product.id)).where(Product.merchant_id == merchant_id, Product.status == ProductStatus.ACTIVE)
     )
-    product_ids = {p.id for p in products}
-    items = list(
-        await db.scalars(select(OrderItem).where(OrderItem.product_id.in_(product_ids)))
-    ) if product_ids else []
-    order_ids = {it.order_id for it in items}
-    orders = list(await db.scalars(select(Order).where(Order.id.in_(order_ids)))) if order_ids else []
-    total_sales = sum(
-        float(o.total_amount) for o in orders if o.status in (OrderStatus.PAID, OrderStatus.SHIPPED, OrderStatus.COMPLETED)
+    pending_review_count = await db.scalar(
+        select(func.count(Product.id)).where(Product.merchant_id == merchant_id, Product.status == ProductStatus.PENDING)
+    )
+    low_stock_count = await db.scalar(
+        select(func.count(Product.id)).where(Product.merchant_id == merchant_id, Product.stock <= 5)
+    )
+    # 仅统计涉及该商家商品的订单（通过 OrderItem -> Product 关联去重）
+    order_count = await db.scalar(
+        select(func.count(Order.id.distinct()))
+        .join(OrderItem, OrderItem.order_id == Order.id)
+        .join(Product, Product.id == OrderItem.product_id)
+        .where(Product.merchant_id == merchant_id)
+    )
+    paid_order_count = await db.scalar(
+        select(func.count(Order.id.distinct()))
+        .join(OrderItem, OrderItem.order_id == Order.id)
+        .join(Product, Product.id == OrderItem.product_id)
+        .where(
+            Product.merchant_id == merchant_id,
+            Order.status.notin_([OrderStatus.PENDING_PAYMENT, OrderStatus.REFUNDED]),
+        )
+    )
+    total_sales = await db.scalar(
+        select(func.coalesce(func.sum(Order.total_amount), 0))
+        .join(OrderItem, OrderItem.order_id == Order.id)
+        .join(Product, Product.id == OrderItem.product_id)
+        .where(Product.merchant_id == merchant_id, Order.status != OrderStatus.REFUNDED)
     )
     return MerchantStats(
-        product_count=len(products),
-        active_product_count=sum(1 for p in products if p.status == ProductStatus.ACTIVE),
-        order_count=len(orders),
-        paid_order_count=sum(1 for o in orders if o.status != OrderStatus.PENDING_PAYMENT and o.status != OrderStatus.REFUNDED),
-        total_sales=round(total_sales, 2),
-        pending_review_count=sum(1 for p in products if p.status == ProductStatus.PENDING),
-        low_stock_count=sum(1 for p in products if p.stock <= 5),
+        product_count=product_count or 0,
+        active_product_count=active_product_count or 0,
+        order_count=order_count or 0,
+        paid_order_count=paid_order_count or 0,
+        total_sales=round(float(total_sales or 0), 2),
+        pending_review_count=pending_review_count or 0,
+        low_stock_count=low_stock_count or 0,
     )
 
 
 async def admin_stats(db: AsyncSession) -> AdminStats:
-    users = list(await db.scalars(select(User)))
-    products = list(await db.scalars(select(Product)))
-    orders = list(await db.scalars(select(Order)))
-    negative = list(await db.scalars(select(Review).where(Review.sentiment == Sentiment.NEGATIVE)))
-    gmv = sum(float(o.total_amount) for o in orders if o.status != OrderStatus.REFUNDED)
+    # P2：聚合下推，避免全表加载
+    user_count = await db.scalar(select(func.count(User.id)))
+    merchant_count = await db.scalar(select(func.count(User.id)).where(User.role == Role.MERCHANT))
+    product_count = await db.scalar(select(func.count(Product.id)))
+    pending_product_count = await db.scalar(
+        select(func.count(Product.id)).where(Product.status == ProductStatus.PENDING)
+    )
+    order_count = await db.scalar(select(func.count(Order.id)))
+    gmv = await db.scalar(
+        select(func.coalesce(func.sum(Order.total_amount), 0)).where(Order.status != OrderStatus.REFUNDED)
+    )
+    negative_review_count = await db.scalar(
+        select(func.count(Review.id)).where(Review.sentiment == Sentiment.NEGATIVE)
+    )
     return AdminStats(
-        user_count=len(users),
-        merchant_count=sum(1 for u in users if u.role == Role.MERCHANT),
-        product_count=len(products),
-        pending_product_count=sum(1 for p in products if p.status == ProductStatus.PENDING),
-        order_count=len(orders),
-        total_gmv=round(gmv, 2),
-        negative_review_count=len(negative),
+        user_count=user_count or 0,
+        merchant_count=merchant_count or 0,
+        product_count=product_count or 0,
+        pending_product_count=pending_product_count or 0,
+        order_count=order_count or 0,
+        total_gmv=round(float(gmv or 0), 2),
+        negative_review_count=negative_review_count or 0,
     )
 
 

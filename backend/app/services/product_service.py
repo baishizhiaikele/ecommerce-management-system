@@ -1,5 +1,5 @@
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.product import Product, ProductStatus
@@ -15,11 +15,16 @@ async def list_products(
     only_active: bool = True,
     category_id: str | None = None,
     keyword: str | None = None,
+    sort: str | None = None,
+    min_price: float | None = None,
+    max_price: float | None = None,
+    in_stock: bool = False,
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[Product], int]:
     page = max(1, page)
     page_size = min(max(1, page_size), 100)
+
     base = select(Product)
     if only_active:
         base = base.where(Product.status == ProductStatus.ACTIVE)
@@ -28,6 +33,12 @@ async def list_products(
     if keyword:
         like = f"%{keyword.strip()}%"
         base = base.where((Product.name.ilike(like)) | (Product.description.ilike(like)))
+    if min_price is not None:
+        base = base.where(Product.price >= min_price)
+    if max_price is not None:
+        base = base.where(Product.price <= max_price)
+    if in_stock:
+        base = base.where(Product.stock > 0)
 
     count_stmt = select(Product.id)
     if only_active:
@@ -37,12 +48,26 @@ async def list_products(
     if keyword:
         like = f"%{keyword.strip()}%"
         count_stmt = count_stmt.where((Product.name.ilike(like)) | (Product.description.ilike(like)))
-    ids = list(await db.scalars(count_stmt))
-    total = len(ids)
+    if min_price is not None:
+        count_stmt = count_stmt.where(Product.price >= min_price)
+    if max_price is not None:
+        count_stmt = count_stmt.where(Product.price <= max_price)
+    if in_stock:
+        count_stmt = count_stmt.where(Product.stock > 0)
+    # P2：直接数据库计数，避免先取全部 id 再 len()（大表会拉爆内存）
+    total = await db.scalar(count_stmt.with_only_columns(func.count(Product.id))) or 0
 
-    rows = await db.scalars(
-        base.order_by(Product.created_at.desc()).limit(page_size).offset((page - 1) * page_size)
-    )
+    order = Product.created_at.desc()
+    if sort == "price_asc":
+        order = Product.price.asc()
+    elif sort == "price_desc":
+        order = Product.price.desc()
+    elif sort == "sales":
+        order = Product.sales_count.desc()
+    elif sort == "newest":
+        order = Product.created_at.desc()
+
+    rows = await db.scalars(base.order_by(order).limit(page_size).offset((page - 1) * page_size))
     items = list(rows)
     return items, total
 
@@ -101,11 +126,7 @@ async def ai_generate(
 ) -> dict:
     if product.merchant_id != merchant_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="只能为自己的商品生成文案")
-    category_name = "通用"
-    if product.category_id:
-        category = await db.get(Category, product.category_id)
-        if category:
-            category_name = category.name
+    category_name = await _category_name(db, product)
     result = await ai_service.generate_product_copy(
         name=product.name,
         category=category_name,
@@ -136,3 +157,35 @@ async def set_status(
     await db.commit()
     await db.refresh(product)
     return product
+
+
+async def _category_name(db: AsyncSession, product: Product) -> str:
+    """取商品分类名称，无分类时返回通用占位（供 AI 文案/定价复用）。"""
+    if product.category_id:
+        category = await db.get(Category, product.category_id)
+        if category:
+            return category.name
+    return "通用"
+
+
+async def ai_marketing_copy(
+    db: AsyncSession, *, product: Product, merchant_id: str, platform: str, note: str | None
+) -> dict:
+    if product.merchant_id != merchant_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="只能为自己的商品生成营销文案")
+    category = await _category_name(db, product)
+    copy = await ai_service.generate_marketing_copy(
+        product.name, category, note or product.description or "", platform
+    )
+    return {"platform": platform, "content": copy}
+
+
+async def ai_price_advice(
+    db: AsyncSession, *, product: Product, merchant_id: str, market_price: float | None, note: str | None
+) -> dict:
+    if product.merchant_id != merchant_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="只能为自己的商品提供估价建议")
+    category = await _category_name(db, product)
+    return await ai_service.price_advice(
+        product.name, category, note or product.description or "", market_price
+    )
