@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import require_role
@@ -97,3 +97,24 @@ async def audit_logs(
 ) -> list[AuditLogOut]:
     rows = await db.scalars(select(AuditLog).order_by(AuditLog.created_at.desc()).limit(200))
     return list(rows)
+
+
+@router.get("/audit-stats")
+async def audit_stats(
+    db: AsyncSession = Depends(get_db), _: User = Depends(require_role(Role.ADMIN))
+) -> dict:
+    by_action_rows = await db.execute(
+        select(AuditLog.action, func.count(AuditLog.id))
+        .group_by(AuditLog.action)
+        .order_by(func.count(AuditLog.id).desc())
+    )
+    by_action = [{"action": a, "count": c} for a, c in by_action_rows]
+
+    by_day_rows = await db.execute(
+        select(func.date(AuditLog.created_at), func.count(AuditLog.id))
+        .group_by(func.date(AuditLog.created_at))
+        .order_by(func.date(AuditLog.created_at))
+        .limit(30)
+    )
+    by_day = [{"day": d, "count": c} for d, c in by_day_rows]
+    return {"by_action": by_action, "by_day": by_day}
