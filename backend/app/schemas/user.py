@@ -36,6 +36,7 @@ class UserOut(BaseModel):
     email: str
     role: Role
     is_active: bool
+    points: int = 0
     created_at: datetime
 
 

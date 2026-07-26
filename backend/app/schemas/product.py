@@ -58,6 +58,7 @@ class ProductOut(BaseModel):
     stock: int
     image_url: Optional[str]
     status: ProductStatus
+    sales_count: int = 0
     ai_title: Optional[str]
     ai_copy: Optional[str]
     ai_price_suggestion: Optional[Decimal]
@@ -73,6 +74,26 @@ class AIGenerateResult(BaseModel):
     title: str
     sales_copy: str
     price_suggestion: float
+
+
+class MarketingRequest(BaseModel):
+    platform: str = "小红书"  # 小红书 | 朋友圈 | 抖音
+    note: Optional[str] = Field(default=None, max_length=500)
+
+
+class MarketingResult(BaseModel):
+    platform: str
+    content: str
+
+
+class PriceAdviceRequest(BaseModel):
+    note: Optional[str] = Field(default=None, max_length=500)
+    market_price: Optional[float] = None
+
+
+class PriceAdviceResult(BaseModel):
+    suggested_price: float
+    reason: str
 
 
 class ProductStatusUpdate(BaseModel):

@@ -9,6 +9,8 @@ from app.models.order import OrderStatus
 
 class CheckoutRequest(BaseModel):
     address: str = Field(min_length=5, max_length=500)
+    coupon_id: Optional[str] = None
+    use_points: bool = False
 
 
 class OrderItemOut(BaseModel):
@@ -24,6 +26,7 @@ class OrderOut(BaseModel):
     order_no: str
     status: OrderStatus
     total_amount: Decimal
+    discount_amount: Decimal = Decimal("0")
     address: Optional[str]
     items: list[OrderItemOut]
     created_at: datetime
@@ -34,3 +37,24 @@ class OrderOut(BaseModel):
 
 class OrderStatusUpdate(BaseModel):
     status: OrderStatus
+
+
+class RefundRequest(BaseModel):
+    reason: str = Field(min_length=1, max_length=500)
+    image_urls: list[str] = []
+
+
+class RefundReview(BaseModel):
+    approve: bool
+    note: str = ""
+
+
+class LogisticsEvent(BaseModel):
+    time: str
+    location: str = ""
+    description: str
+
+
+class LogisticsUpdate(BaseModel):
+    tracking_no: str = ""
+    event: LogisticsEvent
