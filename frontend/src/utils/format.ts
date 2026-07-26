@@ -5,16 +5,17 @@ export const money = (v: string | number) => {
   return isNaN(n) ? "0.00" : n.toFixed(2);
 };
 
-export const orderStatusMeta: Record<OrderStatus, { label: string; color: string }> = {
+export const orderStatusMeta: Record<string, { label: string; color: string }> = {
   pending_payment: { label: "待付款", color: "orange" },
   paid: { label: "已付款", color: "blue" },
   shipped: { label: "已发货", color: "cyan" },
   completed: { label: "已完成", color: "green" },
   refund_requested: { label: "退款中", color: "volcano" },
   refunded: { label: "已退款", color: "red" },
+  refund_rejected: { label: "退款被拒", color: "red" },
 };
 
-export const productStatusMeta: Record<ProductStatus, { label: string; color: string }> = {
+export const productStatusMeta: Record<string, { label: string; color: string }> = {
   draft: { label: "草稿", color: "default" },
   pending: { label: "待审核", color: "gold" },
   active: { label: "已上架", color: "green" },
@@ -34,6 +35,7 @@ export const actionLabel: Record<OrderStatus, string> = {
   refund_requested: "申请退款",
   refunded: "处理退款",
   pending_payment: "待付款",
+  refund_rejected: "重新申请退款",
 };
 
 // 依据「当前状态 + 当前角色」返回可执行的目标状态
@@ -42,6 +44,7 @@ export function nextActions(status: OrderStatus, role: string): OrderStatus[] {
     if (status === "pending_payment") return ["paid"];
     if (status === "paid") return ["refund_requested"];
     if (status === "shipped") return ["completed"];
+    if (status === "refund_rejected") return ["refund_requested", "completed"];
   }
   if (role === "merchant") {
     if (status === "paid") return ["shipped"];

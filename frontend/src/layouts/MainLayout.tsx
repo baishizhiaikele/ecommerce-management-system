@@ -1,9 +1,17 @@
+import { useEffect, useState } from "react";
 import { Outlet, useNavigate, Link } from "react-router-dom";
-import { Layout, Menu, Button, Dropdown, Badge } from "antd";
-import { ShoppingOutlined, AppstoreOutlined } from "@ant-design/icons";
+import { Layout, Menu, Button, Dropdown, Badge, Tooltip } from "antd";
+import {
+  ShoppingOutlined,
+  AppstoreOutlined,
+  HeartOutlined,
+  BellOutlined,
+  GiftOutlined,
+} from "@ant-design/icons";
 import { useAuth } from "../store/auth";
 import { useCart } from "../store/cart";
-import { logout } from "../api";
+import { logout, unreadCount } from "../api";
+import { useI18n } from "../i18n";
 
 const { Header, Content } = Layout;
 
@@ -13,6 +21,8 @@ export default function MainLayout() {
   const doLogout = useAuth((s) => s.logout);
   const lines = useCart((s) => s.lines);
   const count = lines.reduce((s, l) => s + l.quantity, 0);
+  const [unread, setUnread] = useState(0);
+  const { lang, setLang, t } = useI18n();
 
   const onLogout = async () => {
     try {
@@ -24,6 +34,18 @@ export default function MainLayout() {
     navigate("/login");
   };
 
+  useEffect(() => {
+    unreadCount()
+      .then((d) => setUnread(d.count))
+      .catch(() => {});
+    const t = setInterval(() => {
+      unreadCount()
+        .then((d) => setUnread(d.count))
+        .catch(() => {});
+    }, 20000);
+    return () => clearInterval(t);
+  }, []);
+
   return (
     <Layout className="min-h-screen">
       <Header
@@ -33,33 +55,66 @@ export default function MainLayout() {
           background: "#fff",
           borderBottom: "1px solid #f0f0f0",
           padding: "0 24px",
+          boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
         }}
       >
-        <Link to="/" className="text-lg font-bold text-[#4F46E5] mr-8 whitespace-nowrap">
-          <ShoppingOutlined className="mr-1" /> AI 全托管小店
+        <Link to="/" className="text-lg font-bold brand-gradient-text mr-8 whitespace-nowrap">
+          <ShoppingOutlined className="mr-1" /> {t("brand")}
         </Link>
-        <Menu
+          <Menu
           mode="horizontal"
           className="flex-1 border-0"
           selectedKeys={[]}
-          items={[{ key: "market", label: <Link to="/">商品集市</Link> }]}
+          items={[
+            { key: "market", label: <Link to="/">{t("market")}</Link> },
+            { key: "shops", label: <Link to="/shops">{t("shops")}</Link> },
+            { key: "favorites", label: <Link to="/favorites">{t("favorites")}</Link> },
+            { key: "points", label: <Link to="/points">{t("points")}</Link> },
+          ]}
         />
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
+          <Button type="text" onClick={() => setLang(lang === "zh" ? "en" : "zh")}>
+            {lang === "zh" ? "EN" : "中"}
+          </Button>
+          <Tooltip title={t("notifications")}>
+            <Badge count={unread} size="small">
+              <Button
+                type="text"
+                aria-label={t("notifications")}
+                icon={<BellOutlined />}
+                onClick={() => navigate("/notifications")}
+              />
+            </Badge>
+          </Tooltip>
+          <Tooltip title={t("coupons")}>
+            <Button
+              type="text"
+              aria-label={t("coupons")}
+              icon={<GiftOutlined />}
+              onClick={() => navigate("/coupons")}
+            />
+          </Tooltip>
           <Badge count={count} size="small">
-            <Button type="text" icon={<AppstoreOutlined />} onClick={() => navigate("/cart")}>
-              购物车
-            </Button>
+          <Button type="text" icon={<AppstoreOutlined />} onClick={() => navigate("/cart")}>
+            {t("cart")}
+          </Button>
           </Badge>
           <Button type="text" onClick={() => navigate("/orders")}>
-            我的订单
+            {t("orders")}
           </Button>
           <Dropdown
             menu={{
-              items: [{ key: "logout", label: "退出登录" }],
-              onClick: onLogout,
+              items: [
+                { key: "me", label: `${user?.username}（${user?.points ?? 0} 积分）` },
+                { key: "logout", label: t("logout") },
+              ],
+              onClick: ({ key }) => key === "logout" && onLogout(),
             }}
           >
-            <Button>{user?.username}</Button>
+            <Button>
+              <HeartOutlined className="mr-1" />
+              {user?.username}
+            </Button>
           </Dropdown>
         </div>
       </Header>

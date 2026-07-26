@@ -23,8 +23,8 @@ export default function MerchantLayout() {
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
-      <Sider theme="light" width={220} style={{ borderRight: "1px solid #f0f0f0" }}>
-        <div className="h-16 flex items-center px-5 font-bold text-[#4F46E5] text-lg">
+      <Sider theme="light" width={220} style={{ borderRight: "1px solid #f0f0f0", boxShadow: "2px 0 8px rgba(15,23,42,0.03)" }}>
+        <div className="h-16 flex items-center px-5 font-bold text-[#6366F1] text-lg">
           <ShopOutlined className="mr-2" /> 商家后台
         </div>
         <Menu
@@ -33,6 +33,7 @@ export default function MerchantLayout() {
           items={[
             { key: "/merchant", label: <Link to="/merchant">数据看板</Link> },
             { key: "/merchant/products", label: <Link to="/merchant/products">商品管理</Link> },
+            { key: "/merchant/support", label: <Link to="/merchant/support">客服工单</Link> },
           ]}
         />
       </Sider>
@@ -45,6 +46,7 @@ export default function MerchantLayout() {
             justifyContent: "space-between",
             padding: "0 24px",
             borderBottom: "1px solid #f0f0f0",
+            boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
           }}
         >
           <Link to="/" className="text-slate-500">

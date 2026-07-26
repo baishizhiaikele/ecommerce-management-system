@@ -23,8 +23,8 @@ export default function AdminLayout() {
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
-      <Sider theme="light" width={220} style={{ borderRight: "1px solid #f0f0f0" }}>
-        <div className="h-16 flex items-center px-5 font-bold text-[#4F46E5] text-lg">
+      <Sider theme="light" width={220} style={{ borderRight: "1px solid #f0f0f0", boxShadow: "2px 0 8px rgba(15,23,42,0.03)" }}>
+        <div className="h-16 flex items-center px-5 font-bold text-[#6366F1] text-lg">
           <SafetyCertificateOutlined className="mr-2" /> 管理后台
         </div>
         <Menu
@@ -36,6 +36,7 @@ export default function AdminLayout() {
             { key: "/admin/users", label: <Link to="/admin/users">用户管理</Link> },
             { key: "/admin/reviews", label: <Link to="/admin/reviews">负面评价</Link> },
             { key: "/admin/audit", label: <Link to="/admin/audit">审计日志</Link> },
+            { key: "/admin/audit-dashboard", label: <Link to="/admin/audit-dashboard">审计看板</Link> },
           ]}
         />
       </Sider>
@@ -48,6 +49,7 @@ export default function AdminLayout() {
             justifyContent: "space-between",
             padding: "0 24px",
             borderBottom: "1px solid #f0f0f0",
+            boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
           }}
         >
           <Link to="/" className="text-slate-500">

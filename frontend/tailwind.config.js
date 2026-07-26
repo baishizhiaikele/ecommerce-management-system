@@ -5,9 +5,9 @@ export default {
     extend: {
       colors: {
         brand: {
-          indigo: "#4F46E5",
-          violet: "#6366F1",
-          cyan: "#06B6D4",
+          indigo: "#6366F1",
+          violet: "#818CF8",
+          cyan: "#22D3EE",
         },
       },
       fontFamily: {

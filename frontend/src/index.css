@@ -11,6 +11,88 @@ body,
 body {
   margin: 0;
   font-family: "PingFang SC", system-ui, sans-serif;
-  background: #f8fafc;
-  color: #0f172a;
+  background: #f7f8fc;
+  color: #1f2937;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 柔和滚动条 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d6dbe8;
+  border-radius: 999px;
+  border: 2px solid #f7f8fc;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #c0c7db;
+}
+
+/* 商品卡片柔和 hover 抬升（配合 antd Card 的 product-card 类） */
+.product-card {
+  border-radius: 16px !important;
+  transition: transform 0.25s cubic-bezier(0.2, 0.7, 0.3, 1), box-shadow 0.25s ease,
+    border-color 0.25s ease;
+}
+.product-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 18px 40px rgba(99, 102, 241, 0.16);
+  border-color: rgba(99, 102, 241, 0.35);
+}
+
+/* 通用柔和过渡 */
+a,
+button {
+  transition: all 0.2s ease;
+}
+
+/* 渐变品牌文字 */
+.brand-gradient-text {
+  background-image: linear-gradient(90deg, #6366f1, #22d3ee);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* 柔和入场动画 */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.fade-up {
+  animation: fadeUp 0.45s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+/* 后台柔和卡片：去边框 + 柔和阴影 + 轻抬升 */
+.ant-card.soft-card {
+  border: none;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+.ant-card.soft-card:hover {
+  box-shadow: 0 10px 28px rgba(99, 102, 241, 0.14);
+  transform: translateY(-2px);
+}
+
+/* 统计卡片图标容器 */
+.stat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
 }
