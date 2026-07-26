@@ -14,6 +14,7 @@ import {
   message,
 } from "antd";
 import { HeartOutlined, HeartFilled } from "@ant-design/icons";
+import { Sparkles, MessageSquareText } from "lucide-react";
 import { useCart } from "../store/cart";
 import {
   getProduct,
@@ -28,6 +29,7 @@ import {
   ReviewOut,
 } from "../api";
 import { money, sentimentMeta } from "../utils/format";
+import ProductImage from "../components/ProductImage";
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -132,19 +134,24 @@ export default function ProductDetail() {
   if (loading) return <div className="text-center py-20"><Spin /></div>;
   if (!p) return <div className="text-center py-20">商品不存在</div>;
 
+  const avgRating =
+    reviews.length > 0
+      ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length
+      : 0;
+
   return (
-    <div>
-      <Button type="link" onClick={() => navigate(-1)}>
+    <div className="space-y-6">
+      <Button type="link" onClick={() => navigate(-1)} className="!pl-0">
         ← 返回
       </Button>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-2">
-        <div className="h-72 rounded-2xl bg-gradient-to-br from-[#EEF0FF] to-[#E6FBFF] shadow-sm flex items-center justify-center text-6xl transition-transform duration-300 hover:scale-[1.03]">
-          🛍️
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="rounded-3xl overflow-hidden shadow-sm border border-[#EEF0F3]">
+          <ProductImage name={p.name} image_url={p.image_url} height={360} rounded={0} />
         </div>
-        <div className="fade-up">
-          <h1 className="text-2xl font-bold tracking-tight">{p.name}</h1>
-          <div className="flex items-end gap-3 my-3">
-            <div className="text-[#6366F1] font-bold leading-none">
+        <Card className="soft-card fade-up" styles={{ body: { padding: 24 } }}>
+          <h1 className="text-2xl font-bold tracking-tight m-0">{p.name}</h1>
+          <div className="flex items-end gap-3 my-4">
+            <div className="text-[#4F46E5] font-bold leading-none">
               <span className="text-xl align-top mr-0.5">¥</span>
               <span className="text-4xl">{money(p.price)}</span>
             </div>
@@ -153,49 +160,70 @@ export default function ProductDetail() {
             </Tag>
           </div>
           {(p.ai_title || p.ai_copy || p.ai_price_suggestion != null) && (
-            <div className="bg-[#F7F8FC] rounded-xl p-3 space-y-1 text-sm">
-              {p.ai_title && <div className="text-slate-600">AI 标题：{p.ai_title}</div>}
-              {p.ai_copy && <div className="text-slate-600">AI 文案：{p.ai_copy}</div>}
+            <div className="gradient-border p-4 space-y-1.5 text-sm mb-4">
+              <div className="flex items-center gap-1.5 text-[#4F46E5] font-semibold">
+                <Sparkles size={14} /> AI 智能优化
+              </div>
+              {p.ai_title && <div className="text-slate-600">标题：{p.ai_title}</div>}
+              {p.ai_copy && <div className="text-slate-600">文案：{p.ai_copy}</div>}
               {p.ai_price_suggestion != null && (
-                <div className="text-slate-600">AI 建议价：¥{money(p.ai_price_suggestion)}</div>
+                <div className="text-slate-600">建议价：¥{money(p.ai_price_suggestion)}</div>
               )}
             </div>
           )}
-          <div className="mt-5 flex items-center gap-3 flex-wrap">
+          <Divider className="!my-5" />
+          <div className="flex items-center gap-3 flex-wrap">
             <InputNumber min={1} max={p.stock || 1} value={qty} onChange={(v) => setQty(v || 1)} />
-            <Button type="primary" disabled={p.stock <= 0} onClick={onAdd}>
+            <Button type="primary" size="large" disabled={p.stock <= 0} onClick={onAdd}>
               加入购物车
             </Button>
             <Button
+              size="large"
               icon={faved ? <HeartFilled style={{ color: "#EF4444" }} /> : <HeartOutlined />}
               onClick={toggleFav}
             >
               {faved ? "已收藏" : "收藏"}
             </Button>
-            <Button onClick={() => setChatOpen(true)}>咨询 AI 客服</Button>
+            <Button size="large" icon={<MessageSquareText size={16} />} onClick={() => setChatOpen(true)}>
+              咨询 AI 客服
+            </Button>
           </div>
-        </div>
+        </Card>
       </div>
 
-      {p.description && <Divider />}
-      {p.description && <div className="bg-[#F7F8FC] rounded-xl p-4 text-slate-600 whitespace-pre-wrap">{p.description}</div>}
+      {p.description && (
+        <Card className="soft-card" styles={{ body: { padding: 20 } }}>
+          <div className="section-title"><span className="st-text">商品详情</span></div>
+          <div className="text-slate-600 whitespace-pre-wrap leading-relaxed">{p.description}</div>
+        </Card>
+      )}
 
-      <Divider orientation="left">用户评价</Divider>
-      <List
-        dataSource={reviews}
-        locale={{ emptyText: "暂无评价" }}
-        renderItem={(r) => (
-          <List.Item>
-            <div>
-              <Rate disabled value={r.rating} />
-              <Tag color={sentimentMeta[r.sentiment].color} className="ml-2">
-                {sentimentMeta[r.sentiment].label}
-              </Tag>
-              <div className="text-slate-600 mt-1">{r.content}</div>
-            </div>
-          </List.Item>
-        )}
-      />
+      <Card className="soft-card" styles={{ body: { padding: 20 } }}>
+          <div className="section-title">
+            <span className="st-text">用户评价（{reviews.length}）</span>
+            {reviews.length > 0 && (
+              <span className="ml-auto flex items-center gap-1.5 text-sm text-slate-400">
+                <Rate disabled value={avgRating} style={{ fontSize: 14 }} />
+                {avgRating.toFixed(1)}
+              </span>
+            )}
+          </div>
+        <List
+          dataSource={reviews}
+          locale={{ emptyText: "暂无评价" }}
+          renderItem={(r) => (
+            <List.Item className="!px-0">
+              <div className="w-full">
+                <div className="flex items-center gap-2">
+                  <Rate disabled value={r.rating} />
+                  <Tag color={sentimentMeta[r.sentiment].color}>{sentimentMeta[r.sentiment].label}</Tag>
+                </div>
+                <div className="text-slate-600 mt-1.5">{r.content}</div>
+              </div>
+            </List.Item>
+          )}
+        />
+      </Card>
 
       <Modal title="AI 智能客服" open={chatOpen} onCancel={() => setChatOpen(false)} footer={null}>
         <div className="h-80 overflow-auto mb-3 space-y-2">
@@ -206,9 +234,7 @@ export default function ProductDetail() {
             <div key={i} className={m.role === "user" ? "text-right" : "text-left"}>
               <span
                 className={`inline-block px-3 py-2 rounded-2xl ${
-                  m.role === "user"
-                    ? "bg-[#6366F1] text-white"
-                    : "bg-slate-100 text-slate-700"
+                  m.role === "user" ? "bg-[#4F46E5] text-white" : "bg-slate-100 text-slate-700"
                 }`}
               >
                 {m.content}

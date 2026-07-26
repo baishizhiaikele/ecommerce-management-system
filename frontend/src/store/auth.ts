@@ -40,7 +40,7 @@ export const useAuth = create<AuthState>((set) => ({
   // 令牌存放于 HttpOnly Cookie，随请求自动携带；仅需用 /auth/me 拉取当前用户
   init: async () => {
     try {
-      const { data } = await api.get("/auth/me");
+      const { data } = await api.get("/auth/me", { _noAuthRedirect: true } as any);
       set({ user: data });
     } catch {
       set({ user: null });

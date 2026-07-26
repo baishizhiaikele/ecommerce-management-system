@@ -43,11 +43,11 @@ export default function MerchantDashboard() {
     );
 
   const cards = [
-    { title: "商品总数", value: stats.product_count, icon: <AppstoreOutlined />, color: "#6366F1" },
+    { title: "商品总数", value: stats.product_count, icon: <AppstoreOutlined />, color: "#4F46E5" },
     { title: "已上架", value: stats.active_product_count, icon: <CheckCircleOutlined />, color: "#10B981" },
-    { title: "订单数", value: stats.order_count, icon: <ShoppingOutlined />, color: "#6366F1" },
-    { title: "已付款订单", value: stats.paid_order_count, icon: <CreditCardOutlined />, color: "#22D3EE" },
-    { title: "总销售额", value: `¥${money(stats.total_sales)}`, icon: <AccountBookOutlined />, color: "#6366F1" },
+    { title: "订单数", value: stats.order_count, icon: <ShoppingOutlined />, color: "#4F46E5" },
+    { title: "已付款订单", value: stats.paid_order_count, icon: <CreditCardOutlined />, color: "#4F46E5" },
+    { title: "总销售额", value: `¥${money(stats.total_sales)}`, icon: <AccountBookOutlined />, color: "#4F46E5" },
     { title: "待评价", value: stats.pending_review_count, icon: <StarOutlined />, color: "#F59E0B" },
     { title: "低库存(<10)", value: stats.low_stock_count, icon: <AlertOutlined />, color: "#EF4444" },
   ];
@@ -65,7 +65,7 @@ export default function MerchantDashboard() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <span className="w-1 h-6 rounded bg-[#6366F1]" />
+          <span className="w-1 h-6 rounded bg-slate-300" />
           <h2 className="text-xl font-bold m-0">数据看板</h2>
         </div>
         <Button type="primary" icon={<DownloadOutlined />} onClick={onExport}>
@@ -97,7 +97,7 @@ export default function MerchantDashboard() {
             <XAxis dataKey="date" stroke="#94A3B8" />
             <YAxis stroke="#94A3B8" />
             <Tooltip />
-            <Line type="monotone" dataKey="金额" stroke="#6366F1" strokeWidth={2.5} dot={false} />
+            <Line type="monotone" dataKey="金额" stroke="#4F46E5" strokeWidth={2.5} dot={false} />
           </LineChart>
         </ResponsiveContainer>
       </Card>

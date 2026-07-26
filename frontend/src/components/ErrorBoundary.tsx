@@ -24,14 +24,14 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
-          <div className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-slate-200 p-8 text-center">
+          <div className="max-w-md w-full bg-white rounded-2xl shadow-sm border border-slate-200 p-8 text-center">
             <h1 className="text-xl font-bold text-slate-800 mb-2">页面出现了一点问题</h1>
             <p className="text-slate-500 text-sm mb-6">
               {this.state.message || "请刷新页面后重试"}
             </p>
             <button
               onClick={() => window.location.reload()}
-              className="px-4 py-2 rounded-lg bg-[#6366F1] text-white text-sm font-medium"
+              className="px-4 py-2 rounded-lg bg-[#4F46E5] text-white text-sm font-medium"
             >
               刷新页面
             </button>

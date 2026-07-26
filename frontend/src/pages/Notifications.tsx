@@ -11,8 +11,8 @@ import {
 import { listNotifications, markRead, markAllRead, NotificationOut, NotificationType } from "../api";
 
 const META: Record<NotificationType, { icon: React.ReactNode; color: string }> = {
-  order: { icon: <ShoppingOutlined />, color: "#6366F1" },
-  coupon: { icon: <GiftOutlined />, color: "#22D3EE" },
+  order: { icon: <ShoppingOutlined />, color: "#4F46E5" },
+  coupon: { icon: <GiftOutlined />, color: "#4F46E5" },
   points: { icon: <TrophyOutlined />, color: "#F59E0B" },
   review_alert: { icon: <WarningOutlined />, color: "#EF4444" },
   system: { icon: <BellOutlined />, color: "#64748B" },
@@ -60,7 +60,7 @@ export default function Notifications() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <BellOutlined className="text-[#6366F1]" />
+          <BellOutlined className="text-[#4F46E5]" />
           <h2 className="text-xl font-bold m-0">通知中心</h2>
         </div>
         <Button onClick={onAll}>全部已读</Button>

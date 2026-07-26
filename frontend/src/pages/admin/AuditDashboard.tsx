@@ -37,7 +37,7 @@ export default function AuditDashboard() {
   return (
     <div>
       <div className="flex items-center gap-2 mb-4">
-        <span className="w-1 h-6 rounded bg-[#6366F1]" />
+        <span className="w-1 h-6 rounded bg-slate-300" />
         <h2 className="text-xl font-bold m-0">审计可视化看板</h2>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -48,7 +48,7 @@ export default function AuditDashboard() {
               <XAxis type="number" />
               <YAxis type="category" dataKey="action" width={140} />
               <Tooltip />
-              <Bar dataKey="count" fill="#6366F1" />
+              <Bar dataKey="count" fill="#4F46E5" />
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -59,7 +59,7 @@ export default function AuditDashboard() {
               <XAxis dataKey="day" />
               <YAxis />
               <Tooltip />
-              <Line type="monotone" dataKey="count" stroke="#22D3EE" />
+              <Line type="monotone" dataKey="count" stroke="#4F46E5" />
             </LineChart>
           </ResponsiveContainer>
         </Card>

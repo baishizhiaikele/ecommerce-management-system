@@ -22,10 +22,14 @@ export default function Login() {
       const payload =
         mode === "login"
           ? { username: values.username, password: values.password }
-          : { username: values.username, email: values.email, password: values.password, role: values.role || "buyer" };
+          : {
+              username: values.username,
+              email: values.email,
+              password: values.password,
+              role: values.role || "buyer",
+            };
       const { data } = await api.post(url, payload);
       if (mode === "login") {
-        // 令牌已写入 HttpOnly Cookie（S4），直接拉取当前用户
         const me = await api.get("/auth/me");
         setUser(me.data);
         navigate(homeForRole(me.data.role));
@@ -42,14 +46,13 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex">
-      <div className="hidden md:flex md:w-1/2 items-center justify-center bg-gradient-to-br from-[#6366F1] via-[#818CF8] to-[#22D3EE] relative overflow-hidden">
-        <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_30%_30%,white,transparent_40%),radial-gradient(circle_at_70%_70%,white,transparent_40%)]" />
-        <div className="relative text-white px-12">
-          <div className="flex items-center gap-2 text-2xl font-bold mb-4">
+    <div className="min-h-screen flex bg-[#F7F8FA]">
+      <div className="hidden md:flex md:w-1/2 items-center justify-center bg-white border-r border-[#EEF0F3] relative overflow-hidden">
+        <div className="relative text-slate-800 px-12">
+          <div className="flex items-center gap-2 text-2xl font-semibold mb-4">
             <ThunderboltOutlined /> AI 全托管小店
           </div>
-          <p className="text-lg leading-relaxed max-w-sm">
+          <p className="text-lg leading-relaxed max-w-sm text-slate-500">
             不会运营？让 AI 店长替你写文案、定价格、当客服。
             从上传一张照片开始，剩下的交给人工智能。
           </p>
@@ -58,8 +61,8 @@ export default function Login() {
 
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="w-full max-w-sm">
-          <div className="backdrop-blur-xl bg-white/70 border border-white/60 shadow-2xl rounded-2xl p-8">
-            <h1 className="text-2xl font-bold text-slate-800 mb-1">
+          <div className="bg-white border border-[#EEF0F3] shadow-sm rounded-2xl p-8">
+            <h1 className="text-2xl font-semibold text-slate-800 mb-1">
               {mode === "login" ? "欢迎回来" : "创建账号"}
             </h1>
             <p className="text-slate-500 text-sm mb-6">AI 智能商店 · 全栈电商管理平台</p>
@@ -104,7 +107,7 @@ export default function Login() {
                   />
                 </Form.Item>
               )}
-              <Button type="primary" htmlType="submit" block loading={loading} className="bg-[#6366F1]">
+              <Button type="primary" htmlType="submit" block loading={loading}>
                 {mode === "login" ? "登录" : "注册并登录"}
               </Button>
             </Form>

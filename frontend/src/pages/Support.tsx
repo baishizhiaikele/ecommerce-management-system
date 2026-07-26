@@ -151,7 +151,7 @@ export default function Support() {
               <span
                 className={`inline-block px-3 py-2 rounded-2xl ${
                   m.sender_role === "merchant"
-                    ? "bg-[#6366F1] text-white"
+                    ? "bg-[#4F46E5] text-white"
                     : m.sender_role === "ai"
                     ? "bg-emerald-100 text-emerald-700"
                     : "bg-slate-100 text-slate-700"

@@ -27,7 +27,7 @@ function CouponCard({
     <div className="flex rounded-2xl overflow-hidden border border-slate-100 shadow-sm fade-up">
       <div
         className="w-28 flex flex-col items-center justify-center text-white"
-        style={{ background: "linear-gradient(120deg,#6366F1,#22D3EE)" }}
+        style={{ background: "#4F46E5" }}
       >
         <div className="text-2xl font-bold">{couponLabel(c)}</div>
         <div className="text-xs opacity-90 mt-1">{couponDesc(c)}</div>
@@ -79,7 +79,7 @@ export default function Coupons() {
   return (
     <div>
       <div className="flex items-center gap-2 mb-4">
-        <GiftOutlined className="text-[#6366F1]" />
+        <GiftOutlined className="text-[#4F46E5]" />
         <h2 className="text-xl font-bold m-0">我的卡券</h2>
       </div>
       {loading ? (

@@ -29,6 +29,8 @@ const AdminProducts = lazy(() => import("./pages/admin/Products"));
 const AdminReviews = lazy(() => import("./pages/admin/Reviews"));
 const AdminAudit = lazy(() => import("./pages/admin/Audit"));
 const AdminAuditDashboard = lazy(() => import("./pages/admin/AuditDashboard"));
+const AdminCoupons = lazy(() => import("./pages/admin/Coupons"));
+const MerchantCoupons = lazy(() => import("./pages/merchant/Coupons"));
 
 export default function App() {
   const init = useAuth((s) => s.init);
@@ -75,6 +77,7 @@ export default function App() {
         <Route path="/merchant" element={<MerchantDashboard />} />
         <Route path="/merchant/products" element={<MerchantProducts />} />
         <Route path="/merchant/support" element={<Support />} />
+        <Route path="/merchant/coupons" element={<MerchantCoupons />} />
       </Route>
       <Route element={<ProtectedRoute roles={["admin"]}><AdminLayout /></ProtectedRoute>}>
         <Route path="/admin" element={<AdminDashboard />} />
@@ -83,6 +86,7 @@ export default function App() {
         <Route path="/admin/reviews" element={<AdminReviews />} />
         <Route path="/admin/audit" element={<AdminAudit />} />
         <Route path="/admin/audit-dashboard" element={<AdminAuditDashboard />} />
+        <Route path="/admin/coupons" element={<AdminCoupons />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

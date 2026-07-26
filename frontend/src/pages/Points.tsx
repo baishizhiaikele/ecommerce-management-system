@@ -43,7 +43,7 @@ export default function Points() {
       <Card
         className="rounded-2xl mb-4 fade-up"
         style={{
-          background: "linear-gradient(120deg, #6366F1 0%, #22D3EE 100%)",
+          background: "#4F46E5",
           border: "none",
           color: "#fff",
         }}

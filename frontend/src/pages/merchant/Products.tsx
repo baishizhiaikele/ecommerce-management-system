@@ -357,7 +357,7 @@ export default function MerchantProducts() {
       >
         {prResult ? (
           <div className="space-y-2">
-            <div className="text-2xl font-bold text-[#6366F1]">¥{money(prResult.suggested_price)}</div>
+            <div className="text-2xl font-bold text-[#4F46E5]">¥{money(prResult.suggested_price)}</div>
             <div className="text-slate-600">{prResult.reason}</div>
           </div>
         ) : (

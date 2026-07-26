@@ -49,21 +49,26 @@ export default function MainLayout() {
   return (
     <Layout className="min-h-screen">
       <Header
+        className="glass sticky top-0 z-50"
         style={{
           display: "flex",
           alignItems: "center",
-          background: "#fff",
-          borderBottom: "1px solid #f0f0f0",
+          borderBottom: "1px solid #EEF0F3",
           padding: "0 24px",
-          boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
         }}
       >
-        <Link to="/" className="text-lg font-bold brand-gradient-text mr-8 whitespace-nowrap">
-          <ShoppingOutlined className="mr-1" /> {t("brand")}
+        <Link
+          to="/"
+          className="flex items-center gap-2 mr-8 whitespace-nowrap group"
+        >
+          <span className="glow-icon" style={{ width: 38, height: 38, fontSize: 20 }}>
+            <ShoppingOutlined />
+          </span>
+          <span className="text-lg font-extrabold brand-gradient-text">{t("brand")}</span>
         </Link>
-          <Menu
+        <Menu
           mode="horizontal"
-          className="flex-1 border-0"
+          className="flex-1 border-0 bg-transparent hidden lg:flex"
           selectedKeys={[]}
           items={[
             { key: "market", label: <Link to="/">{t("market")}</Link> },
@@ -73,7 +78,7 @@ export default function MainLayout() {
           ]}
         />
         <div className="flex items-center gap-1">
-          <Button type="text" onClick={() => setLang(lang === "zh" ? "en" : "zh")}>
+          <Button type="text" className="hidden sm:inline-flex" onClick={() => setLang(lang === "zh" ? "en" : "zh")}>
             {lang === "zh" ? "EN" : "中"}
           </Button>
           <Tooltip title={t("notifications")}>
@@ -95,11 +100,11 @@ export default function MainLayout() {
             />
           </Tooltip>
           <Badge count={count} size="small">
-          <Button type="text" icon={<AppstoreOutlined />} onClick={() => navigate("/cart")}>
-            {t("cart")}
-          </Button>
+            <Button type="text" icon={<AppstoreOutlined />} onClick={() => navigate("/cart")}>
+              <span className="hidden sm:inline">{t("cart")}</span>
+            </Button>
           </Badge>
-          <Button type="text" onClick={() => navigate("/orders")}>
+          <Button type="text" className="hidden sm:inline-flex" onClick={() => navigate("/orders")}>
             {t("orders")}
           </Button>
           <Dropdown
@@ -111,7 +116,7 @@ export default function MainLayout() {
               onClick: ({ key }) => key === "logout" && onLogout(),
             }}
           >
-            <Button>
+            <Button className="!rounded-full ml-1">
               <HeartOutlined className="mr-1" />
               {user?.username}
             </Button>

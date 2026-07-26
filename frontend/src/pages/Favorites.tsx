@@ -106,7 +106,7 @@ export default function Favorites() {
                 }
                 description={
                   <div className="flex items-center justify-between">
-                    <span className="text-[#6366F1] font-semibold">{money(p.price)}</span>
+                    <span className="text-[#4F46E5] font-semibold">{money(p.price)}</span>
                     <Tag color={p.stock > 0 ? "green" : "red"}>
                       {p.stock > 0 ? "有货" : "缺货"}
                     </Tag>

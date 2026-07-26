@@ -91,6 +91,11 @@ export interface CouponOut {
   value: string;
   expire_at?: string | null;
   is_active: boolean;
+  merchant_id?: string | null;
+  start_at?: string | null;
+  end_at?: string | null;
+  total?: number;
+  issued?: number;
 }
 export interface UserCouponOut {
   id: string;
@@ -363,6 +368,41 @@ export const auditStats = () =>
     )
     .then((r) => r.data);
 
+// ---------- 管理员深度分析（科技渐变看板）----------
+export interface CategoryBreakdown {
+  category_id?: string | null;
+  category: string;
+  products: number;
+  sales: number;
+  revenue: number;
+}
+export interface TopProduct {
+  id: string;
+  name: string;
+  sales: number;
+  revenue: number;
+}
+export interface FunnelStage {
+  stage: string;
+  value: number;
+}
+export interface Comparison {
+  gmv_now: number;
+  gmv_prev: number;
+  gmv_rate: number;
+  orders_now: number;
+  orders_prev: number;
+  orders_rate: number;
+}
+export interface DashboardAnalytics {
+  category_breakdown: CategoryBreakdown[];
+  top_products: TopProduct[];
+  funnel: FunnelStage[];
+  comparison: Comparison;
+}
+export const adminDashboardAnalytics = () =>
+  api.get<DashboardAnalytics>("/admin/dashboard/analytics").then((r) => r.data);
+
 // ---------- 优惠券 ----------
 export const listCoupons = () =>
   api.get<CouponOut[]>("/coupons").then((r) => r.data);
@@ -370,6 +410,28 @@ export const claimCoupon = (id: string) =>
   api.post<UserCouponOut>(`/coupons/${id}/claim`).then((r) => r.data);
 export const myCoupons = () =>
   api.get<UserCouponOut[]>("/coupons/mine").then((r) => r.data);
+
+// ---------- 优惠券管理（管理员 / 商家）----------
+export interface CouponCreate {
+  name: string;
+  type: CouponType;
+  threshold?: number | string;
+  value: number | string;
+  total?: number;
+  start_at?: string;
+  end_at?: string;
+  merchant_id?: string;
+}
+export const adminCoupons = () =>
+  api.get<CouponOut[]>("/coupons/admin").then((r) => r.data);
+export const merchantCoupons = () =>
+  api.get<CouponOut[]>("/coupons/merchant").then((r) => r.data);
+export const createCoupon = (p: CouponCreate) =>
+  api.post<CouponOut>("/coupons", p).then((r) => r.data);
+export const updateCoupon = (id: string, p: Partial<CouponCreate>) =>
+  api.put<CouponOut>(`/coupons/${id}`, p).then((r) => r.data);
+export const deleteCoupon = (id: string) =>
+  api.delete(`/coupons/${id}`);
 
 // ---------- 收藏 ----------
 export const listFavorites = () =>

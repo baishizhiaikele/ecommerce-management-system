@@ -10,56 +10,238 @@ body,
 
 body {
   margin: 0;
-  font-family: "PingFang SC", system-ui, sans-serif;
-  background: #f7f8fc;
-  color: #1f2937;
+  font-family: "PingFang SC", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: #f7f8fa;
+  color: #111827;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* 柔和滚动条 */
+/* 文字选区高亮（品牌色淡） */
+::selection {
+  background: rgba(79, 70, 229, 0.16);
+  color: #111827;
+}
+
+/* 柔和细滚动条 */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d6dbe8;
+  background: #dfe2e8;
   border-radius: 999px;
-  border: 2px solid #f7f8fc;
+  border: 2px solid #f7f8fa;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #c0c7db;
+  background: #cbd0d8;
 }
 
-/* 商品卡片柔和 hover 抬升（配合 antd Card 的 product-card 类） */
-.product-card {
-  border-radius: 16px !important;
-  transition: transform 0.25s cubic-bezier(0.2, 0.7, 0.3, 1), box-shadow 0.25s ease,
-    border-color 0.25s ease;
-}
-.product-card:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 18px 40px rgba(99, 102, 241, 0.16);
-  border-color: rgba(99, 102, 241, 0.35);
+/* ============ 简约设计语言 ============ */
+
+/* 表面：白底 + 细边框 + 极轻阴影（统一质感） */
+.surface {
+  background: #ffffff;
+  border: 1px solid #eef0f3;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
 }
 
-/* 通用柔和过渡 */
+/* 玻璃拟态降级为纯白表面（保留类名兼容） */
+.glass {
+  background: #ffffff !important;
+  border: 1px solid #eef0f3 !important;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  position: relative;
+}
+.glass::after {
+  content: none;
+}
+
+/* 极光背景降级为浅灰（保留类名兼容） */
+.aurora-bg {
+  background: #f7f8fa;
+}
+.aurora-bg::before {
+  content: none;
+}
+
+/* 网格点阵（极淡，中性） */
+.mesh-grid {
+  background-image: radial-gradient(rgba(17, 24, 39, 0.04) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+/* 渐变描边降级为细边框（保留类名兼容） */
+.gradient-border {
+  position: relative;
+  border-radius: 14px;
+  background: #ffffff;
+  border: 1px solid #eef0f3;
+}
+
+/* 图标容器：浅色底 + 单色图标（无发光，克制） */
+.glow-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  color: #4f46e5;
+  background: rgba(79, 70, 229, 0.08);
+  box-shadow: none;
+}
+.glow-soft {
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+/* 通用过渡 */
 a,
-button {
+button,
+.ant-btn {
   transition: all 0.2s ease;
 }
 
-/* 渐变品牌文字 */
+/* 品牌文字：深墨（去掉渐变） */
 .brand-gradient-text {
-  background-image: linear-gradient(90deg, #6366f1, #22d3ee);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  background: none;
+  -webkit-background-clip: border-box;
+  background-clip: border-box;
+  color: #111827;
 }
 
-/* 柔和入场动画 */
+/* 滚动揭示：进入视口淡入上浮（克制动效） */
+.reveal {
+  opacity: 0;
+  transform: translateY(var(--reveal-y, 18px));
+  transition: opacity 0.6s cubic-bezier(0.2, 0.7, 0.3, 1),
+    transform 0.6s cubic-bezier(0.2, 0.7, 0.3, 1);
+  will-change: opacity, transform;
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* 商品卡：白底细边框 + 克制 hover 抬升（去掉光晕/强阴影） */
+.product-card {
+  border-radius: 12px !important;
+  border: 1px solid #eef0f3 !important;
+  background: #ffffff;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.product-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 18px rgba(16, 24, 40, 0.06);
+  border-color: #e2e5eb;
+}
+
+/* 鼠标光晕关闭（保留类名兼容） */
+.spotlight-card::after {
+  content: none;
+}
+.spotlight-card:hover {
+  border-color: #e2e5eb !important;
+}
+
+/* 菜单选中态：克制（去掉发光阴影） */
+.ant-menu-item-selected {
+  box-shadow: none !important;
+}
+.ant-menu-item-selected .anticon,
+.ant-menu-item-selected svg {
+  filter: none;
+}
+
+/* 输入框聚焦：克制描边 */
+.ant-input-affix-wrapper-focused,
+.ant-input-focused,
+.ant-input:focus,
+.ant-input-number-focused,
+.ant-input-affix-wrapper:focus {
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.12) !important;
+}
+
+/* 数字滚动：深墨（去掉渐变文字） */
+.count-pop {
+  background: none;
+  -webkit-background-clip: border-box;
+  background-clip: border-box;
+  color: #111827;
+}
+
+/* 分区标题：中性竖条（无发光） */
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.section-title::before {
+  content: "";
+  width: 3px;
+  height: 18px;
+  border-radius: 3px;
+  background: #d1d5db;
+}
+.section-title h2,
+.section-title .st-text {
+  font-size: 19px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.2px;
+  color: #111827;
+}
+
+/* 骨架屏微光（简约灰） */
+.skeleton-shimmer {
+  background: linear-gradient(90deg, #f1f2f4 25%, #e9ebef 37%, #f1f2f4 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: 10px;
+}
+
+/* 图表卡片：白底细边框 */
+.chart-card {
+  border: 1px solid #eef0f3 !important;
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  transition: box-shadow 0.25s ease;
+  overflow: hidden;
+  background: #ffffff;
+}
+.chart-card:hover {
+  box-shadow: 0 4px 14px rgba(16, 24, 40, 0.06);
+}
+
+/* 后台柔和卡片 */
+.ant-card.soft-card {
+  border: 1px solid #eef0f3 !important;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+.ant-card.soft-card:hover {
+  box-shadow: 0 6px 18px rgba(16, 24, 40, 0.06);
+  transform: translateY(-2px);
+}
+
+/* 迷你 sparkline 容器 */
+.spark-track {
+  display: block;
+  width: 100%;
+  height: 36px;
+}
+
+/* 通用动效（克制） */
 @keyframes fadeUp {
   from {
     opacity: 0;
@@ -70,29 +252,32 @@ button {
     transform: none;
   }
 }
+@keyframes floaty {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+@keyframes shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: 0 0;
+  }
+}
 .fade-up {
-  animation: fadeUp 0.45s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  opacity: 0;
+  animation: fadeUp 0.6s ease forwards;
 }
-
-/* 后台柔和卡片：去边框 + 柔和阴影 + 轻抬升 */
-.ant-card.soft-card {
-  border: none;
-  border-radius: 16px;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
-  transition: box-shadow 0.25s ease, transform 0.25s ease;
+.floaty {
+  animation: floaty 6s ease-in-out infinite;
 }
-.ant-card.soft-card:hover {
-  box-shadow: 0 10px 28px rgba(99, 102, 241, 0.14);
-  transform: translateY(-2px);
-}
-
-/* 统计卡片图标容器 */
-.stat-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
+.shimmer {
+  background: linear-gradient(90deg, #f1f2f4 25%, #e9ebef 37%, #f1f2f4 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
 }

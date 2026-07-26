@@ -20,7 +20,7 @@ export default function Orders() {
   return (
     <div>
       <div className="flex items-center gap-2 mb-4">
-        <span className="w-1 h-6 rounded bg-[#6366F1]" />
+        <span className="w-1 h-6 rounded bg-slate-300" />
         <h2 className="text-xl font-bold m-0">我的订单</h2>
       </div>
       <Card className="soft-card">

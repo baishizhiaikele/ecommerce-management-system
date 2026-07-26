@@ -15,6 +15,11 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const original = error.config as any;
+    // 初始化拉取当前用户（/auth/me）在未登录时不应触发整页跳转登录，
+    // 否则会与 auth store 的 init() 形成「401 → 整页重载 → init() → 401」的死循环
+    if (original._noAuthRedirect) {
+      return Promise.reject(error);
+    }
     if (error.response?.status === 401 && original && !original._retry) {
       if (isRefreshing) {
         // 并发 401 复用同一次刷新

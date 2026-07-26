@@ -54,7 +54,7 @@ export default function Shop() {
     return (
       <div>
         <div className="flex items-center gap-2 mb-4">
-          <ShopOutlined className="text-[#6366F1] text-xl" />
+          <ShopOutlined className="text-[#4F46E5] text-xl" />
           <h2 className="text-xl font-bold m-0">{detail.name} 的店铺</h2>
           <Tag color="cyan">{detail.products.length} 件在售</Tag>
         </div>
@@ -69,7 +69,7 @@ export default function Shop() {
                   className="product-card group fade-up"
                   style={{ animationDelay: `${i * 45}ms` }}
                   cover={
-                    <div className="h-40 bg-gradient-to-br from-[#EEF0FF] to-[#E6FBFF] flex items-center justify-center text-4xl transition-transform duration-300 group-hover:scale-105">
+                    <div className="h-40 bg-[#F7F8FC] flex items-center justify-center text-4xl transition-transform duration-300 group-hover:scale-105">
                       🛍️
                     </div>
                   }
@@ -79,7 +79,7 @@ export default function Shop() {
                     title={<span className="font-medium text-slate-800 truncate">{p.name}</span>}
                     description={
                       <div className="flex items-center justify-between mt-2">
-                        <span className="text-[#6366F1] font-bold text-lg">
+                        <span className="text-[#4F46E5] font-bold text-lg">
                           <span className="text-sm align-top mr-0.5">¥</span>
                           {money(p.price)}
                         </span>
@@ -101,7 +101,7 @@ export default function Shop() {
   return (
       <div>
       <div className="flex items-center gap-2 mb-4">
-        <ShopOutlined className="text-[#6366F1] text-xl" />
+        <ShopOutlined className="text-[#4F46E5] text-xl" />
         <h2 className="text-xl font-bold m-0">逛店铺</h2>
       </div>
       {shops.length === 0 ? (
@@ -117,7 +117,7 @@ export default function Shop() {
                 onClick={() => navigate(`/shops/${s.id}`)}
               >
                 <div className="flex items-center gap-2">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-cyan-400 flex items-center justify-center text-white">
+                  <div className="w-10 h-10 rounded-full bg-[#4F46E5] flex items-center justify-center text-white">
                     <ShopOutlined />
                   </div>
                   <div>
