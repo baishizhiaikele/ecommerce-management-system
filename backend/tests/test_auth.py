@@ -51,5 +51,7 @@ async def test_invalid_token_rejected(client):
 async def test_refresh_token_cannot_be_used_as_access(client):
     """refresh 令牌不能当作 access 访问受保护接口。"""
     login = (await client.post("/api/auth/login", json={"username": "buyer", "password": "buyer123"})).json()
+    # 清掉登录写入的 access Cookie，仅用 refresh 令牌作为 Bearer 验证
+    client.cookies.clear()
     r = await client.get("/api/auth/me", headers={"Authorization": f"Bearer {login['refresh_token']}"})
     assert r.status_code == 401

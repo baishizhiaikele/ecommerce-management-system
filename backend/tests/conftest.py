@@ -14,6 +14,9 @@ import pathlib
 # 必须在导入 app 之前设置，settings/engine 会在首次 import 时读取该值。
 _TEST_DB_PATH = pathlib.Path(__file__).resolve().parent / "test_ai_shop.db"
 os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{_TEST_DB_PATH.as_posix()}"
+# 测试密钥（仅测试用），并在测试环境关闭限流
+os.environ.setdefault("SECRET_KEY", "test-secret-key-not-for-production-use")
+os.environ["TESTING"] = "true"
 
 import httpx  # noqa: E402
 import pytest_asyncio  # noqa: E402
@@ -44,6 +47,13 @@ async def _prepare_database():
             _TEST_DB_PATH.unlink()
         except PermissionError:
             pass
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _reset_cookies_after_each_test(client):
+    """S4：登录会向共享的 session 级 client 写入 Cookie；每个测试后清空，避免污染后续“未鉴权”用例。"""
+    yield
+    client.cookies.clear()
 
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
