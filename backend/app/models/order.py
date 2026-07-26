@@ -14,6 +14,7 @@ class OrderStatus(str, enum.Enum):
     SHIPPED = "shipped"
     COMPLETED = "completed"
     REFUND_REQUESTED = "refund_requested"
+    REFUND_REJECTED = "refund_rejected"
     REFUNDED = "refunded"
 
 
@@ -25,7 +26,11 @@ class Order(Base):
     buyer_id = Column(String(36), ForeignKey("users.id"), nullable=False)
     status = Column(SAEnum(OrderStatus), default=OrderStatus.PENDING_PAYMENT, nullable=False)
     total_amount = Column(Numeric(12, 2), nullable=False, default=0)
+    discount_amount = Column(Numeric(12, 2), default=0, nullable=False, server_default="0")
     address = Column(Text)
+    refund_reason = Column(Text)
+    tracking_no = Column(String(60))
+    logistics = Column(Text)  # JSON 字符串，物流轨迹数组
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     paid_at = Column(DateTime(timezone=True), nullable=True)
     shipped_at = Column(DateTime(timezone=True), nullable=True)

@@ -7,6 +7,11 @@ from app.models.review import Review, Sentiment
 from app.models.chat import Conversation, Message, MessageRole
 from app.models.audit import AuditLog
 from app.models.sequence import OrderSequence
+from app.models.points import PointLog, PointAction
+from app.models.coupon import Coupon, CouponType, UserCoupon
+from app.models.favorite import Favorite
+from app.models.notification import Notification, NotificationType
+from app.models.support import SupportTicket, SupportMessage, TicketStatus, SenderRole
 
 __all__ = [
     "Role",
@@ -25,4 +30,16 @@ __all__ = [
     "MessageRole",
     "AuditLog",
     "OrderSequence",
+    "PointLog",
+    "PointAction",
+    "Coupon",
+    "CouponType",
+    "UserCoupon",
+    "Favorite",
+    "Notification",
+    "NotificationType",
+    "SupportTicket",
+    "SupportMessage",
+    "TicketStatus",
+    "SenderRole",
 ]
