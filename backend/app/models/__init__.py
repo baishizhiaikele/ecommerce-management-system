@@ -11,6 +11,7 @@ from app.models.chat import Conversation, Message, MessageRole
 from app.models.audit import AuditLog
 from app.models.sequence import OrderSequence
 from app.models.points import PointLog, PointAction
+from app.models.task import UserTask
 from app.models.coupon import Coupon, CouponType, UserCoupon
 from app.models.favorite import Favorite
 from app.models.notification import Notification, NotificationType
@@ -43,6 +44,7 @@ __all__ = [
     "OrderSequence",
     "PointLog",
     "PointAction",
+    "UserTask",
     "Coupon",
     "CouponType",
     "UserCoupon",

@@ -25,6 +25,8 @@ class User(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     token_version = Column(Integer, default=1, nullable=False)
     points = Column(Integer, default=0, nullable=False, server_default="0")
+    growth_value = Column(Integer, default=0, nullable=False, server_default="0")
+    level = Column(String(20), default="bronze", nullable=False, server_default="bronze")
     avatar = Column(String(512), nullable=True)
     description = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
@@ -38,3 +40,4 @@ class User(Base):
     favorites = relationship("Favorite", back_populates="user", cascade="all, delete-orphan")
     notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
     redemption_records = relationship("RedemptionRecord", back_populates="user", cascade="all, delete-orphan")
+    user_tasks = relationship("UserTask", back_populates="user", cascade="all, delete-orphan")

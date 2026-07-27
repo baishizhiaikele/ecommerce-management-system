@@ -12,6 +12,8 @@ from app.models.points import PointLog, PointAction
 from app.models.user import Role, User
 from app.schemas.content import AddressCreate, AddressOut, AddressUpdate
 from app.services.audit_service import record
+from app.services.member_service import get_membership as get_member_info
+from app.services.task_service import claim_task, list_tasks
 
 router = APIRouter(prefix="/me", tags=["me"])
 
@@ -129,3 +131,28 @@ async def signin(
     )
     await db.commit()
     return {"signed_today": False, "points": new_balance, "gained": gained, "streak": streak + 1}
+
+
+@router.get("/membership")
+async def get_membership(
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> dict:
+    """当前会员等级、成长值、权益及下一等级进度。"""
+    return get_member_info(user)
+
+
+@router.get("/tasks")
+async def list_my_tasks(
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> list:
+    """任务中心：返回全部任务及其完成 / 领取状态。"""
+    return await list_tasks(db, user)
+
+
+@router.post("/tasks/{task_key}/claim")
+async def claim_my_task(
+    task_key: str,
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> dict:
+    """领取已完成任务的积分奖励。"""
+    return await claim_task(db, user, task_key)

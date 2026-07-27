@@ -14,6 +14,7 @@ class PointAction(str, enum.Enum):
     REFUND = "refund"
     ADMIN_ADJUST = "admin_adjust"
     SIGNIN = "signin"
+    TASK_REWARD = "task_reward"
 
 
 class PointLog(Base):

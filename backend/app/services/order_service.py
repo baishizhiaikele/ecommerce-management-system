@@ -19,6 +19,7 @@ from app.services.coupon_service import compute_discount, find_usable_user_coupo
 from app.services.inventory_service import record_cancel_return, record_sale
 from app.services.points_service import POINTS_REDEEM_RATE, add_points
 from app.services.shipping_service import compute_freight
+from app.core.member_levels import get_tier
 from app.events import bus
 
 
@@ -121,6 +122,9 @@ async def checkout(
 
     subtotal = round(total, 2)
     discount = 0.0
+    # 会员等级专属折扣（青铜 discount=1.0 不打折，不影响既有订单）
+    tier = get_tier(buyer.growth_value or 0)
+    discount += round(subtotal * (1 - tier["discount"]), 2)
     # 优惠券抵扣
     if coupon_id:
         uc = await find_usable_user_coupon(db, buyer.id, coupon_id)
@@ -143,6 +147,9 @@ async def checkout(
     for mid, msub in merchant_subtotals.items():
         freight += await compute_freight(db, mid, msub)
     freight = round(freight, 2)
+    # 会员包邮权益（黄金 / 钻石等级免运费）
+    if tier["free_shipping"]:
+        freight = 0.0
 
     order.freight = freight
     order.total_amount = round(max(subtotal - discount, 0.0) + freight, 2)

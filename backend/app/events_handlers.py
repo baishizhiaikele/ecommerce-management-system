@@ -8,6 +8,7 @@ from app.models.user import User
 from app.services.ai_service import ai_service
 from app.services.audit_service import record
 from app.services.favorite_service import list_user_ids_by_product
+from app.services.member_service import award_growth
 from app.services.notification_service import notify
 from app.services.points_service import POINTS_PER_YUAN, add_points
 
@@ -51,6 +52,8 @@ async def _on_order_completed(order_id: str, buyer_id: str) -> None:
         earned = int(float(order.total_amount) * POINTS_PER_YUAN)
         if earned > 0:
             await add_points(s, buyer_id, "order_complete", earned, f"订单 {order.order_no} 完成奖励")
+        # 成长值：按实付金额累计，自动重算会员等级
+        await award_growth(s, buyer_id, int(float(order.total_amount)))
         await notify(
             s,
             buyer_id,
