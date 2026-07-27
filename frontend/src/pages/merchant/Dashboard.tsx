@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { AxiosError } from "axios";
-import { Row, Col, Card, Statistic, Spin, Button, message, Segmented } from "antd";
+import { Row, Col, Card, Statistic, Spin, Button, message, Segmented, List } from "antd";
 import {
   AppstoreOutlined,
   CheckCircleOutlined,
@@ -20,20 +20,30 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
-import { merchantStats, merchantTrend, exportOrdersReport, MerchantStats, TrendPoint } from "../../api";
+import {
+  merchantStats,
+  merchantTrend,
+  merchantAnalytics,
+  exportOrdersReport,
+  MerchantStats,
+  TrendPoint,
+  MerchantAnalytics,
+} from "../../api";
 import { money } from "../../utils/format";
 
 export default function MerchantDashboard() {
   const [stats, setStats] = useState<MerchantStats | null>(null);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
+  const [analytics, setAnalytics] = useState<MerchantAnalytics | null>(null);
   const [days, setDays] = useState<number>(7);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     setLoading(true);
-    Promise.all([merchantStats(), merchantTrend(days)])
-      .then(([s, t]) => {
+    Promise.all([merchantStats(), merchantTrend(days), merchantAnalytics()])
+      .then(([s, t, a]) => {
         setStats(s);
         setTrend(t);
+        setAnalytics(a);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -119,6 +129,37 @@ export default function MerchantDashboard() {
           </LineChart>
         </ResponsiveContainer>
       </Card>
+
+      {analytics && (
+        <Card title="客户分层（RFM）与复购" className="mt-6 soft-card fade-up">
+          <Row gutter={[16, 16]}>
+            <Col xs={24} md={8}>
+              <Statistic
+                title="复购率"
+                value={(analytics.repurchase_rate * 100).toFixed(1)}
+                suffix="%"
+                valueStyle={{ color: "#4F46E5", fontWeight: 600 }}
+              />
+              <div className="text-slate-500 text-sm mt-2">
+                下单≥2 次的买家占比，共 {analytics.buyers} 位成交客户
+              </div>
+            </Col>
+            <Col xs={24} md={16}>
+              <List
+                dataSource={analytics.rfm}
+                renderItem={(s) => (
+                  <List.Item>
+                    <List.Item.Meta
+                      title={s.segment}
+                      description={`客户 ${s.customers} 人 · 累计消费 ¥${money(s.total_monetary)}`}
+                    />
+                  </List.Item>
+                )}
+              />
+            </Col>
+          </Row>
+        </Card>
+      )}
 
       <Card title="客单价（AOV）趋势" className="mt-6 soft-card fade-up">
         <ResponsiveContainer width="100%" height={260}>

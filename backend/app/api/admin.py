@@ -13,6 +13,7 @@ from app.schemas.product import ProductOut
 from app.schemas.review import ReviewOut
 from app.schemas.user import UserOut, UserUpdate
 from app.services import dashboard_service, review_service
+from app.services.async_queue import backend as queue_backend, stats as queue_stats
 from app.services.audit_service import record
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -87,6 +88,12 @@ async def analytics(
     db: AsyncSession = Depends(get_db), _: User = Depends(require_role(Role.ADMIN))
 ) -> DashboardAnalytics:
     return await dashboard_service.dashboard_analytics(db)
+
+
+@router.get("/queue/stats")
+async def queue_stats(_: User = Depends(require_role(Role.ADMIN))) -> dict:
+    """异步队列运行指标（P2 工程 stub 观测）。"""
+    return {"backend": queue_backend(), **queue_stats()}
 
 
 @router.get("/reviews/negative", response_model=list[ReviewOut])

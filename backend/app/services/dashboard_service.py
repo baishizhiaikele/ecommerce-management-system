@@ -16,7 +16,9 @@ from app.schemas.dashboard import (
     Comparison,
     DashboardAnalytics,
     FunnelStage,
+    MerchantAnalytics,
     MerchantStats,
+    RFMSegment,
     TopProduct,
 )
 
@@ -109,12 +111,14 @@ async def sales_trend(db: AsyncSession, *, merchant_id: str | None = None, days:
         if merchant_id:
             amount = await db.scalar(
                 select(func.coalesce(func.sum(OrderItem.price * OrderItem.quantity), 0))
+                .select_from(Order)
                 .join(OrderItem, OrderItem.order_id == Order.id)
                 .join(Product, Product.id == OrderItem.product_id)
                 .where(*base_where, Product.merchant_id == merchant_id)
             )
             orders = await db.scalar(
                 select(func.count(func.distinct(Order.id)))
+                .select_from(Order)
                 .join(OrderItem, OrderItem.order_id == Order.id)
                 .join(Product, Product.id == OrderItem.product_id)
                 .where(*base_where, Product.merchant_id == merchant_id)
@@ -275,4 +279,132 @@ async def dashboard_analytics(db: AsyncSession) -> DashboardAnalytics:
         top_products=top_products,
         funnel=funnel,
         comparison=comparison,
+        **(await _rfm_and_repurchase(db)),
+    )
+
+
+def _buyer_aggregation(merchant_id: str | None = None):
+    """构造按买家聚合已支付订单的查询（RFM / 复购率共用）。"""
+    stmt = (
+        select(
+            Order.buyer_id,
+            func.count(func.distinct(Order.id)),
+            func.coalesce(func.sum(Order.total_amount), 0),
+            func.max(Order.created_at),
+        )
+        .where(Order.status.notin_([OrderStatus.PENDING_PAYMENT, OrderStatus.REFUNDED]))
+    )
+    if merchant_id:
+        stmt = (
+            stmt.select_from(Order)
+            .join(OrderItem, OrderItem.order_id == Order.id)
+            .join(Product, Product.id == OrderItem.product_id)
+            .where(Product.merchant_id == merchant_id)
+        )
+    return stmt.group_by(Order.buyer_id)
+
+
+async def rfm_analysis(db: AsyncSession, *, merchant_id: str | None = None) -> list[RFMSegment]:
+    """RFM 客户分层：按最近购买 / 频次 / 金额把买家归入运营人群。"""
+    rows = (await db.execute(_buyer_aggregation(merchant_id))).all()
+    # SQLite 存储的 created_at 为 naive，统一用 naive 计算避免时区相减报错
+    now = datetime.now()
+    buckets = {
+        "高价值客户": {"count": 0, "monetary": 0.0},
+        "忠诚客户": {"count": 0, "monetary": 0.0},
+        "潜力客户": {"count": 0, "monetary": 0.0},
+        "新客": {"count": 0, "monetary": 0.0},
+        "流失风险": {"count": 0, "monetary": 0.0},
+    }
+    for _buyer_id, freq, monetary, last in rows:
+        monetary = float(monetary or 0)
+        recency_days = (now - (last or now)).days
+        seg = _classify(recency_days, int(freq or 0), monetary)
+        buckets[seg]["count"] += 1
+        buckets[seg]["monetary"] += monetary
+    return [
+        RFMSegment(
+            segment=name,
+            customers=vals["count"],
+            total_monetary=round(vals["monetary"], 2),
+        )
+        for name, vals in buckets.items()
+    ]
+
+
+def _classify(recency_days: int, frequency: int, monetary: float) -> str:
+    if recency_days > 60:
+        return "流失风险"
+    if frequency == 1:
+        return "新客"
+    if recency_days <= 30 and frequency >= 2 and monetary >= 100:
+        return "高价值客户"
+    if monetary >= 100:
+        return "潜力客户"
+    return "忠诚客户"
+
+
+async def repurchase_rate(db: AsyncSession, *, merchant_id: str | None = None) -> float:
+    """复购率 = 下单≥2 次的买家数 / 下单≥1 次的买家数。"""
+    rows = (await db.execute(_buyer_aggregation(merchant_id))).all()
+    total = len(rows)
+    if total == 0:
+        return 0.0
+    repeat = sum(1 for _b, freq, _m, _l in rows if int(freq or 0) >= 2)
+    return round(repeat / total, 4)
+
+
+async def _rfm_and_repurchase(db: AsyncSession, *, merchant_id: str | None = None) -> dict:
+    rfm = await rfm_analysis(db, merchant_id=merchant_id)
+    buyers = sum(seg.customers for seg in rfm)
+    return {
+        "rfm": rfm,
+        "repurchase_rate": await repurchase_rate(db, merchant_id=merchant_id),
+        "buyers": buyers,
+    }
+
+
+async def _merchant_top_products(db: AsyncSession, merchant_id: str, limit: int = 5) -> list[TopProduct]:
+    stmt = (
+        select(
+            Product.id,
+            Product.name,
+            func.coalesce(func.sum(OrderItem.quantity), 0),
+            func.coalesce(func.sum(OrderItem.quantity * Product.price), 0),
+        )
+        .select_from(OrderItem)
+        .join(Product, Product.id == OrderItem.product_id)
+        .join(Order, Order.id == OrderItem.order_id)
+        .where(
+            Product.merchant_id == merchant_id,
+            Order.status.notin_([OrderStatus.PENDING_PAYMENT, OrderStatus.REFUNDED]),
+        )
+        .group_by(Product.id, Product.name)
+        .order_by(func.coalesce(func.sum(OrderItem.quantity * Product.price), 0).desc())
+        .limit(limit)
+    )
+    rows = (await db.execute(stmt)).all()
+    return [
+        TopProduct(
+            id=pid,
+            name=nm or "未命名商品",
+            sales=int(s or 0),
+            revenue=round(float(rev or 0), 2),
+        )
+        for pid, nm, s, rev in rows
+    ]
+
+
+async def merchant_analytics(db: AsyncSession, merchant_id: str) -> MerchantAnalytics:
+    """商家视角分析：RFM 分层、复购率、销售趋势、Top 商品。"""
+    stats = await merchant_stats(db, merchant_id)
+    rfm = await rfm_analysis(db, merchant_id=merchant_id)
+    buyers = sum(seg.customers for seg in rfm)
+    return MerchantAnalytics(
+        stats=stats,
+        rfm=rfm,
+        repurchase_rate=await repurchase_rate(db, merchant_id=merchant_id),
+        buyers=buyers,
+        sales_trend=await sales_trend(db, merchant_id=merchant_id, days=7),
+        top_products=await _merchant_top_products(db, merchant_id),
     )

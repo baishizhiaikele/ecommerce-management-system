@@ -10,6 +10,7 @@ from app.services.audit_service import record
 from app.services.favorite_service import list_user_ids_by_product
 from app.services.member_service import award_growth
 from app.services.notification_service import notify
+from app.services.payment_service import refund_payment
 from app.services.points_service import POINTS_PER_YUAN, add_points
 
 
@@ -70,6 +71,9 @@ async def _on_order_refunded(order_id: str, buyer_id: str) -> None:
         order = await s.get(Order, order_id)
         if not order:
             return
+        # 原路退款：标记对应支付流水为 REFUNDED（资金沿原网关退回）
+        await refund_payment(s, order)
+        await s.commit()
         refund_amt = float(order.refund_amount or order.total_amount or 0)
         revert = int(refund_amt * POINTS_PER_YUAN)
         if revert > 0:

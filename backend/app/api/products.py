@@ -21,6 +21,7 @@ from app.schemas.product import (
     ProductUpdate,
 )
 from app.services import product_service
+from app.services.image_service import generate_images
 from app.core.cache import cache_get, cache_set, cache_delete_prefix
 
 router = APIRouter(prefix="/products", tags=["products"])
@@ -163,3 +164,20 @@ async def ai_price_advice(
     return await product_service.ai_price_advice(
         db, product=product, merchant_id=product.merchant_id, market_price=data.market_price, note=data.note
     )
+
+
+@router.post("/{product_id}/ai-image")
+async def ai_image(
+    product: Product = Depends(get_merchant_product),
+    db: AsyncSession = Depends(get_db),
+    count: int = Query(4, ge=1, le=8),
+    apply: bool = Query(False, description="为 true 时将首张自动设为商品主图"),
+) -> dict:
+    """AI 文生图：生成候选主图 / 场景图（未配置网关时降级为占位图）。"""
+    prompt = f"{product.name}。{product.description or ''}"
+    urls = await generate_images(prompt, count)
+    if apply and urls:
+        product.image_url = urls[0]
+        await db.commit()
+        await cache_delete_prefix("products:")
+    return {"images": urls, "applied": bool(apply and urls)}

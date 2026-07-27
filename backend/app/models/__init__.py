@@ -18,6 +18,7 @@ from app.models.notification import Notification, NotificationType
 from app.models.inventory import StockChangeType, StockLog
 from app.models.follow import FollowShop
 from app.models.support import SupportTicket, SupportMessage, TicketStatus, SenderRole
+from app.models.payment import Payment
 
 __all__ = [
     "Role",
@@ -57,4 +58,5 @@ __all__ = [
     "SupportMessage",
     "TicketStatus",
     "SenderRole",
+    "Payment",
 ]

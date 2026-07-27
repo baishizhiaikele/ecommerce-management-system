@@ -75,6 +75,7 @@ export default function MainLayout() {
             { key: "shops", label: <Link to="/shops">{t("shops")}</Link> },
             { key: "favorites", label: <Link to="/favorites">{t("favorites")}</Link> },
             { key: "points", label: <Link to="/points">{t("points")}</Link> },
+            { key: "membership", label: <Link to="/membership">会员中心</Link> },
             { key: "promotions", label: <Link to="/promotions">促销活动</Link> },
             { key: "mall", label: <Link to="/mall">积分商城</Link> },
           ]}

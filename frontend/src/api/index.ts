@@ -789,3 +789,65 @@ export const requestRefundPartial = (
       image_urls: image_urls || [],
     })
     .then((r) => r.data);
+
+// ---------- 会员等级 + 任务中心 ----------
+export interface MembershipOut {
+  level: string;
+  level_name: string;
+  growth_value: number;
+  discount: number;
+  free_shipping: boolean;
+  next_level?: string | null;
+  next_level_name?: string | null;
+  next_growth?: number | null;
+  progress: number;
+  benefits: string[];
+}
+export interface TaskOut {
+  key: string;
+  name: string;
+  description: string;
+  points: number;
+  done: boolean;
+  claimed: boolean;
+}
+export const getMembership = () =>
+  api.get<MembershipOut>("/me/membership").then((r) => r.data);
+export const listTasks = () =>
+  api.get<TaskOut[]>("/me/tasks").then((r) => r.data);
+export const claimTask = (key: string) =>
+  api.post<{ ok: boolean; gained: number; points: number }>(`/me/tasks/${key}/claim`).then((r) => r.data);
+
+// ---------- 支付（沙箱网关）----------
+export interface PaymentOut {
+  payment_id: string;
+  gateway: string;
+  amount: number;
+  currency: string;
+  status: string;
+  pay_url?: string;
+  transaction_id?: string | null;
+}
+export const createPayment = (orderId: string) =>
+  api.post<PaymentOut>(`/payments/orders/${orderId}/pay`).then((r) => r.data);
+export const confirmPayment = (orderId: string) =>
+  api.post<{ status: string }>(`/payments/orders/${orderId}/confirm`).then((r) => r.data);
+export const getPaymentStatus = (orderId: string) =>
+  api.get<PaymentOut>(`/payments/orders/${orderId}/status`).then((r) => r.data);
+
+// ---------- 商家深度分析（含 RFM / 复购率）----------
+export interface RFMSegment {
+  segment: string;
+  customers: number;
+  total_monetary: number;
+}
+export interface MerchantAnalytics {
+  stats: MerchantStats;
+  rfm: RFMSegment[];
+  repurchase_rate: number;
+  buyers: number;
+  sales_trend: TrendPoint[];
+  top_products: TopProduct[];
+}
+export const merchantAnalytics = () =>
+  api.get<MerchantAnalytics>("/merchant/dashboard/analytics").then((r) => r.data);

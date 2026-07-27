@@ -62,8 +62,26 @@ class Comparison(BaseModel):
     orders_rate: float
 
 
+class RFMSegment(BaseModel):
+    segment: str
+    customers: int
+    total_monetary: float
+
+
 class DashboardAnalytics(BaseModel):
     category_breakdown: List[CategoryBreakdown]
     top_products: List[TopProduct]
     funnel: List[FunnelStage]
     comparison: Comparison
+    rfm: List[RFMSegment] = []
+    repurchase_rate: float = 0.0
+    buyers: int = 0
+
+
+class MerchantAnalytics(BaseModel):
+    stats: MerchantStats
+    rfm: List[RFMSegment] = []
+    repurchase_rate: float = 0.0
+    buyers: int = 0
+    sales_trend: List[TrendPoint] = []
+    top_products: List[TopProduct] = []

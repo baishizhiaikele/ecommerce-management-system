@@ -393,6 +393,12 @@ try/
 | P0 | 降价提醒 | ✅ | `77850f4` | 收藏商品降价经事件总线推送，顺带修复 `GET /notifications` 500 |
 | P0 | 运费模板 | ✅ | `77850f4` | 商家运费模板 + 结算接入，顺带修复 `OrderOut` 漏传字段 |
 | **P1** | **会员等级 + 任务中心** | ✅ | 见下 | 成长值→等级→折扣/包邮；签到任务中心发积分；订单完成累加成长值 |
+| **P0** | **真实支付接入** | ✅ | 见下 | sandbox 网关 + 签名验真 + 幂等回调 + 原路退款；前端沙箱确认支付 |
+| **P1** | **AI 商品图生成** | ✅ | 见下 | 文生图接口，未配置网关时 mock 占位图降级 |
+| **P1** | **AI 智能搜索问答** | ✅ | 见下 | 自然语言→结构化筛选→召回，LLM/正则双实现 |
+| **P1** | **数据看板增强** | ✅ | 见下 | RFM 分层 + 复购率 + 商家深度分析 |
+| **P2** | **工程增强** | ✅ | 见下 | 限流全局落地 + /metrics 可观测性 + 异步队列 stub |
+| **前端** | **会员/任务中心 + 支付 + 看板** | ✅ | 见下 | 会员中心、任务中心、沙箱支付、商家 RFM 页面 |
 
 ### 本次（会员等级 + 任务中心）改动要点
 - 新增 `app/core/member_levels.py`：青铜/白银/黄金/钻石四档，配置驱动。
@@ -403,4 +409,13 @@ try/
 - 结算接入会员权益：会员专属折扣（青铜不打折，不影响既有订单）、黄金/钻石包邮。
 - 订单完成事件累加成长值并自动重算等级。
 - 迁移 `0005_member_tasks.py`（生产环境变量）；pytest 全绿（39 项）。
-- 前端会员中心/任务中心页面待补（API 已就绪）。
+- 前端会员中心/任务中心页面已补齐（见下）。
+
+### 本次（真实支付 + AI + 看板 + 工程 + 前端）改动要点
+- **支付（P0）**：`Payment` 模型 + `payment_service`（sandbox 网关、HMAC 签名验真、`handle_webhook` 幂等、原路退款）+ 接口 `/payments/orders/{id}/pay`、`/status`、`/webhook/{gateway`、`/confirm`（沙箱）。退款事件自动标记支付流水 REFUNDED。迁移 `0006_payments.py`。
+- **AI 商品图（P1）**：`image_service.generate_images` 文生图，配置 `IMAGE_API_KEY/BASE_URL` 时调用网关，否则返回确定性占位图；接口 `POST /products/{id}/ai-image`（商家，可 apply 首张为主图）。
+- **AI 搜索问答（P1）**：`search_service.search_qa` 自然语言→解析价格/类目/关键词→召回商品并生成回答；配置 AI 密钥走 LLM，否则本地正则解析。接口 `POST /search/qa`。
+- **数据看板（P1）**：`dashboard_service` 新增 `rfm_analysis`（高价值/忠诚/潜力/新客/流失风险）、`repurchase_rate`；`DashboardAnalytics` 增加 rfm/repurchase_rate/buyers；新增 `merchant_analytics` 与 `GET /merchant/dashboard/analytics`（RFM+复购率+趋势+Top 商品）。
+- **工程（P2）**：`core/ratelimit.py` 设 `default_limits` 并经 `SlowAPIMiddleware` 全局落地（测试环境禁用）；`core/metrics.py` + `/metrics` 暴露 Prometheus 风格指标；`services/async_queue.py` 进程内异步任务队列 stub，`/admin/queue/stats` 观测。
+- **前端**：`Membership.tsx`（会员等级 + 任务中心领取）、`Pay.tsx`（沙箱确认支付）、订单列表"去支付"按钮、商家看板 RFM/复购率卡片；`api/index.ts` 新增对应类型与函数。
+- **测试**：新增 `test_payments.py`、`test_ai_features.py`、`test_dashboard_v4.py`，pytest 全绿（47 项）；`npm run build` 通过。

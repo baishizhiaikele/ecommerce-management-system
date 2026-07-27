@@ -44,9 +44,16 @@ export default function Orders() {
           {
             title: "操作",
             render: (_, r) => (
-              <Button type="link" onClick={() => navigate(`/orders/${r.id}`)}>
-                查看
-              </Button>
+              <>
+                <Button type="link" onClick={() => navigate(`/orders/${r.id}`)}>
+                  查看
+                </Button>
+                {r.status === "pending_payment" && (
+                  <Button type="link" onClick={() => navigate(`/pay/${r.id}`)}>
+                    去支付
+                  </Button>
+                )}
+              </>
             ),
           },
         ]}

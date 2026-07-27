@@ -8,7 +8,7 @@ from app.db.session import get_db
 from app.models.order import Order, OrderItem
 from app.models.product import Product, ProductStatus
 from app.models.user import Role, User
-from app.schemas.dashboard import MerchantStats, TrendPoint
+from app.schemas.dashboard import MerchantAnalytics, MerchantStats, TrendPoint
 from app.schemas.product import ProductOut
 import csv
 import io
@@ -74,6 +74,14 @@ async def trend(
     user: User = Depends(require_role(Role.MERCHANT)),
 ) -> list[TrendPoint]:
     return await dashboard_service.sales_trend(db, merchant_id=user.id, days=days)
+
+
+@router.get("/dashboard/analytics", response_model=MerchantAnalytics)
+async def analytics(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(Role.MERCHANT)),
+) -> MerchantAnalytics:
+    return await dashboard_service.merchant_analytics(db, user.id)
 
 
 @router.get("/products", response_model=list[ProductOut])

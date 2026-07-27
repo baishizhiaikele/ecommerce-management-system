@@ -27,6 +27,19 @@ class Settings(BaseSettings):
     AI_MODEL: str = "gpt-4o-mini"
     AI_TIMEOUT_SECONDS: float = 12.0
 
+    # 支付网关（P0 真实支付接入）：默认 sandbox 自测网关，生产切换为 alipay/wechat 并注入密钥
+    PAYMENT_GATEWAY: str = "sandbox"
+    PAYMENT_SECRET: str = "change-me-in-prod-payment-secret"
+    PAYMENT_NOTIFY_BASE_URL: str = ""
+
+    # AI 商品图生成（P1）：未配置则走 mock 占位图降级
+    IMAGE_API_KEY: str = ""
+    IMAGE_BASE_URL: str = ""
+    IMAGE_MODEL: str = "gpt-image-1"
+
+    # 异步任务队列（P2 工程）：默认进程内后台执行，生产可切换 redis/celery
+    ASYNC_QUEUE_BACKEND: str = "inprocess"
+
     @property
     def async_database_url(self) -> str:
         """返回 SQLAlchemy 异步引擎可用的数据库 URL。

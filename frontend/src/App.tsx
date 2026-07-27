@@ -15,6 +15,8 @@ import Favorites from "./pages/Favorites";
 import Notifications from "./pages/Notifications";
 import Points from "./pages/Points";
 import Me from "./pages/Me";
+import Membership from "./pages/Membership";
+import Pay from "./pages/Pay";
 import Address from "./pages/Address";
 import Coupons from "./pages/Coupons";
 import Support from "./pages/Support";
@@ -93,6 +95,8 @@ export default function App() {
         <Route path="/favorites" element={<Favorites />} />
         <Route path="/notifications" element={<Notifications />} />
           <Route path="/points" element={<Points />} />
+          <Route path="/membership" element={<Membership />} />
+          <Route path="/pay/:id" element={<Pay />} />
           <Route path="/me" element={<Me />} />
           <Route path="/addresses" element={<Address />} />
           <Route path="/coupons" element={<Coupons />} />

@@ -41,13 +41,16 @@ from app.api.support import router as support_router
 from app.api.upload import UPLOAD_DIR
 from app.api.ws import router as ws_router
 from app.api.shipping import router as shipping_router
+from app.api.payments import router as payments_router
 from app.core.config import settings
 from app.core.seed import seed_demo
 from app.events_handlers import register_handlers
 from app.core.scheduler import scheduler_loop
 from app.core.ratelimit import limiter
+from app.core.metrics import MetricsMiddleware, render as render_metrics
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 # 注册所有模型，确保建表元数据完整
 importlib.import_module("app.models")
@@ -118,9 +121,15 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title=settings.PROJECT_NAME, lifespan=lifespan)
 
-# 限流（S2）：按客户端 IP 限制敏感接口频率；测试环境（TESTING=True）已在 ratelimit 中禁用
+# 限流（S2）：按客户端 IP 限制全局请求频率；测试环境（TESTING=True）已在 ratelimit 中禁用
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+if not settings.TESTING:
+    # 全局默认限流通过中间件落地（无需在每个路由上添加 request 参数）
+    app.add_middleware(SlowAPIMiddleware)
+
+# 可观测性（P2）：请求指标中间件（始终开启，开销极低）
+app.add_middleware(MetricsMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -158,6 +167,13 @@ app.include_router(variant_router, prefix=settings.API_V1_PREFIX)
 app.include_router(follow_router, prefix=settings.API_V1_PREFIX)
 app.include_router(ws_router, prefix=settings.API_V1_PREFIX)
 app.include_router(shipping_router, prefix=settings.API_V1_PREFIX)
+app.include_router(payments_router, prefix=settings.API_V1_PREFIX)
+
+
+# ---- 可观测性：Prometheus 风格指标端点（无需鉴权，供监控抓取）----
+@app.get("/metrics", include_in_schema=False)
+async def metrics() -> str:
+    return render_metrics()
 
 
 # ---- 上传文件静态服务（开发/生产均生效）----
