@@ -23,7 +23,7 @@ import {
   RobotOutlined,
   MessageOutlined,
 } from "@ant-design/icons";
-import { getProduct, listProductReviews, listVariants, addCartItem, type ProductOut, type ReviewOut, type VariantOut } from "../api";
+import { getProduct, listProductReviews, listVariants, addCartItem, logView, type ProductOut, type ReviewOut, type VariantOut } from "../api";
 import { money, productStatusMeta } from "../utils/format";
 import { useAuth } from "../store/auth";
 import { useCart } from "../store/cart";
@@ -68,7 +68,7 @@ export default function ProductDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // 记录浏览历史（本地，用于首页「最近浏览」）
+  // 记录浏览历史（本地兜底 + 登录用户同步后端）
   useEffect(() => {
     if (!p?.id) return;
     try {
@@ -81,6 +81,15 @@ export default function ProductDetail() {
       localStorage.setItem("browse_history", JSON.stringify(next));
     } catch {
       /* 忽略 */
+    }
+    const u = useAuth.getState().user;
+    if (u) {
+      logView({
+        product_id: p.id,
+        product_name: p.name,
+        price: p.price != null ? Number(p.price) : null,
+        image_url: p.image_url,
+      }).catch(() => {});
     }
   }, [p]);
 

@@ -48,6 +48,7 @@ from app.api.decoration import router as decoration_router
 from app.api.notes import router as notes_router
 from app.api.plus import router as plus_router
 from app.api.qna import router as qna_router
+from app.api.views import router as views_router
 from app.core.config import settings
 from app.core.seed import seed_demo
 from app.events_handlers import register_handlers
@@ -207,6 +208,7 @@ app.include_router(decoration_router, prefix=settings.API_V1_PREFIX)
 app.include_router(notes_router, prefix=settings.API_V1_PREFIX)
 app.include_router(plus_router, prefix=settings.API_V1_PREFIX)
 app.include_router(qna_router, prefix=settings.API_V1_PREFIX)
+app.include_router(views_router, prefix=settings.API_V1_PREFIX)
 
 
 # ---- 可观测性：Prometheus 风格指标端点（无需鉴权，供监控抓取）----

@@ -930,6 +930,33 @@ export const acceptAnswer = (questionId: string, answerId: string) =>
 export const deleteQuestion = (questionId: string) =>
   api.delete(`/products/questions/${questionId}`);
 
+// ---------- 浏览历史 / 最近常买 ----------
+export interface ViewLogIn {
+  product_id: string;
+  product_name?: string | null;
+  price?: number | null;
+  image_url?: string | null;
+}
+export interface ViewLogOut {
+  id: string;
+  product_id: string;
+  product_name?: string | null;
+  price?: number | null;
+  image_url?: string | null;
+  created_at: string;
+}
+export interface BoughtOut {
+  product_id: string;
+  product_name: string;
+  times: number;
+}
+export const logView = (data: ViewLogIn) =>
+  api.post(`/me/view-log`, data).then((r) => r.data);
+export const listHistory = (limit = 30) =>
+  api.get<ViewLogOut[]>(`/me/history`, { params: { limit } }).then((r) => r.data);
+export const listRecentlyBought = () =>
+  api.get<BoughtOut[]>(`/me/recently-bought`).then((r) => r.data);
+
 // ---------- 报表导出 PDF ----------
 export const exportOrdersPdf = () =>
   api
