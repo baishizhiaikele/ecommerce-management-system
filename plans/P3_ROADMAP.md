@@ -34,3 +34,31 @@
   - 前端：`OrderDetail` 增加退货寄回、商家确认收货、换货、发起/裁定仲裁的交互与中英文案；`api/index.ts`、`format.ts`、`i18n` 同步扩展。
   - 验证：后端全量 pytest 通过；前端 `tsc --noEmit` 0 错；新增 `tests/test_returns_p3.py` 覆盖退货退款 / 仅退款 / 换货 / 仲裁四条链路。
   - 下一步：**P3-F 支付抽象化 + 担保交易**。
+- **2026-07-28（续2）**：**P3-F 已完成**（提交 538f655）。
+  - 后端：`payment_providers.py` 抽象 `PaymentProvider`（sandbox/stripe/mock，HMAC 签名验真+幂等回调）；担保交易 escrow 状态机 `none→held→released/reversed`（支付托管、确认收货释放、退款逆向）；新增 `Settlement` 结算台账 + `GET /payments/settlements`（商家/管理员）；`order_service` 在 COMPLETED/REFUNDED 分支挂接释放/逆向。
+  - 前端：`OrderDetail` 展示担保状态 Tag（`escrowMeta`）；`api/index.ts` 增 `PaymentStatus`。
+  - 验证：`tests/test_escrow_p3.py` 全绿。
+- **2026-07-28（续3）**：**P3-B 已完成**（提交 23a8ac3）。
+  - 后端：`agent_service.py` 工具注册表（check_stock/compare_price/bundle_recommend/add_to_cart/checkout）+ 意图路由；`/agent/chat`、`/agent/tools` 端点。
+  - 前端：`AIMall` 增加对话式购物面板（意图识别 → 工具调用 → 结果卡片）。
+  - 验证：`tests/test_agent_p3.py` 全绿。
+- **2026-07-28（续4）**：**P3-C 已完成**（提交 c010910）。
+  - 后端：`Promotion` 增 `stock_limit/stock_sold`，秒杀下单原子扣减防超卖；新增 `marketing.py` 模型/服务/路由：拼团（GroupBuy 开团/参团/成团自动为全员下单）、砍价（Bargain 好友助砍、按总差价 25% 递减、触底锁价下单）。
+  - 验证：`tests/test_marketing_p3.py` 全绿（防超卖并发断言通过）。
+- **2026-07-28（续5）**：**P3-D 已完成**（提交 5a834cf）。
+  - 后端：`Order` 增 `delivery_type/pickup_store/pickup_code/picked_up_at`；自提免运费；支付成功自动生成 8 位自提码；商家 `POST /orders/{id}/pickup-verify` 凭码核销（备货→当面交付→订单完成，触发托管释放）；发货/备货自动写首条物流轨迹。
+  - 前端：购物车下单选择「快递/到店自提」；订单详情展示配送方式、买家自提码、商家核销输入框。
+  - 验证：`tests/test_pickup_p3.py` 全绿。
+- **2026-07-28（续6）**：**P3-E 已完成**（提交 f60fad4）。
+  - 后端：`ShopDecoration` 模型（主题色/招牌/模块化 layout JSON）；`/decoration/mine`（商家读写，模块类型白名单校验）+ `/decoration/{merchant_id}`（买家公开读取，products 模块自动填充商品数据并保序）。
+  - 前端：商家中心新增「店铺装修」页（主题色 ColorPicker、招牌、公告、推荐位多选 + 实时预览）；买家店铺页渲染自定义招牌/公告条/店长推荐区。
+  - 验证：`tests/test_decoration_p3.py` 全绿。
+- **2026-07-28（续7）**：**P3-G 已完成**（提交 0ab59e1）。
+  - 后端：`ShoppingNote`/`NoteLike` 模型；`/notes` 发布（挂商品校验在售）/feed 列表（关键词搜索）/详情/点赞切换/删除（作者或管理员）。
+  - 前端：新增「种草社区」页（发布图文笔记、挂载商品卡直达购买、点赞、搜索）。
+  - 验证：`tests/test_notes_p3.py` 全绿。
+- **2026-07-28（续8）**：**P3-H 已完成**（提交 7c18e62）。
+  - 后端：`PaidMembership` 模型 + `plus_service`（月卡 19.9/30 天/送 200 积分，年卡 198/365 天/送 2400 积分；续费顺延）；`/plus/status`、`/plus/subscribe`；`checkout` 叠加 PLUS 权益：全场额外 95 折（与等级折扣叠加）+ 全场包邮。
+  - 前端：会员中心新增 PLUS 卡片（权益说明、月/年卡开通与续费）。
+  - 验证：`tests/test_plus_p3.py` 全绿。
+- **2026-07-28（终）**：**P3 全部完成**。最终验证：后端全量 pytest 通过（`test_membership_default_bronze` 为预存在的会话级共享账号隔离 flake，单独运行通过，与 P3 改动无关）；前端 `tsc --noEmit` 0 错、`vite build` 成功。

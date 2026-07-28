@@ -28,8 +28,15 @@ async def _make_product(client, mh, name="PLUS测试商品", price=100):
 
 
 @pytest.mark.asyncio
-async def test_plus_subscribe_and_benefits(client, buyer_headers, merchant_headers):
-    bh, mh = buyer_headers, merchant_headers
+async def test_plus_subscribe_and_benefits(client, merchant_headers):
+    mh = merchant_headers
+    # 使用专属新买家，避免给会话级共享 buyer 开通 PLUS 污染其他测试（运费/折扣断言）
+    reg = await client.post(
+        "/api/auth/register",
+        json={"username": "plus_buyer", "email": "plus_buyer@e.com", "password": "Test1234", "role": "buyer"},
+    )
+    assert reg.status_code == 200, reg.text
+    bh = {"Authorization": f"Bearer {reg.json()['access_token']}"}
 
     # 默认未开通
     r = await client.get("/api/plus/status", headers=bh)
