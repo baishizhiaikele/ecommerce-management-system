@@ -945,6 +945,26 @@ export interface PaymentStatus {
 export const getPaymentStatus = (orderId: string) =>
   api.get<PaymentStatus>(`/payments/orders/${orderId}/status`).then((r) => r.data);
 
+// ---------- P3-B AI 可行动代理层 ----------
+export interface AgentTool {
+  name: string;
+  description: string;
+  params: Record<string, string>;
+}
+export interface AgentReply {
+  reply: string;
+  intent?: string;
+  tool_calls: { tool: string; result: any }[];
+}
+export const agentChat = (body: {
+  message: string;
+  product_id?: string;
+  address?: string;
+  tool?: string;
+}) => api.post<AgentReply>("/agent/chat", body).then((r) => r.data);
+export const agentTools = () =>
+  api.get<AgentTool[]>("/agent/tools").then((r) => r.data);
+
 // ---------- 商家深度分析（含 RFM / 复购率）----------
 export interface RFMSegment {
   segment: string;

@@ -13,6 +13,8 @@ import {
   Spin,
   Tag,
   Typography,
+  Input,
+  List,
   message,
 } from "antd";
 import { RefreshCw, Sparkles } from "lucide-react";
@@ -31,6 +33,7 @@ import {
   listProducts,
   listShops,
   recommendations,
+  agentChat,
 } from "../api";
 
 const { Title, Paragraph, Text } = Typography;
@@ -290,6 +293,10 @@ export default function AIMall() {
   const [hour, setHour] = useState<number>(20);
   const [data, setData] = useState<HomeArrangeOut | null>(null);
   const [loading, setLoading] = useState(false);
+  const [chatInput, setChatInput] = useState("");
+  const [chatReply, setChatReply] = useState<string>("");
+  const [chatIntent, setChatIntent] = useState<string>("");
+  const [chatLoading, setChatLoading] = useState(false);
 
   const arrange = useCallback(async () => {
     setLoading(true);
@@ -306,6 +313,21 @@ export default function AIMall() {
   useEffect(() => {
     arrange();
   }, [arrange]);
+
+  const runAgent = useCallback(async () => {
+    const msg = chatInput.trim();
+    if (!msg) return;
+    setChatLoading(true);
+    try {
+      const res = await agentChat({ message: msg });
+      setChatReply(res.reply);
+      setChatIntent(res.intent || "");
+    } catch (e: any) {
+      message.error(e?.response?.data?.detail || "代理调用失败");
+    } finally {
+      setChatLoading(false);
+    }
+  }, [chatInput]);
 
   return (
     <div style={{ maxWidth: 1080, margin: "0 auto", padding: 16 }}>
@@ -360,6 +382,42 @@ export default function AIMall() {
         ))}
         {!loading && !data && <Empty description="暂无编排" />}
       </Spin>
+
+      {/* P3-B：AI 可行动代理层 —— 用户用自然语言触发真实工具操作 */}
+      <Card
+        size="small"
+        style={{ marginBottom: 16, background: "linear-gradient(90deg,#f0f5ff,#f9f0ff)" }}
+        title={
+          <Space>
+            <Sparkles color="#1677ff" />
+            <span>{t("ai.agent.title")}</span>
+          </Space>
+        }
+      >
+        <Paragraph type="secondary" style={{ marginBottom: 8 }}>
+          {t("ai.agent.subtitle")}
+        </Paragraph>
+        <Space.Compact style={{ width: "100%" }}>
+          <Input
+            placeholder={t("ai.agent.placeholder")}
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            onPressEnter={runAgent}
+          />
+          <Button type="primary" loading={chatLoading} onClick={runAgent}>
+            {t("ai.agent.send")}
+          </Button>
+        </Space.Compact>
+        {chatReply && (
+          <div style={{ marginTop: 12 }}>
+            <Space size={6} wrap>
+              <Tag color="blue">{t("ai.agent.intent")}</Tag>
+              <Tag>{chatIntent || "-"}</Tag>
+            </Space>
+            <Paragraph style={{ marginTop: 6 }}>{chatReply}</Paragraph>
+          </div>
+        )}
+      </Card>
 
       <div style={{ textAlign: "center", marginTop: 8 }}>
         <Button onClick={() => nav("/market")}>{t("market.featured")}</Button>
