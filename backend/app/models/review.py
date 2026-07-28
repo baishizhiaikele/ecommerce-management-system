@@ -1,4 +1,5 @@
 import enum
+import json
 import uuid
 from datetime import datetime, timezone
 
@@ -31,8 +32,32 @@ class Review(Base):
     helpful_count = Column(Integer, nullable=False, default=0, server_default="0")
     report_count = Column(Integer, nullable=False, default=0, server_default="0")
     report_reason = Column(Text, nullable=True)
+    # 评价增强：图片 / 视频 / 追评
+    _images = Column("images", Text, nullable=True)
+    video = Column(String(512), nullable=True)
+    append_content = Column(Text, nullable=True)
+    append_at = Column(DateTime(timezone=True), nullable=True)
+    _append_images = Column("append_images", Text, nullable=True)
 
     user = relationship("User", back_populates="reviews")
     product = relationship("Product", back_populates="reviews")
 
     __table_args__ = (Index("ix_review_product", "product_id"),)
+
+    @property
+    def images(self) -> list:
+        if not self._images:
+            return []
+        try:
+            return json.loads(self._images)
+        except Exception:
+            return []
+
+    @property
+    def append_images(self) -> list:
+        if not self._append_images:
+            return []
+        try:
+            return json.loads(self._append_images)
+        except Exception:
+            return []

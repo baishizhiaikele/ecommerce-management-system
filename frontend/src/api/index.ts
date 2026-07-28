@@ -150,6 +150,11 @@ export interface ReviewOut {
   user_id: string;
   username?: string | null;
   rating: number;
+  images?: string[];
+  video?: string | null;
+  append_content?: string | null;
+  append_at?: string | null;
+  append_images?: string[];
   content: string;
   sentiment: Sentiment;
   reply?: string | null;
@@ -378,9 +383,15 @@ export const listProductReviews = (productId: string) =>
   api.get<ReviewOut[]>(`/products/${productId}/reviews`).then((r) => r.data);
 export const createProductReview = (
   productId: string,
-  p: { order_id?: string; rating: number; content: string }
+  p: { order_id?: string; rating: number; content: string; images?: string[]; video?: string | null }
 ) =>
   api.post<ReviewOut>(`/products/${productId}/reviews`, p).then((r) => r.data);
+
+export const appendReview = (
+  reviewId: string,
+  p: { content: string; images?: string[]; video?: string | null }
+) =>
+  api.post<ReviewOut>(`/products/reviews/${reviewId}/append`, p).then((r) => r.data);
 
 // ---------- 分类 ----------
 export const listCategories = () =>

@@ -5,6 +5,7 @@ from app.core.deps import get_current_user, require_role
 from app.db.session import get_db
 from app.models.user import Role, User
 from app.schemas.review import (
+    AppendIn,
     MerchantReviewPage,
     PinIn,
     ReplyIn,
@@ -118,4 +119,22 @@ async def report_review_endpoint(
     """举报评价（P2-17）。"""
     return await review_service.report_review(
         db, review_id=review_id, user_id=user.id, reason=data.reason
+    )
+
+
+@router.post("/reviews/{review_id}/append", response_model=ReviewOut)
+async def append_review_endpoint(
+    review_id: str,
+    data: AppendIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> ReviewOut:
+    """买家追评（评价增强）。"""
+    return await review_service.append_review(
+        db,
+        review_id=review_id,
+        user_id=user.id,
+        content=data.content,
+        images=data.images,
+        video=data.video,
     )

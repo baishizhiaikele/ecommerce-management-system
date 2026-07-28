@@ -104,6 +104,11 @@ async def _ensure_demo_columns() -> None:
         "ALTER TABLE orders ADD COLUMN pickup_store VARCHAR(200)",
         "ALTER TABLE orders ADD COLUMN pickup_code VARCHAR(12)",
         "ALTER TABLE orders ADD COLUMN picked_up_at TIMESTAMP",
+        "ALTER TABLE reviews ADD COLUMN images TEXT",
+        "ALTER TABLE reviews ADD COLUMN video VARCHAR(512)",
+        "ALTER TABLE reviews ADD COLUMN append_content TEXT",
+        "ALTER TABLE reviews ADD COLUMN append_at TIMESTAMP",
+        "ALTER TABLE reviews ADD COLUMN append_images TEXT",
     ]
     async with engine.begin() as conn:
         for stmt in statements:

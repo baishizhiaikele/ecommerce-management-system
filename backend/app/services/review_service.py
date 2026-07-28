@@ -1,3 +1,6 @@
+import json
+from datetime import datetime, timezone
+
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -66,6 +69,10 @@ async def create_review(
         rating=data.rating,
         content=data.content,
     )
+    if data.images:
+        review._images = json.dumps(data.images)
+    if data.video:
+        review.video = data.video
     db.add(review)
     await record(db, user_id, "review.create", "review", review.id, f"评分{data.rating}")
     await db.commit()
@@ -205,6 +212,34 @@ async def report_review(
     review.report_count = (review.report_count or 0) + 1
     if reason:
         review.report_reason = reason
+    await db.commit()
+    await db.refresh(review)
+    return review
+
+
+async def append_review(
+    db: AsyncSession,
+    *,
+    review_id: str,
+    user_id: str,
+    content: str,
+    images: list[str] | None = None,
+    video: str | None = None,
+) -> Review:
+    """买家对已完成的评价发起追评（仅一次）。"""
+    review = await db.get(Review, review_id)
+    if not review:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="评价不存在")
+    if review.user_id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="只能追评自己的评价")
+    if review.append_content:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="该评价已追评")
+    review.append_content = content
+    review.append_at = datetime.now(timezone.utc)
+    if images:
+        review._append_images = json.dumps(images)
+    if video:
+        review.video = video
     await db.commit()
     await db.refresh(review)
     return review

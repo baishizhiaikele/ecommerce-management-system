@@ -1192,6 +1192,13 @@ export const zh: Record<string, string> = {
   "review.divider": "我来评价",
   "review.placeholder": "说说这件商品的使用体验…",
   "review.submit": "提交评价",
+  "review.images": "图片",
+  "review.video": "视频",
+  "review.imageUrls": "图片链接（多个用逗号分隔）",
+  "review.videoUrl": "视频链接",
+  "review.append": "追评",
+  "review.appendPlaceholder": "补充使用一段时间后的感受…",
+  "review.appendSuccess": "追评成功",
 
   // 商品问答
   "qna.title": "问答",

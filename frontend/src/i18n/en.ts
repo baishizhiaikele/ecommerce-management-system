@@ -1192,6 +1192,13 @@ export const en: Record<string, string> = {
   "review.divider": "Write a review",
   "review.placeholder": "Share your experience with this product…",
   "review.submit": "Submit Review",
+  "review.images": "Photos",
+  "review.video": "Video",
+  "review.imageUrls": "Photo URLs (comma separated)",
+  "review.videoUrl": "Video URL",
+  "review.append": "Append review",
+  "review.appendPlaceholder": "Share experience after using it…",
+  "review.appendSuccess": "Appended",
 
   // Product Q&A
   "qna.title": "Q&A",
