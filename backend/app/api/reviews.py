@@ -11,6 +11,7 @@ from app.schemas.review import (
     ReviewCreate,
     ReviewDistributionOut,
     ReviewOut,
+    ReviewReportIn,
 )
 from app.services import review_service
 
@@ -95,3 +96,26 @@ async def delete_review(
     else:
         await review_service.delete_review(db, review_id=review_id)
     return {"ok": True}
+
+
+@router.post("/reviews/{review_id}/helpful", response_model=ReviewOut)
+async def mark_review_helpful(
+    review_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> ReviewOut:
+    """标记评价「有用」（P2-17）。"""
+    return await review_service.mark_helpful(db, review_id=review_id, user_id=user.id)
+
+
+@router.post("/reviews/{review_id}/report", response_model=ReviewOut)
+async def report_review_endpoint(
+    review_id: str,
+    data: ReviewReportIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> ReviewOut:
+    """举报评价（P2-17）。"""
+    return await review_service.report_review(
+        db, review_id=review_id, user_id=user.id, reason=data.reason
+    )

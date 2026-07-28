@@ -20,14 +20,16 @@ import {
   deleteReview,
   MerchantReviewItem,
 } from "../../api";
+import { useI18n, translate } from "../../i18n";
 
-const sentimentMeta: Record<string, { label: string; color: string }> = {
-  positive: { label: "好评", color: "green" },
-  neutral: { label: "中性", color: "blue" },
-  negative: { label: "差评", color: "red" },
+const sentimentMeta: Record<string, { labelKey: string; color: string }> = {
+  positive: { labelKey: "mr.positive", color: "green" },
+  neutral: { labelKey: "mr.neutral", color: "blue" },
+  negative: { labelKey: "mr.negative", color: "red" },
 };
 
 export default function MerchantReviews() {
+  const { t } = useI18n();
   const [items, setItems] = useState<MerchantReviewItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -57,49 +59,49 @@ export default function MerchantReviews() {
     if (!replyTo) return;
     try {
       await replyReview(replyTo.id, v.content);
-      message.success("已回复");
+      message.success(t("mr.replied"));
       setReplyTo(null);
       load(page);
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || "回复失败");
+      message.error(err.response?.data?.detail || t("common.replyFail"));
     }
   };
 
   const togglePin = async (r: MerchantReviewItem) => {
     try {
       await pinReview(r.id, !r.is_pinned);
-      message.success(r.is_pinned ? "已取消置顶" : "已置顶");
+      message.success(r.is_pinned ? t("mr.unpinned") : t("mr.pinned"));
       load(page);
     } catch {
-      message.error("操作失败");
+      message.error(t("common.operationFailed"));
     }
   };
   const remove = async (id: string) => {
     try {
       await deleteReview(id);
-      message.success("已删除");
+      message.success(t("common.deleted"));
       load(page);
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || "删除失败");
+      message.error(err.response?.data?.detail || t("common.deleteFail"));
     }
   };
 
   return (
     <Card
-      title="评价管理"
+      title={t("mr.title")}
       extra={
         <Select
           value={sentiment}
           style={{ width: 140 }}
           allowClear
-          placeholder="全部情感"
+          placeholder={t("mr.allSentiment")}
           onChange={(v) => setSentiment(v)}
           options={[
-            { value: "negative", label: "仅差评" },
-            { value: "neutral", label: "中性" },
-            { value: "positive", label: "好评" },
+            { value: "negative", label: t("mr.filterOnlyNegative") },
+            { value: "neutral", label: t("mr.filterNeutral") },
+            { value: "positive", label: t("mr.filterPositive") },
           ]}
         />
       }
@@ -111,24 +113,24 @@ export default function MerchantReviews() {
         pagination={{ current: page, total, pageSize: 10, onChange: load }}
         columns={[
           {
-            title: "评分",
+            title: t("mr.rating"),
             dataIndex: "rating",
             width: 120,
             render: (v) => <Rate disabled value={v} />,
           },
           {
-            title: "情感",
+            title: t("mr.sentiment"),
             dataIndex: "sentiment",
-            render: (s) => <Tag color={sentimentMeta[s]?.color}>{sentimentMeta[s]?.label || s}</Tag>,
+            render: (s) => <Tag color={sentimentMeta[s]?.color}>{translate(sentimentMeta[s]?.labelKey) || s}</Tag>,
           },
-          { title: "内容", dataIndex: "content", ellipsis: true },
+          { title: t("mr.content"), dataIndex: "content", ellipsis: true },
           {
-            title: "商家回复",
+            title: t("mr.replyCol"),
             dataIndex: "reply",
             render: (v) => (v ? <span className="text-emerald-600">{v}</span> : <span className="text-slate-300">—</span>),
           },
           {
-            title: "操作",
+            title: t("common.action"),
             render: (_, r) => (
               <span className="flex gap-1">
                 <Button
@@ -138,14 +140,14 @@ export default function MerchantReviews() {
                     form.setFieldsValue({ content: r.reply || "" });
                   }}
                 >
-                  {r.reply ? "修改回复" : "回复"}
+                  {r.reply ? t("mr.modifyReply") : t("mr.reply")}
                 </Button>
                 <Button type="link" onClick={() => togglePin(r)}>
-                  {r.is_pinned ? "取消置顶" : "置顶"}
+                  {r.is_pinned ? t("mr.unpin") : t("mr.pin")}
                 </Button>
-                <Popconfirm title="确认删除该评价？" onConfirm={() => remove(r.id)}>
+                <Popconfirm title={t("mr.confirmDelete")} onConfirm={() => remove(r.id)}>
                   <Button type="link" danger>
-                    删除
+                    {t("common.delete")}
                   </Button>
                 </Popconfirm>
               </span>
@@ -155,16 +157,16 @@ export default function MerchantReviews() {
       />
 
       <Modal
-        title="回复评价"
+        title={t("mr.replyModal")}
         open={!!replyTo}
         onOk={submitReply}
         onCancel={() => setReplyTo(null)}
-        okText="提交"
+        okText={t("common.submit")}
         destroyOnClose
       >
-        <p className="text-slate-500 mb-2">原评价：{replyTo?.content}</p>
+        <p className="text-slate-500 mb-2">{t("mr.original")}{replyTo?.content}</p>
         <Form form={form} layout="vertical">
-          <Form.Item name="content" label="回复内容" rules={[{ required: true, message: "请输入回复" }]}>
+          <Form.Item name="content" label={t("mr.replyContent")} rules={[{ required: true, message: t("mr.reqReply") }]}>
             <Input.TextArea rows={3} maxLength={500} />
           </Form.Item>
         </Form>

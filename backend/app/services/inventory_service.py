@@ -16,8 +16,14 @@ from app.models.product import Product, ProductStatus
 from app.models.user import User
 from app.services.notification_service import notify
 
-# 低库存预警阈值（演示项目用全局常量，避免给已存在的 products 表加列引发迁移）
+# 低库存预警阈值（演示项目用全局常量；商品可设置独立的 warning_threshold 覆盖，P2-18）
 LOW_STOCK_THRESHOLD = 10
+
+
+def _threshold(product: Product) -> int:
+    """取商品自身的预警阈值，未设置时回退全局阈值。"""
+    wt = getattr(product, "warning_threshold", None)
+    return wt if (wt is not None and wt > 0) else LOW_STOCK_THRESHOLD
 
 
 async def _write_log(
@@ -43,8 +49,8 @@ async def _write_log(
         operator_id=operator_id,
     )
     db.add(log)
-    # 越过低库存阈值的边缘提醒一次
-    if 0 <= product.stock <= LOW_STOCK_THRESHOLD and change_type != StockChangeType.ORDER_CANCEL:
+    # 越过低库存阈值的边缘提醒一次（优先使用商品自身阈值，P2-18）
+    if 0 <= product.stock <= _threshold(product) and change_type != StockChangeType.ORDER_CANCEL:
         await notify(
             db,
             product.merchant_id,
@@ -137,7 +143,7 @@ async def low_stock_products(db: AsyncSession, *, merchant_id: str) -> list[Prod
         .where(
             Product.merchant_id == merchant_id,
             Product.status == ProductStatus.ACTIVE,
-            Product.stock <= LOW_STOCK_THRESHOLD,
+            Product.stock <= func.coalesce(Product.warning_threshold, LOW_STOCK_THRESHOLD),
         )
         .order_by(Product.stock.asc())
     )

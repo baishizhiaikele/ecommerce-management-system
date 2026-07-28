@@ -31,6 +31,7 @@ class ProductBase(BaseModel):
     stock: int = Field(ge=0, le=1_000_000)
     image_url: Optional[str] = Field(default=None, max_length=512)
     category_id: Optional[str] = None
+    warning_threshold: Optional[int] = Field(default=None, ge=0, le=100000)
 
 
 class ProductCreate(ProductBase):
@@ -44,6 +45,7 @@ class ProductUpdate(BaseModel):
     stock: Optional[int] = Field(default=None, ge=0, le=1_000_000)
     image_url: Optional[str] = Field(default=None, max_length=512)
     category_id: Optional[str] = None
+    warning_threshold: Optional[int] = Field(default=None, ge=0, le=100000)
 
 
 class ProductOut(BaseModel):
@@ -61,6 +63,7 @@ class ProductOut(BaseModel):
     specs: Optional[str] = None
     status: ProductStatus
     sales_count: int = 0
+    warning_threshold: int = 10
     ai_title: Optional[str]
     ai_copy: Optional[str]
     ai_price_suggestion: Optional[Decimal]

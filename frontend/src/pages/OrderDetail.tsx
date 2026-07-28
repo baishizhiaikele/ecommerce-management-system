@@ -28,11 +28,13 @@ import {
 } from "../api";
 import { money, orderStatusMeta, nextActions, actionLabel } from "../utils/format";
 import { useAuth } from "../store/auth";
+import { useI18n } from "../i18n";
 
 export default function OrderDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const user = useAuth((s) => s.user);
+  const { t } = useI18n();
   const [order, setOrder] = useState<OrderOut | null>(null);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
@@ -68,7 +70,7 @@ export default function OrderDetail() {
     setActing(true);
     try {
       await transitionOrder(order.id, status);
-      message.success("操作成功");
+      message.success(t("common.opSuccess"));
       load();
     } catch (e) {
       const err = e as AxiosError<any, any>;
@@ -80,7 +82,7 @@ export default function OrderDetail() {
 
   const submitReview = async () => {
     if (!reviewFor || !content.trim()) {
-      message.warning("请填写评价内容");
+      message.warning(t("od.reviewRequired"));
       return;
     }
     try {
@@ -89,7 +91,7 @@ export default function OrderDetail() {
         rating,
         content: content.trim(),
       });
-      message.success("评价成功");
+      message.success(t("od.reviewSuccess"));
       setReviewFor(null);
       setContent("");
       setRating(5);
@@ -104,13 +106,13 @@ export default function OrderDetail() {
     if (!refundReason.trim() || !order) return;
     try {
       await requestRefund(order.id, refundReason.trim());
-      message.success("退款申请已提交");
+      message.success(t("od.refundSubmitted"));
       setRefundOpen(false);
       setRefundReason("");
       load();
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || "申请失败");
+      message.error(err.response?.data?.detail || t("od.applyFail"));
     }
   };
 
@@ -118,7 +120,7 @@ export default function OrderDetail() {
     if (!order) return;
     try {
       await reviewRefund(order.id, approve);
-      message.success(approve ? "已同意退款" : "已拒绝退款");
+      message.success(approve ? t("od.approveRefund") : t("od.rejectRefund"));
       load();
     } catch (e) {
       const err = e as AxiosError<any, any>;
@@ -134,7 +136,7 @@ export default function OrderDetail() {
       setLogOpen(true);
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || "获取物流失败");
+      message.error(err.response?.data?.detail || t("od.getLogFail"));
     }
   };
 
@@ -148,11 +150,11 @@ export default function OrderDetail() {
       });
       setLogData(d);
       setLogDesc("");
-      message.success("物流已更新");
+      message.success(t("od.logUpdated"));
       load();
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || "录入失败");
+      message.error(err.response?.data?.detail || t("od.addLogFail"));
     }
   };
 
@@ -164,7 +166,7 @@ export default function OrderDetail() {
   return (
     <div>
       <Button type="link" onClick={() => navigate(-1)}>
-        ← 返回
+        {t("common.back")}
       </Button>
       <Card title={`订单 ${order.order_no}`} className="mt-2">
         <Descriptions column={2}>
@@ -196,7 +198,7 @@ export default function OrderDetail() {
                         key="r"
                         onClick={() => setReviewFor({ product_id: it.product_id, name: it.name })}
                       >
-                        评价
+                        {t("order.action.review")}
                       </Button>,
                     ]
                   : []
@@ -210,7 +212,7 @@ export default function OrderDetail() {
           <div className="mt-4 flex gap-3">
             {actions.map((a) => (
               <Button key={a} type="primary" loading={acting} onClick={() => doAction(a)}>
-                {actionLabel[a]}
+                {t(actionLabel[a])}
               </Button>
             ))}
           </div>
@@ -219,42 +221,42 @@ export default function OrderDetail() {
         <div className="mt-4 flex flex-wrap gap-3">
           {user?.role === "buyer" && ["paid", "shipped"].includes(order.status) && (
             <Button danger onClick={() => setRefundOpen(true)}>
-              申请退款
+              {t("od.applyRefund")}
             </Button>
           )}
           {user?.role === "buyer" &&
             ["shipped", "completed", "refund_requested", "refunded"].includes(order.status) && (
-              <Button onClick={openLogistics}>查看物流</Button>
+              <Button onClick={openLogistics}>{t("od.viewLogistics")}</Button>
             )}
           {user?.role === "merchant" && order.status === "refund_requested" && (
             <>
               <Button type="primary" onClick={() => doRefundReview(true)}>
-                同意退款
+                {t("od.approveRefund")}
               </Button>
               <Button danger onClick={() => doRefundReview(false)}>
-                拒绝退款
+                {t("od.rejectRefund")}
               </Button>
             </>
           )}
           {user?.role === "merchant" &&
             !["pending_payment", "completed"].includes(order.status) && (
-              <Button onClick={() => setLogOpen(true)}>录入物流</Button>
+              <Button onClick={() => setLogOpen(true)}>{t("od.addLogistics")}</Button>
             )}
         </div>
       </Card>
 
       <Modal
-        title={`评价：${reviewFor?.name ?? ""}`}
+        title={`${t("order.action.review")}：${reviewFor?.name ?? ""}`}
         open={!!reviewFor}
         onCancel={() => setReviewFor(null)}
         onOk={submitReview}
-        okText="提交"
+        okText={t("common.submit")}
       >
         <Rate value={rating} onChange={setRating} />
         <Input.TextArea
           rows={4}
           className="mt-3"
-          placeholder="说说你的使用体验（1-1000 字）"
+          placeholder={t("od.reviewPlaceholder")}
           value={content}
           onChange={(e) => setContent(e.target.value)}
           maxLength={1000}
@@ -262,43 +264,43 @@ export default function OrderDetail() {
       </Modal>
 
       <Modal
-        title="申请退款"
+        title={t("od.applyRefund")}
         open={refundOpen}
         onCancel={() => setRefundOpen(false)}
         onOk={submitRefund}
-        okText="提交申请"
+        okText={t("common.submit")}
       >
         <Input.TextArea
           rows={4}
-          placeholder="请说明退款原因"
+          placeholder={t("od.refundReasonPlaceholder")}
           value={refundReason}
           onChange={(e) => setRefundReason(e.target.value)}
         />
       </Modal>
 
-      <Modal title="物流追踪" open={logOpen} onCancel={() => setLogOpen(false)} footer={null}>
+      <Modal title={t("od.logistics")} open={logOpen} onCancel={() => setLogOpen(false)} footer={null}>
         {user?.role === "merchant" && (
           <div className="mb-3 flex gap-2">
             <Input
-              placeholder="运单号"
+              placeholder={t("od.trackingNo")}
               value={logTrack}
               onChange={(e) => setLogTrack(e.target.value)}
             />
             <Input
-              placeholder="物流描述，如：已揽收"
+              placeholder={t("od.logDescPlaceholder")}
               value={logDesc}
               onChange={(e) => setLogDesc(e.target.value)}
             />
             <Button type="primary" onClick={submitLogistics}>
-              添加节点
+              {t("od.addNode")}
             </Button>
           </div>
         )}
         {logData.tracking_no && (
-          <div className="mb-2 text-slate-500">运单号：{logData.tracking_no}</div>
+          <div className="mb-2 text-slate-500">{t("od.trackingNo")}：{logData.tracking_no}</div>
         )}
         {logData.events.length === 0 ? (
-          <div className="text-slate-400">暂无物流信息</div>
+          <div className="text-slate-400">{t("od.noLogistics")}</div>
         ) : (
           <Timeline
             items={logData.events.map((e) => ({

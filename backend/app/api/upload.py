@@ -42,6 +42,26 @@ def _write_file(path: str, data: bytes) -> None:
         f.write(data)
 
 
+def _optimize(path: str, ext: str) -> None:
+    """上传后无损/有损压缩（P1-13）。缺乏 Pillow 或动图(gif)时跳过，安全降级。"""
+    if ext in ("gif",):
+        return
+    try:
+        from PIL import Image
+    except Exception:
+        return
+    try:
+        with Image.open(path) as im:
+            if ext in ("jpg", "jpeg"):
+                im.convert("RGB").save(path, "JPEG", quality=82, optimize=True)
+            elif ext == "png":
+                im.save(path, "PNG", optimize=True)
+            elif ext == "webp":
+                im.save(path, "WEBP", quality=82)
+    except Exception:
+        return
+
+
 @router.post("/image", response_model=UploadOut)
 async def upload_image(
     file: UploadFile = File(...),
@@ -71,4 +91,6 @@ async def upload_image(
     save_path = os.path.join(UPLOAD_DIR, filename)
     # P4：文件写入放到线程池，避免阻塞事件循环
     await asyncio.to_thread(_write_file, save_path, data)
+    # P1-13：写入后压缩（同样放到线程池，避免阻塞）
+    await asyncio.to_thread(_optimize, save_path, ext)
     return UploadOut(url=f"/uploads/{filename}", filename=filename)

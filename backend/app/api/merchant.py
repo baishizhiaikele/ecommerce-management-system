@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -57,6 +57,71 @@ async def export_orders(
         iter([content]),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=orders.csv"},
+    )
+
+
+@router.get("/reports/orders/pdf")
+async def export_orders_pdf(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(Role.MERCHANT)),
+):
+    """导出订单 PDF（P2-19）。依赖 reportlab，未安装时返回 501。"""
+    from app.models.merchant import Merchant
+
+    merchant = await db.scalar(select(Merchant).where(Merchant.user_id == user.id))
+    if not merchant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="商家不存在")
+
+    orders = list(
+        await db.scalars(
+            select(Order)
+            .where(Order.merchant_id == merchant.id)
+            .order_by(Order.created_at.desc())
+            .limit(500)
+        )
+    )
+
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="服务端未安装 PDF 依赖（reportlab）",
+        )
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4)
+    data = [["订单号", "下单时间", "状态", "金额", "优惠"]]
+    for o in orders:
+        data.append(
+            [
+                o.order_no,
+                o.created_at.strftime("%Y-%m-%d %H:%M"),
+                o.status.value if hasattr(o.status, "value") else str(o.status),
+                f"{float(o.total_amount):.2f}",
+                f"{float(o.discount_amount):.2f}",
+            ]
+        )
+    table = Table(data, repeatRows=1)
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2563eb")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f1f5f9")]),
+            ]
+        )
+    )
+    doc.build([table])
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=orders.pdf"},
     )
 
 

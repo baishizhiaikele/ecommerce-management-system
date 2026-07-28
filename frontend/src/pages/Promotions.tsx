@@ -4,13 +4,14 @@ import { Card, Tag, Empty, Spin, Segmented, Row, Col } from "antd";
 import { Flame, Zap, Gift } from "lucide-react";
 import { getPromotions, type PromotionOut, type PromotionType } from "../api";
 import { money } from "../utils/format";
+import { useI18n, translate } from "../i18n";
 import ProductImage from "../components/ProductImage";
 import Reveal from "../components/Reveal";
 
 const TYPE_META: Record<PromotionType, { label: string; color: string; icon: JSX.Element }> = {
-  flash: { label: "限时秒杀", color: "#f43f5e", icon: <Flame size={16} /> },
-  discount: { label: "限时折扣", color: "#f59e0b", icon: <Zap size={16} /> },
-  full_reduce: { label: "满减优惠", color: "#10b981", icon: <Gift size={16} /> },
+  flash: { label: "promo.flash", color: "#f43f5e", icon: <Flame size={16} /> },
+  discount: { label: "promo.discount", color: "#f59e0b", icon: <Zap size={16} /> },
+  full_reduce: { label: "promo.fullReducePromo", color: "#10b981", icon: <Gift size={16} /> },
 };
 
 function finalPrice(p: PromotionOut): number | null {
@@ -26,7 +27,7 @@ function Countdown({ endAt }: { endAt?: string | null }) {
     if (!endAt) return;
     const tick = () => {
       const diff = new Date(endAt).getTime() - Date.now();
-      if (diff <= 0) return setLeft("已结束");
+      if (diff <= 0) return setLeft(translate("market.ended"));
       const d = Math.floor(diff / 8.64e7);
       const h = Math.floor((diff % 8.64e7) / 3.6e6);
       const m = Math.floor((diff % 3.6e6) / 6e4);
@@ -42,6 +43,7 @@ function Countdown({ endAt }: { endAt?: string | null }) {
 }
 
 export default function Promotions() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [list, setList] = useState<PromotionOut[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,15 +70,15 @@ export default function Promotions() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-extrabold text-slate-800">促销活动</h1>
+        <h1 className="text-2xl font-extrabold text-slate-800">{t("page.promotions.title")}</h1>
         <Segmented
           value={tab}
           onChange={(v) => setTab(v as PromotionType | "all")}
           options={[
-            { label: "全部", value: "all" },
-            { label: "秒杀", value: "flash" },
-            { label: "折扣", value: "discount" },
-            { label: "满减", value: "full_reduce" },
+            { label: t("common.all"), value: "all" },
+            { label: t("promo.seckill"), value: "flash" },
+            { label: t("promo.discount"), value: "discount" },
+            { label: t("promo.fullReduce"), value: "full_reduce" },
           ]}
         />
       </div>
@@ -86,13 +88,13 @@ export default function Promotions() {
           <Spin />
         </div>
       ) : Object.keys(groups).length === 0 ? (
-        <Empty className="py-20" description="暂无进行中的活动" />
+        <Empty className="py-20" description={t("promo.empty")} />
       ) : (
         Object.entries(groups).map(([type, items]) => (
           <section key={type}>
             <div className="section-title flex items-center gap-2" style={{ color: TYPE_META[type as PromotionType].color }}>
               {TYPE_META[type as PromotionType].icon}
-              <span className="st-text">{TYPE_META[type as PromotionType].label}</span>
+              <span className="st-text">{t(TYPE_META[type as PromotionType].label)}</span>
             </div>
             <Row gutter={[16, 16]}>
               {items.map((p, i) => {
@@ -113,7 +115,7 @@ export default function Promotions() {
                             color={TYPE_META[p.type].color}
                             className="absolute top-2 left-2"
                           >
-                            {TYPE_META[p.type].label}
+                            {t(TYPE_META[p.type].label)}
                           </Tag>
                         </div>
                         <div className="p-3">
@@ -134,7 +136,7 @@ export default function Promotions() {
                                 )}
                               </>
                             ) : (
-                              <span className="text-sm text-slate-500">查看详情</span>
+                              <span className="text-sm text-slate-500">{t("promo.viewDetail")}</span>
                             )}
                           </div>
                           {p.end_at && (

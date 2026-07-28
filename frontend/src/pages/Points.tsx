@@ -4,19 +4,21 @@ import { TrophyOutlined } from "@ant-design/icons";
 import EmptyState from "../components/EmptyState";
 import { pointHistory, PointLogOut } from "../api";
 import { useAuth, vipTier } from "../store/auth";
+import { useI18n } from "../i18n";
 
 const { Paragraph, Text } = Typography;
 
 const ACTION_LABEL: Record<string, string> = {
-  order_complete: "订单完成奖励",
-  redeem: "积分抵扣",
-  refund: "退款回收",
-  admin_adjust: "管理员调整",
-  signin: "每日签到",
+  order_complete: "points.action.order_complete",
+  redeem: "points.action.deduct",
+  refund: "points.action.refund_recover",
+  admin_adjust: "points.action.admin_adjust",
+  signin: "points.action.signin_daily",
 };
 
 export default function Points() {
   const user = useAuth((s) => s.user);
+  const { t } = useI18n();
   const points = user?.points ?? 0;
   const tier = vipTier(points);
   const [logs, setLogs] = useState<PointLogOut[]>([]);
@@ -50,7 +52,7 @@ export default function Points() {
       >
         <div className="flex items-center justify-between">
           <div>
-            <div className="opacity-80 text-sm">当前可用积分</div>
+            <div className="opacity-80 text-sm">{t("points.currentAvailable")}</div>
             <div className="text-4xl font-bold my-1">{points}</div>
             <Tag color="gold" className="!text-black/80">
               {tier.name}
@@ -60,7 +62,9 @@ export default function Points() {
         </div>
         <div className="mt-4">
           <div className="text-xs opacity-90 mb-1">
-            距 {tier.name === "钻石会员" ? "顶级" : "下一等级"} 还需 {Math.max(tier.next - points, 0)} 积分
+            {t("points.toNext")
+              .replace("{target}", tier.name === "钻石会员" ? t("points.top") : t("points.nextTier"))
+              .replace("{n}", String(Math.max(tier.next - points, 0)))}
           </div>
           <Progress
             percent={pct}
@@ -71,28 +75,24 @@ export default function Points() {
         </div>
       </Card>
 
-      <Card className="rounded-2xl mb-4 soft-card fade-up" title="积分规则">
-        <Paragraph className="m-0 text-slate-600">
-          · 每消费 1 元订单完成可得 <Text strong>1 积分</Text>；<br />
-          · <Text strong>100 积分可抵扣 1 元</Text>，结算时可在「使用积分」中勾选；<br />
-          · 退款订单将回收对应的奖励积分。
-        </Paragraph>
+      <Card className="rounded-2xl mb-4 soft-card fade-up" title={t("sec.pointsRules")}>
+        <Paragraph className="m-0 text-slate-600">{t("points.rulesText")}</Paragraph>
       </Card>
 
-      <Card className="rounded-2xl soft-card fade-up" title="积分明细">
+      <Card className="rounded-2xl soft-card fade-up" title={t("sec.pointsHistory")}>
         {loading ? (
           <div className="flex justify-center py-10">
             <Spin />
           </div>
         ) : logs.length === 0 ? (
-          <EmptyState title="暂无积分记录" description="消费、签到都会累积积分" />
+          <EmptyState title={t("empty.points")} description={t("empty.pointsDesc")} />
         ) : (
           <List
             dataSource={logs}
             renderItem={(l) => (
               <List.Item>
                 <List.Item.Meta
-                  title={ACTION_LABEL[l.action] || l.action}
+                  title={t(ACTION_LABEL[l.action] || l.action)}
                   description={l.remark || l.created_at}
                 />
                 <span className={l.delta >= 0 ? "text-green-600" : "text-red-500"}>

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import hashlib
@@ -29,12 +29,14 @@ router = APIRouter(prefix="/products", tags=["products"])
 
 @router.get("", response_model=list[ProductOut])
 async def list_products(
+    response: Response,
     db: AsyncSession = Depends(get_db),
     category_id: str | None = None,
     keyword: str | None = None,
     sort: str | None = Query(None, description="price_asc|price_desc|sales|newest"),
     min_price: float | None = Query(None, ge=0),
     max_price: float | None = Query(None, ge=0),
+    min_rating: float | None = Query(None, ge=0, le=5),
     in_stock: bool = False,
     merchant_id: str | None = None,
     page: int = Query(1, ge=1),
@@ -46,6 +48,7 @@ async def list_products(
         "sort": sort,
         "min_price": min_price,
         "max_price": max_price,
+        "min_rating": min_rating,
         "in_stock": in_stock,
         "merchant_id": merchant_id,
         "page": page,
@@ -57,18 +60,23 @@ async def list_products(
     cached = await cache_get(cache_key)
     if cached is not None:
         return cached
-    items, _ = await product_service.list_products(
+    items, total = await product_service.list_products(
         db,
         category_id=category_id,
         keyword=keyword,
         sort=sort,
         min_price=min_price,
         max_price=max_price,
+        min_rating=min_rating,
         in_stock=in_stock,
         merchant_id=merchant_id,
         page=page,
         page_size=page_size,
     )
+    # 统一分页 meta（P1-5）：以响应头暴露总数/页码，兼容现有前端契约
+    response.headers["X-Total-Count"] = str(total)
+    response.headers["X-Page"] = str(page)
+    response.headers["X-Page-Size"] = str(page_size)
     await cache_set(cache_key, [ProductOut.model_validate(it).model_dump() for it in items], ttl=60)
     return items
 

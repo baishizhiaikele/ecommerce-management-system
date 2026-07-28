@@ -1,90 +1,84 @@
-import { createContext, useContext, useState, ReactNode } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { zh } from "./zh";
+import { en } from "./en";
 
-type Lang = "zh" | "en";
+export type Lang = "zh" | "en";
 
-const dict: Record<Lang, Record<string, string>> = {
-  zh: {
-    market: "商品集市",
-    shops: "逛店铺",
-    favorites: "收藏",
-    points: "积分",
-    cart: "购物车",
-    orders: "我的订单",
-    notifications: "通知中心",
-    coupons: "我的卡券",
-    support: "客服工单",
-    login: "登录",
-    logout: "退出登录",
-    profile: "个人中心",
-    brand: "AI 全托管小店",
-    promotions: "促销活动",
-    following: "我的关注",
-    searchPlaceholder: "搜索商品 / 店铺",
-    hotSearch: "热门搜索：",
-    searchHistory: "搜索历史：",
-    clear: "清空",
-    addToCart: "加入购物车",
-    buyNow: "立即购买",
-    askAI: "咨询 AI",
-    reviews: "评价",
-    inventory: "库存管理",
-    lowStock: "低库存",
-    createActivity: "创建活动",
-    myProducts: "商品管理",
-  },
-  en: {
-    market: "Market",
-    shops: "Shops",
-    favorites: "Favorites",
-    points: "Points",
-    cart: "Cart",
-    orders: "My Orders",
-    notifications: "Notifications",
-    coupons: "Coupons",
-    support: "Support",
-    login: "Login",
-    logout: "Logout",
-    profile: "Profile",
-    brand: "AI Smart Shop",
-    promotions: "Promotions",
-    following: "Following",
-    searchPlaceholder: "Search products / shops",
-    hotSearch: "Hot:",
-    searchHistory: "History:",
-    clear: "Clear",
-    addToCart: "Add to Cart",
-    buyNow: "Buy Now",
-    askAI: "Ask AI",
-    reviews: "Reviews",
-    inventory: "Inventory",
-    lowStock: "Low Stock",
-    createActivity: "Create",
-    myProducts: "Products",
-  },
-};
+const dict: Record<Lang, Record<string, string>> = { zh, en };
 
-interface I18nCtx {
+// 模块级当前语言，供非 React 上下文环境（如 utils/format.ts 的元数据）同步取用。
+let currentLang: Lang = (localStorage.getItem("lang") as Lang) || "zh";
+
+export function getLang(): Lang {
+  return currentLang;
+}
+
+/** 全局翻译函数：缺失英文时回落到中文，避免界面出现原始 key。支持 {name} 形式的参数插值。 */
+export function translate(key: string, params?: Record<string, string | number>): string {
+  let s = dict[currentLang][key] ?? dict.zh[key] ?? key;
+  if (params) {
+    for (const [k, v] of Object.entries(params)) {
+      s = s.split(`{${k}}`).join(String(v));
+    }
+  }
+  return s;
+}
+
+const LanguageContext = createContext<{
   lang: Lang;
   setLang: (l: Lang) => void;
-  t: (key: string) => string;
-}
-
-const Ctx = createContext<I18nCtx>({
-  lang: "zh",
+  t: (key: string, params?: Record<string, string | number>) => string;
+  translate: (key: string, params?: Record<string, string | number>) => string;
+}>({
+  lang: currentLang,
   setLang: () => {},
-  t: (k) => k,
+  t: (k, p) => translate(k, p),
+  translate,
 });
 
-export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [lang, setLangState] = useState<Lang>(
-    () => ((localStorage.getItem("lang") as Lang) || "zh")
-  );
-  const setLang = (l: Lang) => {
+export function LanguageProvider({ children }: { children: React.ReactNode }) {
+  const [lang, setLangState] = useState<Lang>(currentLang);
+
+  const setLang = useCallback((l: Lang) => {
+    currentLang = l;
     localStorage.setItem("lang", l);
     setLangState(l);
-  };
-  const t = (key: string) => dict[lang][key] ?? key;
-  return <Ctx.Provider value={{ lang, setLang, t }}>{children}</Ctx.Provider>;
+    // 跨标签页同步
+    try {
+      window.dispatchEvent(new Event("langchange"));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    const sync = () => setLangState(currentLang);
+    window.addEventListener("langchange", sync);
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "lang" && e.newValue) {
+        currentLang = e.newValue as Lang;
+        setLangState(currentLang);
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("langchange", sync);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
+
+  const t = useCallback(
+    (key: string, params?: Record<string, string | number>) => translate(key, params),
+    []
+  );
+
+  return (
+    <LanguageContext.Provider value={{ lang, setLang, t, translate }}>
+      {children}
+    </LanguageContext.Provider>
+  );
 }
 
-export const useI18n = () => useContext(Ctx);
+export function useI18n() {
+  return useContext(LanguageContext);
+}

@@ -28,6 +28,7 @@ export interface UserOut {
   role: Role;
   is_active: boolean;
   created_at: string;
+  points?: number;
 }
 export interface ProductOut {
   id: string;
@@ -42,6 +43,7 @@ export interface ProductOut {
   specs?: string | null;
   status: ProductStatus;
   sales_count: number;
+  warning_threshold?: number;
   ai_title?: string | null;
   ai_copy?: string | null;
   ai_price_suggestion?: string | null;
@@ -63,6 +65,8 @@ export interface CartItemOut {
   image_url?: string | null;
   stock: number;
   quantity: number;
+  variant_id?: string | null;
+  variant_label?: string | null;
 }
 export interface OrderItemOut {
   id: string;
@@ -132,9 +136,14 @@ export interface ReviewOut {
   order_id: string;
   product_id: string;
   user_id: string;
+  username?: string | null;
   rating: number;
   content: string;
   sentiment: Sentiment;
+  reply?: string | null;
+  is_pinned?: boolean;
+  helpful_count?: number;
+  report_count?: number;
   created_at: string;
 }
 export interface MessageOut {
@@ -166,6 +175,7 @@ export interface MerchantStats {
 export interface TrendPoint {
   date: string;
   amount: Decimal;
+  orders?: number;
 }
 export interface AdminStats {
   user_count: number;
@@ -307,6 +317,7 @@ export const listProducts = (params?: {
   sort?: string;
   min_price?: number;
   max_price?: number;
+  min_rating?: number;
   in_stock?: boolean;
   merchant_id?: string;
   page?: number;
@@ -321,6 +332,7 @@ export const createProduct = (p: {
   description?: string;
   image_url?: string;
   category_id?: string;
+  warning_threshold?: number;
 }) => api.post<ProductOut>("/products", p).then((r) => r.data);
 export const updateProduct = (
   id: string,
@@ -331,6 +343,7 @@ export const updateProduct = (
     stock: number;
     image_url: string;
     category_id: string;
+    warning_threshold?: number;
   }>
 ) => api.put<ProductOut>(`/products/${id}`, p).then((r) => r.data);
 export const deleteProduct = (id: string) => api.delete(`/products/${id}`);
@@ -353,7 +366,7 @@ export const listProductReviews = (productId: string) =>
   api.get<ReviewOut[]>(`/products/${productId}/reviews`).then((r) => r.data);
 export const createProductReview = (
   productId: string,
-  p: { order_id: string; rating: number; content: string }
+  p: { order_id?: string; rating: number; content: string }
 ) =>
   api.post<ReviewOut>(`/products/${productId}/reviews`, p).then((r) => r.data);
 
@@ -369,7 +382,7 @@ export const createCategory = (p: {
 // ---------- 购物车 ----------
 export const getCart = () =>
   api.get<CartItemOut[]>("/cart").then((r) => r.data);
-export const addCartItem = (p: { product_id: string; quantity?: number }) =>
+export const addCartItem = (p: { product_id: string; quantity?: number; variant_id?: string }) =>
   api.post<CartItemOut>("/cart/items", p).then((r) => r.data);
 export const updateCartItem = (itemId: string, quantity: number) =>
   api.put<CartItemOut>(`/cart/items/${itemId}`, { quantity }).then((r) => r.data);
@@ -621,6 +634,40 @@ export const aiPriceAdvice = (id: string, note?: string, market_price?: number) 
     })
     .then((r) => r.data);
 
+// ---------- AI 首页编排 / 选品洞察 ----------
+export interface FloorOut {
+  key: string;
+  title: string;
+  reason: string;
+}
+export interface HomeArrangeOut {
+  segment: string;
+  hour: number;
+  floors: FloorOut[];
+  insight: string;
+}
+export interface DemandGap {
+  keyword: string;
+  search_count: number;
+  matched_products: number;
+  suggested_category: string;
+}
+export interface SuggestedCategory {
+  category: string;
+  keywords: string[];
+}
+export interface TrendInsightOut {
+  hot_keywords: string[];
+  demand_gap: DemandGap[];
+  suggested_categories: SuggestedCategory[];
+  rising_products: ProductOut[];
+  insight: string;
+}
+export const homeArrange = (params?: { segment?: string; hour?: number }) =>
+  api.get<HomeArrangeOut>("/ai/home-arrange", { params }).then((r) => r.data);
+export const trendInsight = () =>
+  api.get<TrendInsightOut>("/ai/trend-insight").then((r) => r.data);
+
 // ---------- 售后工单 ----------
 export interface SupportMessageOut {
   id: string;
@@ -716,6 +763,37 @@ export const myFollowing = () =>
 export const searchHot = () => api.get<string[]>("/search/hot").then((r) => r.data);
 export const searchRecord = (q: string) =>
   api.post(`/search/record?q=${encodeURIComponent(q)}`).then((r) => r.data);
+
+// ---------- 搜索增强：分面检索 / 搜索联想 ----------
+export interface Facets {
+  categories: { id: string; name: string; count: number }[];
+  price_min: number;
+  price_max: number;
+  rating_buckets: Record<string, number>;
+  sorts: { value: string; label: string }[];
+}
+export const searchFacets = (params?: {
+  keyword?: string;
+  category_id?: string;
+  min_price?: number;
+  max_price?: number;
+}) => api.get<Facets>("/search/facets", { params }).then((r) => r.data);
+export const searchSuggest = (q: string) =>
+  api.get<string[]>("/search/suggest", { params: { q } }).then((r) => r.data);
+
+// ---------- 评价增强（有用 / 举报）----------
+export const markReviewHelpful = (reviewId: string) =>
+  api.post<ReviewOut>(`/products/reviews/${reviewId}/helpful`).then((r) => r.data);
+export const reportReview = (reviewId: string, reason?: string) =>
+  api
+    .post<ReviewOut>(`/products/reviews/${reviewId}/report`, { reason })
+    .then((r) => r.data);
+
+// ---------- 报表导出 PDF ----------
+export const exportOrdersPdf = () =>
+  api
+    .get("/merchant/reports/orders/pdf", { responseType: "blob" })
+    .then((r) => downloadBlob(r.data, "orders.pdf"));
 
 // ---------- 商品多规格 SKU ----------
 export interface VariantOut {

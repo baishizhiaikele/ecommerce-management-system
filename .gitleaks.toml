@@ -1,0 +1,34 @@
+# gitleaks 配置（P2-12）：CI 中扫描密钥泄露
+title = "AI 全托管小店 密钥扫描"
+
+[extend]
+# 使用 gitleaks 内置规则
+useDefault = true
+
+[[rules]]
+id = "extra-secret-env"
+description = "可能的环境变量密钥赋值"
+# 键名用非捕获组，值用捕获组（成为 Secret），便于在 allowlist 中按值排除误报
+regex = '''(?i)(?:SECRET_KEY|API_KEY|ACCESS_TOKEN|PRIVATE_KEY|PASSWORD|DATABASE_URL)\s*[:=]\s*[\x27\x22]?([A-Za-z0-9_\-/+]{16,})[\x27\x22]?'''
+  [rules.allowlist]
+  # 演示/占位默认值，非真实密钥
+  regexes = [
+    'change-me',
+    'change-me-in-prod',
+    'your-',
+    'test-secret',
+    # 本地测试用 sqlite 连接串（非凭证）
+    'sqlite',
+    # 代码中 create_access_token 函数调用（非密钥值）
+    'create_access_token',
+  ]
+
+[allowlist]
+# 扫描时忽略的路径（正则匹配文件相对路径）
+paths = [
+    '''(?i).*\.md$''',
+    '''(?i).*tests.*''',
+    '''(?i).*/migrations/.*''',
+    '''(?i)\.env\.example$''',
+    '''(?i).*\.lock$''',
+]

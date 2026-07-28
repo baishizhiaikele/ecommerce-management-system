@@ -2,8 +2,10 @@ import { Package } from "lucide-react";
 import { useState } from "react";
 
 interface Props {
-  name: string;
+  name?: string;
   image_url?: string | null;
+  src?: string | null;
+  alt?: string;
   height?: number | string;
   rounded?: number;
   className?: string;
@@ -16,12 +18,16 @@ interface Props {
 export default function ProductImage({
   name,
   image_url,
+  src,
+  alt,
   height = 180,
   rounded = 12,
   className,
 }: Props) {
+  const displayName = name || alt || "";
+  const usableUrl = image_url || src;
   const usable =
-    image_url && !image_url.includes("placeholder") && image_url.startsWith("http");
+    usableUrl && !usableUrl.includes("placeholder") && usableUrl.startsWith("http");
   const [loaded, setLoaded] = useState(false);
 
   if (usable) {
@@ -50,8 +56,10 @@ export default function ProductImage({
           </div>
         )}
         <img
-          src={image_url}
-          alt={name}
+          src={usableUrl}
+          alt={displayName}
+          loading="lazy"
+          decoding="async"
           onLoad={() => setLoaded(true)}
           style={{
             width: "100%",
@@ -80,7 +88,7 @@ export default function ProductImage({
       }}
     >
       <Package size={42} color="#C7CBD3" strokeWidth={1.5} />
-      {name && (
+      {displayName && (
         <span
           style={{
             position: "absolute",
@@ -95,7 +103,7 @@ export default function ProductImage({
             whiteSpace: "nowrap",
           }}
         >
-          {name}
+          {displayName}
         </span>
       )}
     </div>

@@ -203,5 +203,15 @@ class AIService:
         keys = ("人工", "客服", "电话", "投诉", "举报", "退款", "纠纷", "订单号", "隐私")
         return any(k in message for k in keys)
 
+    async def generate_text(self, prompt: str, *, temperature: float = 0.6) -> str | None:
+        """自由文本生成；无 API key 或调用失败时返回 None（调用方自行兜底）。"""
+        if not settings.AI_API_KEY:
+            return None
+        try:
+            return (await self._chat(prompt, temperature=temperature)).strip()
+        except Exception:
+            logger.warning("AI 自由文本生成调用失败，降级为 None", exc_info=True)
+            return None
+
 
 ai_service = AIService()

@@ -49,3 +49,34 @@ async def test_search_qa_price_filter(client, buyer_headers):
     assert body["filters"]["max_price"] == 200.0
     assert "200" in body["answer"]
     assert isinstance(body["products"], list)
+
+
+@pytest.mark.asyncio
+async def test_home_arrange(client):
+    """B4：AI 首页编排按身份/时段返回有序楼层。"""
+    r = await client.get("/api/ai/home-arrange", params={"segment": "member", "hour": 20})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["segment"] == "member"
+    assert body["hour"] == 20
+    assert len(body["floors"]) >= 3
+    keys = [f["key"] for f in body["floors"]]
+    # 会员在晚间应优先展示领券/推荐类楼层
+    assert "coupon" in keys and "recommend" in keys
+    assert isinstance(body["insight"], str) and body["insight"]
+
+
+@pytest.mark.asyncio
+async def test_trend_insight_requires_merchant(client, merchant_headers):
+    """B5：趋势洞察仅商家可访问，且返回结构化建议。"""
+    forbidden = await client.get("/api/ai/trend-insight")
+    assert forbidden.status_code in (401, 403)
+
+    r = await client.get("/api/ai/trend-insight", headers=merchant_headers)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert isinstance(body["hot_keywords"], list)
+    assert isinstance(body["demand_gap"], list)
+    assert isinstance(body["suggested_categories"], list)
+    assert isinstance(body["rising_products"], list)
+    assert isinstance(body["insight"], str) and body["insight"]

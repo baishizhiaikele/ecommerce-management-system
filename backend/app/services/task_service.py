@@ -92,9 +92,12 @@ async def list_tasks(db: AsyncSession, user: User) -> list[dict]:
             {
                 "key": defn["key"],
                 "title": defn["title"],
+                "name": defn["title"],
                 "description": defn["description"],
                 "reward_points": defn["reward_points"],
+                "points": defn["reward_points"],
                 "completed": bool(ut and ut.completed),
+                "done": bool(ut and ut.completed),
                 "claimed": bool(ut and ut.claimed),
             }
         )

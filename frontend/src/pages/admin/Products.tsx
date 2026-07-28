@@ -4,8 +4,10 @@ import { Table, Button, Tag, message, Card, Select, Popconfirm, Spin } from "ant
 import EmptyState from "../../components/EmptyState";
 import { adminListProducts, setProductStatus, ProductOut, ProductStatus } from "../../api";
 import { money, productStatusMeta } from "../../utils/format";
+import { useI18n } from "../../i18n";
 
 export default function AdminProducts() {
+  const { t } = useI18n();
   const [items, setItems] = useState<ProductOut[]>([]);
   const [filter, setFilter] = useState<ProductStatus | "all">("all");
   const [loading, setLoading] = useState(true);
@@ -26,27 +28,27 @@ export default function AdminProducts() {
   const approve = async (id: string) => {
     try {
       await setProductStatus(id, "active");
-      message.success("已上架");
+      message.success(t("admin.online"));
       load();
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || "操作失败");
+      message.error(err.response?.data?.detail || t("common.operationFailed"));
     }
   };
   const reject = async (id: string) => {
     try {
       await setProductStatus(id, "rejected", "不符合平台规范");
-      message.success("已驳回");
+      message.success(t("admin.rejected"));
       load();
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || "操作失败");
+      message.error(err.response?.data?.detail || t("common.operationFailed"));
     }
   };
 
   return (
     <Card
-      title="商品审核"
+      title={t("admin.productReview")}
       className="soft-card"
       extra={
         <Select
@@ -54,11 +56,11 @@ export default function AdminProducts() {
           style={{ width: 160 }}
           onChange={setFilter}
           options={[
-            { value: "all", label: "全部" },
-            { value: "pending", label: "待审核" },
-            { value: "active", label: "已上架" },
-            { value: "rejected", label: "已驳回" },
-            { value: "draft", label: "草稿" },
+            { value: "all", label: t("common.all") },
+            { value: "pending", label: t("admin.pending") },
+            { value: "active", label: t("admin.online") },
+            { value: "rejected", label: t("admin.rejected") },
+            { value: "draft", label: t("common.draft") },
           ]}
         />
       }
@@ -75,34 +77,34 @@ export default function AdminProducts() {
           locale={{
             emptyText: (
               <EmptyState
-                title="暂无商品"
-                description="切换上方筛选条件，或等待商家提交新的待审商品"
+                title={t("admin.noProducts")}
+                description={t("admin.noProductsDesc")}
               />
             ),
           }}
           columns={[
-            { title: "名称", dataIndex: "name" },
-            { title: "价格", dataIndex: "price", render: (v) => `¥${money(v)}` },
-            { title: "库存", dataIndex: "stock" },
+            { title: t("col.name"), dataIndex: "name" },
+            { title: t("col.price"), dataIndex: "price", render: (v) => `¥${money(v)}` },
+            { title: t("col.stock"), dataIndex: "stock" },
             {
-              title: "状态",
+              title: t("common.status"),
               dataIndex: "status",
-              render: (s) => <Tag color={productStatusMeta[s].color}>{productStatusMeta[s].label}</Tag>,
+              render: (s: ProductStatus) => <Tag color={productStatusMeta[s].color}>{productStatusMeta[s].label}</Tag>,
             },
-            { title: "驳回原因", dataIndex: "reject_reason", render: (v) => v || "-" },
+            { title: t("admin.rejectReason"), dataIndex: "reject_reason", render: (v) => v || "-" },
             {
-              title: "操作",
+              title: t("common.action"),
               render: (_, r) => (
                 <span className="flex gap-1">
                   {r.status === "pending" && (
                     <Button type="link" onClick={() => approve(r.id)}>
-                      通过
+                      {t("admin.approve")}
                     </Button>
                   )}
                   {(r.status === "pending" || r.status === "active") && (
-                    <Popconfirm title="确认驳回？" onConfirm={() => reject(r.id)}>
+                    <Popconfirm title={t("admin.confirmReject")} onConfirm={() => reject(r.id)}>
                       <Button type="link" danger>
-                        驳回
+                        {t("admin.reject")}
                       </Button>
                     </Popconfirm>
                   )}

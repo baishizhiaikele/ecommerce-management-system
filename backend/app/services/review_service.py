@@ -11,8 +11,36 @@ from app.schemas.review import ReviewCreate
 
 
 async def create_review(
-    db: AsyncSession, *, user_id: str, product_id: str, order_id: str, data: ReviewCreate
+    db: AsyncSession, *, user_id: str, product_id: str, order_id: str | None, data: ReviewCreate
 ) -> Review:
+    if not order_id:
+        # 未指定订单：自动匹配该用户已完成、包含该商品且尚未评价的最近订单
+        reviewed_ids = set(
+            await db.scalars(
+                select(Review.order_id).where(
+                    (Review.product_id == product_id) & (Review.user_id == user_id)
+                )
+            )
+        )
+        stmt = (
+            select(Order.id)
+            .join(OrderItem, OrderItem.order_id == Order.id)
+            .where(
+                (Order.buyer_id == user_id)
+                & (Order.status == OrderStatus.COMPLETED)
+                & (OrderItem.product_id == product_id)
+            )
+            .order_by(Order.created_at.desc())
+        )
+        for oid in await db.scalars(stmt):
+            if oid not in reviewed_ids:
+                order_id = oid
+                break
+        if not order_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="购买并完成订单后才能评价该商品",
+            )
     order = await db.get(Order, order_id)
     if not order or order.buyer_id != user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="只能评价自己的订单")
@@ -48,12 +76,24 @@ async def create_review(
 
 
 async def list_product_reviews(db: AsyncSession, product_id: str) -> list[Review]:
-    rows = await db.scalars(
-        select(Review)
-        .where(Review.product_id == product_id)
-        .order_by(Review.is_pinned.desc(), Review.created_at.desc())
+    rows = list(
+        await db.scalars(
+            select(Review)
+            .where(Review.product_id == product_id)
+            .order_by(Review.is_pinned.desc(), Review.created_at.desc())
+        )
     )
-    return list(rows)
+    # 附带评论者用户名（ReviewOut.username）
+    user_ids = {r.user_id for r in rows}
+    if user_ids:
+        from app.models.user import User
+
+        names = dict(
+            (await db.execute(select(User.id, User.username).where(User.id.in_(user_ids)))).all()
+        )
+        for r in rows:
+            r.username = names.get(r.user_id)  # type: ignore[attr-defined]
+    return rows
 
 
 async def count_negative(db: AsyncSession) -> int:
@@ -142,3 +182,29 @@ async def review_distribution(db: AsyncSession, *, product_id: str) -> dict:
         "average": round(float(avg or 0), 2),
         "distribution": dist,
     }
+
+
+async def mark_helpful(db: AsyncSession, *, review_id: str, user_id: str) -> Review:
+    """标记「有用」（P2-17）。简易计数，不做去重（演示场景足够）。"""
+    review = await db.get(Review, review_id)
+    if not review:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="评价不存在")
+    review.helpful_count = (review.helpful_count or 0) + 1
+    await db.commit()
+    await db.refresh(review)
+    return review
+
+
+async def report_review(
+    db: AsyncSession, *, review_id: str, user_id: str, reason: str | None
+) -> Review:
+    """举报评价（P2-17）。累计举报数并记录最近一次原因。"""
+    review = await db.get(Review, review_id)
+    if not review:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="评价不存在")
+    review.report_count = (review.report_count or 0) + 1
+    if reason:
+        review.report_reason = reason
+    await db.commit()
+    await db.refresh(review)
+    return review

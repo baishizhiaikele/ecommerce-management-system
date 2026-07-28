@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { AxiosError } from "axios";
 import {
   Drawer,
   Table,
@@ -20,6 +21,7 @@ import {
   deleteVariant,
   type VariantOut,
 } from "../api";
+import { useI18n } from "../i18n";
 
 interface Props {
   productId: string;
@@ -34,6 +36,7 @@ interface SpecRow {
 }
 
 export default function VariantManager({ productId, productName, open, onClose }: Props) {
+  const { t } = useI18n();
   const [variants, setVariants] = useState<VariantOut[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -90,56 +93,58 @@ export default function VariantManager({ productId, productName, open, onClose }
     try {
       if (editing) {
         await updateVariant(editing.id, payload);
-        message.success("已更新规格");
+        message.success(t("variant.updated"));
       } else {
         await createVariant(productId, payload);
-        message.success("已新增规格");
+        message.success(t("variant.created"));
       }
       setModalOpen(false);
       load();
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "保存失败");
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || t("variant.saveFail"));
     }
   };
 
   const remove = async (id: string) => {
     try {
       await deleteVariant(id);
-      message.success("已删除");
+      message.success(t("common.deleted"));
       load();
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "删除失败");
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || t("variant.deleteFail"));
     }
   };
 
   const columns = [
     {
-      title: "规格",
+      title: t("variant.spec"),
       dataIndex: "specs",
       render: (s: Record<string, string>) => (
         <Space wrap>
           {Object.entries(s || {}).map(([k, v]) => (
             <Tag key={k}>{k}: {v}</Tag>
           ))}
-          {(!s || Object.keys(s).length === 0) && <span className="text-slate-400">默认</span>}
+          {(!s || Object.keys(s).length === 0) && <span className="text-slate-400">{t("variant.default")}</span>}
         </Space>
       ),
     },
-    { title: "SKU", dataIndex: "sku_code", render: (t: string) => t || "-" },
+    { title: t("inv.sku"), dataIndex: "sku_code", render: (txt: string) => txt || "-" },
     {
-      title: "差价",
+      title: t("variant.delta"),
       dataIndex: "price_delta",
       render: (n: number) => (n > 0 ? `+¥${n}` : `¥${n}`),
     },
-    { title: "库存", dataIndex: "stock" },
+    { title: t("col.stock"), dataIndex: "stock" },
     {
-      title: "操作",
+      title: t("common.action"),
       render: (_: unknown, v: VariantOut) => (
         <Space>
           <Button size="small" onClick={() => openEdit(v)}>
-            编辑
+            {t("common.edit")}
           </Button>
-          <Popconfirm title="确认删除该规格？" onConfirm={() => remove(v.id)}>
+          <Popconfirm title={t("variant.confirmDel")} onConfirm={() => remove(v.id)}>
             <Button size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
@@ -148,10 +153,10 @@ export default function VariantManager({ productId, productName, open, onClose }
   ];
 
   return (
-    <Drawer title={`规格管理 · ${productName}`} width={640} open={open} onClose={onClose}>
+    <Drawer title={t("variant.title", { name: productName })} width={640} open={open} onClose={onClose}>
       <div className="mb-3 flex justify-end">
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-          新增规格
+          {t("variant.create")}
         </Button>
       </div>
       <Table
@@ -164,22 +169,23 @@ export default function VariantManager({ productId, productName, open, onClose }
       />
 
       <Modal
-        title={editing ? "编辑规格" : "新增规格"}
+        title={editing ? t("variant.edit") : t("variant.create")}
         open={modalOpen}
         onOk={submit}
         onCancel={() => setModalOpen(false)}
+        okText={t("common.save")}
         destroyOnClose
       >
         <Form form={form} layout="vertical">
-          <Form.Item label="SKU 编码" name="sku_code">
-            <Input placeholder="可选，如 RED-M" />
+          <Form.Item label={t("variant.skuCode")} name="sku_code">
+            <Input placeholder={t("variant.skuPlaceholder")} />
           </Form.Item>
-          <Form.Item label="规格项（名称: 值）">
+          <Form.Item label={t("variant.items")}>
             <Space direction="vertical" className="w-full">
               {specs.map((s, i) => (
                 <Space key={i}>
                   <Input
-                    placeholder="规格名"
+                    placeholder={t("variant.specName")}
                     value={s.key}
                     onChange={(e) =>
                       setSpecs((arr) =>
@@ -189,7 +195,7 @@ export default function VariantManager({ productId, productName, open, onClose }
                     style={{ width: 120 }}
                   />
                   <Input
-                    placeholder="规格值"
+                    placeholder={t("variant.specValue")}
                     value={s.val}
                     onChange={(e) =>
                       setSpecs((arr) =>
@@ -211,18 +217,18 @@ export default function VariantManager({ productId, productName, open, onClose }
                 onClick={() => setSpecs((arr) => [...arr, { key: "", val: "" }])}
                 block
               >
-                添加规格项
+                {t("variant.addItem")}
               </Button>
             </Space>
           </Form.Item>
-          <Form.Item label="价格差价" name="price_delta">
+          <Form.Item label={t("variant.delta")} name="price_delta">
             <InputNumber className="w-full" precision={2} />
           </Form.Item>
-          <Form.Item label="库存" name="stock">
+          <Form.Item label={t("col.stock")} name="stock">
             <InputNumber className="w-full" min={0} />
           </Form.Item>
-          <Form.Item label="图片 URL" name="image_url">
-            <Input placeholder="可选" />
+          <Form.Item label={t("mprod.imageUrl")} name="image_url">
+            <Input placeholder={t("common.optional")} />
           </Form.Item>
         </Form>
       </Modal>

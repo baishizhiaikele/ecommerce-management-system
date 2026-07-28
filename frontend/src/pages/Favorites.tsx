@@ -7,10 +7,12 @@ import EmptyState from "../components/EmptyState";
 import { listFavorites, removeFavorite, addCartItem, ProductOut } from "../api";
 import { useCart } from "../store/cart";
 import { money } from "../utils/format";
+import { useI18n } from "../i18n";
 
 export default function Favorites() {
   const navigate = useNavigate();
   const add = useCart((s) => s.add);
+  const { t } = useI18n();
   const [items, setItems] = useState<ProductOut[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -32,10 +34,10 @@ export default function Favorites() {
     try {
       await removeFavorite(id);
       setItems((s) => s.filter((p) => p.id !== id));
-      message.success("已取消收藏");
+      message.success(t("favorites.removed"));
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || "操作失败");
+      message.error(err.response?.data?.detail || t("common.operationFailed"));
     }
   };
 
@@ -49,10 +51,10 @@ export default function Favorites() {
         quantity: 1,
         image_url: p.image_url || undefined,
       });
-      message.success("已加入购物车");
+      message.success(t("pd.addedCart"));
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || "操作失败");
+      message.error(err.response?.data?.detail || t("common.operationFailed"));
     }
   };
 
@@ -60,7 +62,7 @@ export default function Favorites() {
     <div>
       <div className="flex items-center gap-2 mb-4">
         <HeartFilled style={{ color: "#EF4444" }} />
-        <h2 className="text-xl font-bold m-0">我的收藏</h2>
+        <h2 className="text-xl font-bold m-0">{t("page.favorites.title")}</h2>
         <span className="text-slate-400">共 {items.length} 件</span>
       </div>
       {loading ? (
@@ -69,9 +71,9 @@ export default function Favorites() {
         </div>
       ) : items.length === 0 ? (
         <EmptyState
-          title="还没有收藏任何商品"
-          description="遇到喜欢的商品，点击收藏即可在这里找到"
-          action={<Button type="primary" onClick={() => navigate("/")}>去逛逛</Button>}
+          title={t("empty.favorites")}
+          description={t("empty.favoritesDesc")}
+          action={<Button type="primary" onClick={() => navigate("/")}>{t("favorites.browse")}</Button>}
         />
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -92,10 +94,10 @@ export default function Favorites() {
                 <ShoppingCartOutlined key="add" onClick={() => onAdd(p)} />,
                 <Popconfirm
                   key="del"
-                  title="取消收藏？"
+                  title={t("favorites.confirmRemove")}
                   onConfirm={() => onRemove(p.id)}
-                  okText="确定"
-                  cancelText="取消"
+                  okText={t("common.confirm")}
+                  cancelText={t("common.cancel")}
                 >
                   <HeartFilled style={{ color: "#EF4444" }} />
                 </Popconfirm>,
@@ -111,7 +113,7 @@ export default function Favorites() {
                   <div className="flex items-center justify-between">
                     <span className="text-[#4F46E5] font-semibold">{money(p.price)}</span>
                     <Tag color={p.stock > 0 ? "green" : "red"}>
-                      {p.stock > 0 ? "有货" : "缺货"}
+                      {p.stock > 0 ? t("market.inStock") : t("market.outStock")}
                     </Tag>
                   </div>
                 }

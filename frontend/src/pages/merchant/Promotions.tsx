@@ -25,14 +25,16 @@ import {
   type PromotionOut,
   type PromotionType,
 } from "../../api";
+import { useI18n, translate } from "../../i18n";
 
-const TYPE_META: Record<PromotionType, { label: string; color: string }> = {
-  flash: { label: "限时秒杀", color: "red" },
-  discount: { label: "限时折扣", color: "orange" },
-  full_reduce: { label: "满减优惠", color: "green" },
+const TYPE_META: Record<PromotionType, { labelKey: string; color: string }> = {
+  flash: { labelKey: "mp.typeFlash", color: "red" },
+  discount: { labelKey: "mp.typeDiscount", color: "orange" },
+  full_reduce: { labelKey: "mp.typeFull", color: "green" },
 };
 
 export default function MerchantPromotions() {
+  const { t, lang } = useI18n();
   const [promos, setPromos] = useState<PromotionOut[]>([]);
   const [products, setProducts] = useState<ProductOut[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,65 +80,69 @@ export default function MerchantPromotions() {
     if (v.type === "full_reduce") payload.discount_price = Number(v.discount_price || 0);
     try {
       await createPromotion(payload);
-      message.success("活动已创建");
+      message.success(t("mp.created"));
       setModalOpen(false);
       load();
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "创建失败");
+      message.error(e?.response?.data?.detail || t("mp.createFail"));
     }
   };
 
   const remove = async (id: string) => {
     try {
       await deletePromotion(id);
-      message.success("已删除");
+      message.success(t("common.deleted"));
       load();
     } catch {
-      message.error("删除失败");
+      message.error(t("mp.deleteFail"));
     }
   };
 
   const columns = [
     {
-      title: "活动",
+      title: t("mp.activity"),
       dataIndex: "title",
-      render: (t: string, r: PromotionOut) => (
+      render: (title: string, r: PromotionOut) => (
         <Space direction="vertical" size={0}>
-          <span className="font-medium">{t}</span>
+          <span className="font-medium">{title}</span>
           <Tag color={TYPE_META[r.type].color} className="!mt-1">
-            {TYPE_META[r.type].label}
+            {translate(TYPE_META[r.type].labelKey)}
           </Tag>
         </Space>
       ),
     },
-    { title: "商品", dataIndex: "product_name", render: (t: string) => t || "-" },
+    { title: t("col.product"), dataIndex: "product_name", render: (title: string) => title || "-" },
     {
-      title: "优惠",
+      title: t("mp.discount"),
       render: (_: unknown, r: PromotionOut) =>
         r.discount_price != null
           ? `¥${r.discount_price}`
           : r.discount_rate != null
-          ? `${(Number(r.discount_rate) * 10).toFixed(1)} 折`
+          ? lang === "zh"
+            ? `${(Number(r.discount_rate) * 10).toFixed(1)} 折`
+            : `${Math.round((1 - Number(r.discount_rate)) * 100)}% OFF`
           : "—",
     },
     {
-      title: "时间",
+      title: t("mp.time"),
       render: (_: unknown, r: PromotionOut) => (
         <span className="text-xs text-slate-400">
-          {r.start_at ? dayjs(r.start_at).format("MM-DD HH:mm") : "即日"} ~{" "}
-          {r.end_at ? dayjs(r.end_at).format("MM-DD HH:mm") : "长期"}
+          {r.start_at ? dayjs(r.start_at).format("MM-DD HH:mm") : t("mp.fromToday")} ~{" "}
+          {r.end_at ? dayjs(r.end_at).format("MM-DD HH:mm") : t("mp.longTerm")}
         </span>
       ),
     },
     {
-      title: "状态",
+      title: t("common.status"),
       dataIndex: "is_active",
-      render: (a: boolean) => <Tag color={a ? "green" : "default"}>{a ? "进行中" : "已停用"}</Tag>,
+      render: (a: boolean) => (
+        <Tag color={a ? "green" : "default"}>{a ? t("mp.active") : t("mp.stopped")}</Tag>
+      ),
     },
     {
-      title: "操作",
+      title: t("common.action"),
       render: (_: unknown, r: PromotionOut) => (
-        <Popconfirm title="确认删除该活动？" onConfirm={() => remove(r.id)}>
+        <Popconfirm title={t("mp.confirmDelete")} onConfirm={() => remove(r.id)}>
           <Button danger size="small" icon={<DeleteOutlined />} />
         </Popconfirm>
       ),
@@ -145,10 +151,10 @@ export default function MerchantPromotions() {
 
   return (
     <Card
-      title="营销活动"
+      title={t("page.merchant.promotions")}
       extra={
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-          创建活动
+          {t("mp.create")}
         </Button>
       }
     >
@@ -158,68 +164,69 @@ export default function MerchantPromotions() {
         columns={columns}
         dataSource={promos}
         pagination={false}
-        locale={{ emptyText: "还没有活动，点击右上角创建" }}
+        locale={{ emptyText: t("mp.empty") }}
       />
 
       <Modal
-        title="创建营销活动"
+        title={t("mp.create")}
         open={modalOpen}
         onOk={submit}
         onCancel={() => setModalOpen(false)}
+        okText={t("mp.createBtn")}
         destroyOnClose
       >
         <Form form={form} layout="vertical">
-          <Form.Item name="product_id" label="商品" rules={[{ required: true, message: "请选择商品" }]}>
+          <Form.Item name="product_id" label={t("col.product")} rules={[{ required: true, message: t("inv.reqProduct") }]}>
             <Select
               showSearch
-              placeholder="选择参与活动的商品"
+              placeholder={t("mp.selectProduct")}
               optionFilterProp="label"
               options={products.map((p) => ({ value: p.id, label: p.name }))}
             />
           </Form.Item>
-          <Form.Item name="type" label="活动类型" rules={[{ required: true }]}>
+          <Form.Item name="type" label={t("common.type")} rules={[{ required: true }]}>
             <Select
               onChange={(v) => setType(v)}
               options={[
-                { value: "flash", label: "限时秒杀" },
-                { value: "discount", label: "限时折扣" },
-                { value: "full_reduce", label: "满减优惠" },
+                { value: "flash", label: translate("mp.typeFlash") },
+                { value: "discount", label: translate("mp.typeDiscount") },
+                { value: "full_reduce", label: translate("mp.typeFull") },
               ]}
             />
           </Form.Item>
-          <Form.Item name="title" label="活动标题" rules={[{ required: true, message: "请输入标题" }]}>
-            <Input placeholder="如：双十一秒杀" />
+          <Form.Item name="title" label={t("mp.name")} rules={[{ required: true, message: t("mp.reqTitle") }]}>
+            <Input placeholder={t("mp.titlePlaceholder")} />
           </Form.Item>
           {type === "flash" && (
-            <Form.Item name="discount_price" label="秒杀价" rules={[{ required: true, message: "请输入秒杀价" }]}>
+            <Form.Item name="discount_price" label={t("mp.discountPrice")} rules={[{ required: true, message: t("mp.reqPrice") }]}>
               <InputNumber className="w-full" min={0} precision={2} />
             </Form.Item>
           )}
           {type === "discount" && (
-            <Form.Item name="discount_rate" label="折扣（如 0.8 表示 8 折）" rules={[{ required: true }]}>
+            <Form.Item name="discount_rate" label={t("mp.discountRate")} rules={[{ required: true }]}>
               <InputNumber className="w-full" min={0.1} max={1} step={0.05} precision={2} />
             </Form.Item>
           )}
           {type === "full_reduce" && (
-            <Form.Item name="discount_price" label="立减金额">
+            <Form.Item name="discount_price" label={t("mp.reduceAmount")}>
               <InputNumber className="w-full" min={0} precision={2} />
             </Form.Item>
           )}
-          <Form.Item label="起止时间（可选）">
+          <Form.Item label={t("mp.optionalTime")}>
             <Space>
               <Form.Item name="start_at" noStyle>
-                <DatePicker showTime placeholder="开始" />
+                <DatePicker showTime placeholder={t("mp.start")} />
               </Form.Item>
               <Form.Item name="end_at" noStyle>
-                <DatePicker showTime placeholder="结束" />
+                <DatePicker showTime placeholder={t("mp.end")} />
               </Form.Item>
             </Space>
           </Form.Item>
-          <Form.Item name="is_active" label="立即生效" initialValue={true}>
+          <Form.Item name="is_active" label={t("mp.immediate")} initialValue={true}>
             <Select
               options={[
-                { value: true, label: "是" },
-                { value: false, label: "否（暂存草稿）" },
+                { value: true, label: t("common.yes") },
+                { value: false, label: t("mp.noDraft") },
               ]}
             />
           </Form.Item>

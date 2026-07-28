@@ -7,7 +7,8 @@ import httpx
 
 from app.core.config import settings
 from app.models.catalog import Category
-from app.models.product import Product
+from app.models.product import Product, ProductStatus
+from app.models.review import Review
 from app.models.search import SearchKeyword
 from app.schemas.product import ProductOut
 from app.services import product_service
@@ -156,3 +157,99 @@ async def search_qa(db: AsyncSession, question: str, user_id: str | None = None)
         "products": [ProductOut.model_validate(p).model_dump() for p in items],
         "total": total,
     }
+
+
+async def facets(
+    db: AsyncSession,
+    *,
+    keyword: str | None = None,
+    category_id: str | None = None,
+    min_price: float | None = None,
+    max_price: float | None = None,
+) -> dict:
+    """分面检索数据（P1-6）：类目计数 / 价格区间 / 评分分桶 / 排序选项。
+
+    评分分桶统计「平均评分 >= 阈值」的商品数；类目分面不叠加 category_id
+    过滤，便于用户在前端切换类目。
+    """
+    kw_min_max = []
+    if keyword:
+        kw_min_max.append(Product.name.ilike(f"%{keyword}%"))
+    if min_price is not None:
+        kw_min_max.append(Product.price >= min_price)
+    if max_price is not None:
+        kw_min_max.append(Product.price <= max_price)
+
+    cat_rows = await db.execute(
+        select(Category.id, Category.name, func.count(Product.id))
+        .select_from(Product)
+        .join(Category, Category.id == Product.category_id)
+        .where(Product.status == ProductStatus.ACTIVE, *kw_min_max)
+        .group_by(Category.id, Category.name)
+    )
+    categories = [{"id": r[0], "name": r[1], "count": r[2]} for r in cat_rows.all()]
+
+    price_stmt = select(func.min(Product.price), func.max(Product.price)).where(
+        Product.status == ProductStatus.ACTIVE, *kw_min_max
+    )
+    if category_id:
+        price_stmt = price_stmt.where(Product.category_id == category_id)
+    pmin, pmax = (await db.execute(price_stmt)).first() or (None, None)
+
+    avg_sub = (
+        select(Review.product_id, func.avg(Review.rating).label("avg_rating"))
+        .group_by(Review.product_id)
+        .subquery()
+    )
+    rating_buckets: dict[str, int] = {}
+    for thr in (4.5, 4.0, 3.0):
+        cnt = await db.scalar(
+            select(func.count(func.distinct(Product.id)))
+            .select_from(Product)
+            .join(avg_sub, avg_sub.c.product_id == Product.id)
+            .where(
+                Product.status == ProductStatus.ACTIVE,
+                *kw_min_max,
+                avg_sub.c.avg_rating >= thr,
+            )
+        )
+        rating_buckets[str(thr)] = int(cnt or 0)
+
+    return {
+        "categories": categories,
+        "price_min": float(pmin) if pmin is not None else 0.0,
+        "price_max": float(pmax) if pmax is not None else 0.0,
+        "rating_buckets": rating_buckets,
+        "sorts": [
+            {"value": "newest", "label": "最新"},
+            {"value": "price_asc", "label": "价格升序"},
+            {"value": "price_desc", "label": "价格降序"},
+            {"value": "sales", "label": "销量"},
+        ],
+    }
+
+
+async def suggest(db: AsyncSession, q: str, limit: int = 8) -> list[str]:
+    """搜索联想（P1-7）：热门关键词前缀匹配，不足时补充商品名包含匹配。"""
+    q = (q or "").strip()
+    if len(q) < 1:
+        return []
+    rows = await db.scalars(
+        select(SearchKeyword.keyword)
+        .where(SearchKeyword.keyword.ilike(f"{q}%"))
+        .order_by(SearchKeyword.count.desc())
+        .limit(limit)
+    )
+    out = list(rows)
+    if len(out) < limit:
+        extra = await db.scalars(
+            select(Product.name)
+            .where(Product.status == ProductStatus.ACTIVE, Product.name.ilike(f"%{q}%"))
+            .limit(limit - len(out))
+        )
+        seen: set[str] = set(out)
+        for n in extra:
+            if n not in seen:
+                out.append(n)
+                seen.add(n)
+    return out[:limit]

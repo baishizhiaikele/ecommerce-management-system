@@ -4,17 +4,18 @@ import { Card, Button, Tabs, Tag, Spin, message } from "antd";
 import { GiftOutlined } from "@ant-design/icons";
 import EmptyState from "../components/EmptyState";
 import { listCoupons, claimCoupon, myCoupons, CouponOut, UserCouponOut } from "../api";
+import { useI18n, translate } from "../i18n";
 
 function couponLabel(c: { type: string; threshold: string; value: string }) {
   if (c.type === "discount") {
     const zhe = (parseFloat(c.value) * 10).toFixed(1);
-    return `${zhe} 折`;
+    return `${zhe} ${translate("membership.zhe")}`;
   }
-  return `减 ${c.value}`;
+  return `${translate("coupon.minus")} ${c.value}`;
 }
 function couponDesc(c: { type: string; threshold: string }) {
-  if (c.type === "discount") return "无门槛折扣";
-  return `满 ${c.threshold} 元可用`;
+  if (c.type === "discount") return translate("coupon.noThresholdDiscount");
+  return translate("coupon.thresholdHint").replace("{threshold}", c.threshold);
 }
 
 function CouponCard({
@@ -37,7 +38,7 @@ function CouponCard({
         <div>
           <div className="font-semibold">{c.name}</div>
           <Tag color="blue" className="mt-1">
-            {c.type === "discount" ? "折扣券" : "满减券"}
+            {c.type === "discount" ? translate("coupon.type.discount") : translate("coupon.type.full_reduce")}
           </Tag>
         </div>
         {footer}
@@ -47,6 +48,7 @@ function CouponCard({
 }
 
 export default function Coupons() {
+  const { t } = useI18n();
   const [avail, setAvail] = useState<CouponOut[]>([]);
   const [mine, setMine] = useState<UserCouponOut[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,11 +72,11 @@ export default function Coupons() {
   const onClaim = async (id: string) => {
     try {
       await claimCoupon(id);
-      message.success("领取成功");
+      message.success(t("coupon.claimSuccess"));
       load();
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || "领取失败");
+      message.error(err.response?.data?.detail || t("coupon.claimFail"));
     }
   };
 
@@ -82,7 +84,7 @@ export default function Coupons() {
     <div>
       <div className="flex items-center gap-2 mb-4">
         <GiftOutlined className="text-[#4F46E5]" />
-        <h2 className="text-xl font-bold m-0">我的卡券</h2>
+        <h2 className="text-xl font-bold m-0">{t("coupon.myTitle")}</h2>
       </div>
       {loading ? (
         <div className="flex justify-center py-20">
@@ -93,10 +95,10 @@ export default function Coupons() {
           items={[
             {
               key: "mine",
-              label: `我的卡券（${mine.length}）`,
+              label: `${t("coupon.myTitle")}（${mine.length}）`,
               children:
                 mine.length === 0 ? (
-                  <EmptyState title="还没有卡券" description="去「可领取」标签页领券吧" />
+                  <EmptyState title={t("coupon.empty")} description={t("coupon.emptyTip")} />
                 ) : (
                   <div className="grid gap-3">
                     {mine.map((c) => (
@@ -105,7 +107,7 @@ export default function Coupons() {
                         c={c}
                         footer={
                           <Tag color={c.is_used ? "default" : "green"}>
-                            {c.is_used ? "已使用" : "待使用"}
+                            {c.is_used ? t("coupon.used") : t("coupon.pending")}
                           </Tag>
                         }
                       />
@@ -115,10 +117,10 @@ export default function Coupons() {
             },
             {
               key: "avail",
-              label: `可领取（${avail.length}）`,
+              label: `${t("coupon.available")}（${avail.length}）`,
               children:
                 avail.length === 0 ? (
-                  <EmptyState title="暂无可领取优惠券" description="优惠活动上线后会显示在这里" />
+                  <EmptyState title={t("coupon.noAvail")} description={t("coupon.availDesc")} />
                 ) : (
                   <div className="grid gap-3">
                     {avail.map((c) => (
@@ -127,7 +129,7 @@ export default function Coupons() {
                         c={c}
                         footer={
                           <Button type="primary" size="small" onClick={() => onClaim(c.id)}>
-                            立即领取
+                            {t("coupon.receive")}
                           </Button>
                         }
                       />

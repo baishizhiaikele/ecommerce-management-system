@@ -27,6 +27,10 @@ class Review(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     reply = Column(Text, nullable=True)
     is_pinned = Column(Integer, nullable=False, default=0)
+    # 评价增强（P2-17）：有用数 + 举报计数 / 原因
+    helpful_count = Column(Integer, nullable=False, default=0, server_default="0")
+    report_count = Column(Integer, nullable=False, default=0, server_default="0")
+    report_reason = Column(Text, nullable=True)
 
     user = relationship("User", back_populates="reviews")
     product = relationship("Product", back_populates="reviews")

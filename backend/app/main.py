@@ -48,6 +48,8 @@ from app.events_handlers import register_handlers
 from app.core.scheduler import scheduler_loop
 from app.core.ratelimit import limiter
 from app.core.metrics import MetricsMiddleware, render as render_metrics
+from app.core.security import SecurityHeadersMiddleware, MaxBodySizeMiddleware
+from app.core.logging_config import setup_logging
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -77,6 +79,9 @@ async def _ensure_demo_columns() -> None:
         "ALTER TABLE order_items ADD COLUMN variant_info TEXT",
         "ALTER TABLE orders ADD COLUMN refund_amount NUMERIC NOT NULL DEFAULT 0",
         "ALTER TABLE cart_items ADD COLUMN variant_id TEXT",
+        "ALTER TABLE reviews ADD COLUMN helpful_count INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE reviews ADD COLUMN report_count INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE products ADD COLUMN warning_threshold INTEGER NOT NULL DEFAULT 10",
     ]
     async with engine.begin() as conn:
         for stmt in statements:
@@ -100,6 +105,9 @@ async def run_migrations() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 结构化日志（P2-11）：生产用 JSON 单行，测试保持可读
+    if not settings.TESTING:
+        setup_logging()
     register_handlers()
     # 通过 Alembic 将数据库 schema 升级到最新版本（幂等，兼容既有旧库）
     await run_migrations()
@@ -130,6 +138,10 @@ if not settings.TESTING:
 
 # 可观测性（P2）：请求指标中间件（始终开启，开销极低）
 app.add_middleware(MetricsMiddleware)
+
+# 安全加固（P1-10 / P1-5）：安全响应头 + 请求体大小限制
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(MaxBodySizeMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

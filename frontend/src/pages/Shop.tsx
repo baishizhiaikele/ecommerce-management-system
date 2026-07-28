@@ -14,8 +14,10 @@ import {
 } from "../api";
 import ProductImage from "../components/ProductImage";
 import { money } from "../utils/format";
+import { useI18n } from "../i18n";
 
 function ShopCard({ shop, onClick }: { shop: ShopSummary; onClick: () => void }) {
+  const { t } = useI18n();
   return (
     <Card hoverable className="soft-card" onClick={onClick} styles={{ body: { padding: 16 } }}>
       <div className="flex items-center gap-3">
@@ -31,10 +33,10 @@ function ShopCard({ shop, onClick }: { shop: ShopSummary; onClick: () => void })
           <div className="flex items-center gap-2 text-xs text-slate-400 mt-1">
             <span className="flex items-center gap-0.5 text-amber-500">
               <Star size={12} fill="currentColor" />
-              {shop.rating > 0 ? shop.rating.toFixed(1) : "新店"}
+              {shop.rating > 0 ? shop.rating.toFixed(1) : t("shop.newStore")}
             </span>
             <span>·</span>
-            <span>{shop.product_count} 件好物</span>
+            <span>{shop.product_count} {t("shop.goodsUnit")}</span>
           </div>
         </div>
         <ChevronRight size={18} className="text-slate-300" />
@@ -49,6 +51,7 @@ function ShopCard({ shop, onClick }: { shop: ShopSummary; onClick: () => void })
 export default function Shop() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [list, setList] = useState<ShopSummary[]>([]);
   const [detail, setDetail] = useState<ShopDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -95,7 +98,7 @@ export default function Shop() {
 
   if (id) {
     if (loading) return <div className="py-24 flex justify-center"><Spin /></div>;
-    if (!detail) return <Empty description="店铺不存在" className="py-24" />;
+    if (!detail) return <Empty description={t("shop.notFound")} className="py-24" />;
     return (
       <div className="space-y-5">
         {/* 店铺头图 / 资料卡 */}
@@ -119,8 +122,8 @@ export default function Shop() {
                     <Star size={14} fill="currentColor" />
                     {detail.rating > 0 ? detail.rating.toFixed(1) : "新店"}
                   </span>
-                  <span>· {detail.product_count} 件商品</span>
-                  <span>· 已售 {detail.sales_total}</span>
+                  <span>· {detail.product_count} {t("shop.productsCount")}</span>
+                  <span>· {t("market.sold")} {detail.sales_total}</span>
                 </div>
                 <Button
                   size="small"
@@ -128,7 +131,7 @@ export default function Shop() {
                   className="mt-2"
                   onClick={toggleFollow}
                 >
-                  {followed ? "已关注" : "关注"} · {followers}
+                  {followed ? t("shop.unfollow") : t("shop.follow")} · {followers}
                 </Button>
                 {detail.description && (
                   <div className="text-xs text-slate-400 mt-2">{detail.description}</div>
@@ -142,11 +145,11 @@ export default function Shop() {
         <div className="px-1">
           <div className="flex items-center gap-2 mb-3">
             <Package size={18} className="text-[#4F46E5]" />
-            <h2 className="text-lg font-bold">店铺好物</h2>
-            <Tag color="purple" className="ml-auto">{detail.products.length} 件</Tag>
+            <h2 className="text-lg font-bold">{t("shop.goods")}</h2>
+            <Tag color="purple" className="ml-auto">{detail.products.length} {t("shop.productsCount")}</Tag>
           </div>
           {detail.products.length === 0 ? (
-            <Empty description="该店铺暂未上架商品" className="py-12" />
+            <Empty description={t("shop.noProducts")} className="py-12" />
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {detail.products.map((p) => (
@@ -177,13 +180,13 @@ export default function Shop() {
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <Star className="text-amber-500" size={22} />
-        <h1 className="text-2xl font-bold">逛店铺</h1>
-        <Tag color="purple" className="ml-auto">{list.length} 家好店</Tag>
+        <h1 className="text-2xl font-bold">{t("shop.browse")}</h1>
+        <Tag color="purple" className="ml-auto">{list.length} {t("shop.shopsUnit")}</Tag>
       </div>
       {loading ? (
         <div className="py-20 flex justify-center"><Spin /></div>
       ) : list.length === 0 ? (
-        <Empty description="暂无店铺" className="py-20" />
+        <Empty description={t("shop.empty")} className="py-20" />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {list.map((s) => (

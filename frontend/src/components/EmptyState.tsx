@@ -1,28 +1,18 @@
 import { Empty } from "antd";
-import { ReactNode } from "react";
+import { translate } from "../i18n";
 
-export default function EmptyState({
-  title = "暂无数据",
-  description,
-  action,
-}: {
+interface Props {
   title?: string;
   description?: string;
-  action?: ReactNode;
-}) {
+  action?: React.ReactNode;
+}
+
+export default function EmptyState({ title = translate("common.noData"), description, action }: Props) {
   return (
-    <div className="flex flex-col items-center justify-center py-14">
-      <Empty
-        image={Empty.PRESENTED_IMAGE_SIMPLE}
-        description={
-          <div className="text-slate-400">
-            <div className="font-medium text-slate-500">{title}</div>
-            {description && <div className="text-sm mt-1 max-w-xs mx-auto">{description}</div>}
-          </div>
-        }
-      >
-        {action}
-      </Empty>
+    <div className="text-center py-10">
+      <Empty description={title} />
+      {description && <p className="text-slate-400 mt-1">{description}</p>}
+      {action && <div className="mt-3">{action}</div>}
     </div>
   );
 }

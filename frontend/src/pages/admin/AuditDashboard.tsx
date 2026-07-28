@@ -13,6 +13,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { auditStats } from "../../api";
+import { useI18n } from "../../i18n";
 
 interface AuditStats {
   by_action: { action: string; count: number }[];
@@ -20,6 +21,7 @@ interface AuditStats {
 }
 
 export default function AuditDashboard() {
+  const { t } = useI18n();
   const [data, setData] = useState<AuditStats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -32,16 +34,16 @@ export default function AuditDashboard() {
 
   if (loading) return <div className="text-center py-20"><Spin /></div>;
   if (!data || (data.by_action.length === 0 && data.by_day.length === 0))
-    return <EmptyState title="暂无审计数据" description="系统操作记录会显示在这里" />;
+    return <EmptyState title={t("admin.noAuditData")} description={t("admin.noAuditDataDesc")} />;
 
   return (
     <div>
       <div className="flex items-center gap-2 mb-4">
         <span className="w-1 h-6 rounded bg-slate-300" />
-        <h2 className="text-xl font-bold m-0">审计可视化看板</h2>
+        <h2 className="text-xl font-bold m-0">{t("admin.auditDash")}</h2>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card title="操作类型分布" className="soft-card">
+        <Card title={t("admin.actionDist")} className="soft-card">
           <ResponsiveContainer width="100%" height={320}>
             <BarChart data={data.by_action} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" />
@@ -52,7 +54,7 @@ export default function AuditDashboard() {
             </BarChart>
           </ResponsiveContainer>
         </Card>
-        <Card title="每日操作量" className="soft-card">
+        <Card title={t("admin.dailyOps")} className="soft-card">
           <ResponsiveContainer width="100%" height={320}>
             <LineChart data={data.by_day}>
               <CartesianGrid strokeDasharray="3 3" />

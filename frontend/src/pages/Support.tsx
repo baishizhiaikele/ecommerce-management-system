@@ -10,15 +10,21 @@ import {
   SupportTicketOut,
 } from "../api";
 import { useAuth } from "../store/auth";
+import { useI18n } from "../i18n";
 
 const STATUS: Record<string, { color: string; label: string }> = {
-  open: { color: "orange", label: "待处理" },
-  answered: { color: "blue", label: "已回复" },
-  closed: { color: "default", label: "已关闭" },
+  open: { color: "orange", label: "support.status.open" },
+  answered: { color: "blue", label: "support.status.answered" },
+  closed: { color: "default", label: "support.status.closed" },
 };
-const ROLE_LABEL: Record<string, string> = { buyer: "我", merchant: "商家", ai: "AI" };
+const ROLE_LABEL: Record<string, string> = {
+  buyer: "support.role.me",
+  merchant: "support.role.merchant",
+  ai: "support.role.ai",
+};
 
 export default function Support() {
+  const { t } = useI18n();
   const role = useAuth((s) => s.user?.role);
   const [tickets, setTickets] = useState<SupportTicketOut[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,7 +52,7 @@ export default function Support() {
       setActive(await getTicket(id));
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || "打开失败");
+      message.error(err.response?.data?.detail || t("support.openFail"));
     }
   };
 
@@ -59,7 +65,7 @@ export default function Support() {
       load();
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || "回复失败");
+      message.error(err.response?.data?.detail || t("support.replyFail"));
     }
   };
 
@@ -67,12 +73,12 @@ export default function Support() {
     if (!active) return;
     try {
       await closeTicket(active.id);
-      message.success("工单已关闭");
+      message.success(t("support.closedMsg"));
       setActive(null);
       load();
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || "操作失败");
+      message.error(err.response?.data?.detail || t("common.operationFailed"));
     }
   };
 
@@ -86,12 +92,12 @@ export default function Support() {
       load();
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || "提交失败");
+      message.error(err.response?.data?.detail || t("support.submitFail"));
     }
   };
 
   if (role === "admin") {
-    return <Empty description="管理员无需客服工单" className="py-20" />;
+    return <Empty description={t("support.adminNoNeed")} className="py-20" />;
   }
 
   const isMerchant = role === "merchant";
@@ -99,10 +105,10 @@ export default function Support() {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold m-0">{isMerchant ? "客服工单（商家）" : "我的客服工单"}</h2>
+        <h2 className="text-xl font-bold m-0">{isMerchant ? t("support.titleMerchant") : t("support.titleMine")}</h2>
         {!isMerchant && (
           <Button type="primary" onClick={() => setNewOpen(true)}>
-            新建工单
+            {t("support.newTicket")}
           </Button>
         )}
       </div>
@@ -111,7 +117,7 @@ export default function Support() {
           <Spin />
         </div>
       ) : tickets.length === 0 ? (
-        <Empty description={isMerchant ? "暂无工单" : "还没有提交过工单"} className="py-20" />
+        <Empty description={isMerchant ? t("support.emptyMerchant") : t("support.emptyMine")} className="py-20" />
       ) : (
         <List
           className="border border-slate-100 rounded-2xl overflow-hidden"
@@ -139,20 +145,20 @@ export default function Support() {
       )}
 
       <Drawer
-        title={active?.subject || "工单详情"}
+        title={active?.subject || t("support.detail")}
         open={!!active}
         onClose={() => setActive(null)}
         width={480}
         extra={
           active && active.status !== "closed" ? (
-            <Button onClick={onClose}>关闭工单</Button>
+            <Button onClick={onClose}>{t("support.closeTicket")}</Button>
           ) : null
         }
       >
         <div className="space-y-3 mb-4">
           {active?.messages.map((m) => (
             <div key={m.id} className={m.sender_role === "merchant" ? "text-right" : "text-left"}>
-              <div className="text-xs text-slate-400 mb-1">{ROLE_LABEL[m.sender_role]}</div>
+              <div className="text-xs text-slate-400 mb-1">{t(ROLE_LABEL[m.sender_role])}</div>
               <span
                 className={`inline-block px-3 py-2 rounded-2xl ${
                   m.sender_role === "merchant"
@@ -172,20 +178,20 @@ export default function Support() {
             <Input
               value={reply}
               onChange={(e) => setReply(e.target.value)}
-              placeholder={isMerchant ? "输入回复…" : "补充说明…"}
+              placeholder={isMerchant ? t("support.replyPlaceholder") : t("support.notePlaceholder")}
               onPressEnter={onReply}
             />
             <Button type="primary" onClick={onReply}>
-              发送
+              {t("support.send")}
             </Button>
           </div>
         )}
       </Drawer>
 
-      <Modal title="新建工单" open={newOpen} onCancel={() => setNewOpen(false)} onOk={onCreate} okText="提交">
+      <Modal title={t("support.newTicket")} open={newOpen} onCancel={() => setNewOpen(false)} onOk={onCreate} okText={t("common.submit")}>
         <Input.TextArea
           rows={4}
-          placeholder="请描述您的问题，商家会尽快回复"
+          placeholder={t("support.newPlaceholder")}
           value={newMsg}
           onChange={(e) => setNewMsg(e.target.value)}
         />

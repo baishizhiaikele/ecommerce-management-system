@@ -23,19 +23,15 @@ import {
   UserCouponOut,
 } from "../api";
 import { money } from "../utils/format";
+import { calcSubtotal, calcCouponDiscount, calcPointsDiscount, calcPayable } from "../utils/cart";
 import { useCart } from "../store/cart";
 import { useAuth } from "../store/auth";
+import { useI18n } from "../i18n";
 import { Checkbox, Select } from "antd";
-
-function couponDiscount(c: UserCouponOut | undefined, subtotal: number): number {
-  if (!c) return 0;
-  if (c.type === "discount") return Number((subtotal * (1 - Number(c.value))).toFixed(2));
-  if (Number(subtotal) < Number(c.threshold)) return 0;
-  return Number(c.value);
-}
 
 export default function Cart() {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const clear = useCart((s) => s.clear);
   const points = useAuth((s) => s.user?.points ?? 0);
   const [items, setItems] = useState<CartItemOut[]>([]);
@@ -68,7 +64,7 @@ export default function Cart() {
       load();
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || "更新失败");
+      message.error(err.response?.data?.detail || t("cart.updateFail"));
     }
   };
   const remove = async (id: string) => {
@@ -92,21 +88,21 @@ export default function Cart() {
         use_points: usePoints,
       });
       clear();
-      message.success("下单成功");
+      message.success(t("cart.orderSuccess"));
       navigate(`/orders/${order.id}`);
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || "下单失败");
+      message.error(err.response?.data?.detail || t("cart.orderFail"));
     } finally {
       setSubmitting(false);
     }
   };
 
-  const subtotal = items.reduce((s, it) => s + Number(it.price) * it.quantity, 0);
+  const subtotal = calcSubtotal(items);
   const selCoupon = coupons.find((c) => c.id === couponId);
-  const cDisc = couponDiscount(selCoupon, subtotal);
-  const pDisc = usePoints ? Math.min(points, Math.floor(subtotal * 100)) / 100 : 0;
-  const payable = Math.max(subtotal - cDisc - pDisc, 0);
+  const cDisc = calcCouponDiscount(selCoupon, subtotal);
+  const pDisc = calcPointsDiscount(points, subtotal, usePoints);
+  const payable = calcPayable(subtotal, cDisc, pDisc);
 
   if (loading) return <div className="text-center py-20"><Spin /></div>;
   if (items.length === 0) return <Empty description="购物车是空的" className="py-20" />;
@@ -121,10 +117,16 @@ export default function Cart() {
           size="middle"
           scroll={{ x: "max-content" }}
           columns={[
-            { title: "商品", dataIndex: "name" },
-            { title: "单价", dataIndex: "price", render: (v) => `¥${money(v)}` },
+            { title: t("col.product"), dataIndex: "name" },
             {
-              title: "数量",
+              title: t("col.spec"),
+              dataIndex: "variant_label",
+              render: (v: string | null | undefined) =>
+                v ? <Tag color="blue">{v}</Tag> : <span className="text-slate-400">—</span>,
+            },
+            { title: t("col.price"), dataIndex: "price", render: (v) => `¥${money(v)}` },
+            {
+              title: t("col.qty"),
               render: (_, r) => (
                 <InputNumber
                   min={1}
@@ -134,14 +136,14 @@ export default function Cart() {
                 />
               ),
             },
-            { title: "小计", render: (_, r) => `¥${money(Number(r.price) * r.quantity)}` },
+            { title: t("col.subtotal"), render: (_, r) => `¥${money(Number(r.price) * r.quantity)}` },
             {
-              title: "操作",
+              title: t("common.action"),
               fixed: "right",
               render: (_, r) => (
-                <Popconfirm title="确认删除？" onConfirm={() => remove(r.id)}>
+                <Popconfirm title={t("common.confirmDelete")} onConfirm={() => remove(r.id)}>
                   <Button type="link" danger>
-                    删除
+                    {t("common.delete")}
                   </Button>
                 </Popconfirm>
               ),
@@ -151,31 +153,31 @@ export default function Cart() {
       </Card>
 
       <div className="lg:col-span-1 lg:sticky lg:top-6 space-y-4">
-        <Card title="结算" className="rounded-2xl shadow-sm border-0">
+        <Card title={t("cart.checkoutTitle")} className="rounded-2xl shadow-sm border-0">
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-3">
-              <span className="text-slate-600 whitespace-nowrap">优惠券</span>
+              <span className="text-slate-600 whitespace-nowrap">{t("cart.coupon")}</span>
               <Select
                 style={{ width: 200 }}
-                placeholder="不使用优惠券"
+                placeholder={t("cart.noCoupon")}
                 allowClear
                 value={couponId}
                 onChange={(v) => setCouponId(v)}
                 options={coupons.map((c) => ({
                   value: c.id,
-                  label: `${c.name}（${c.type === "discount" ? "折扣" : `满${c.threshold}减${c.value}`}）`,
+                  label: `${c.name}（${c.type === "discount" ? t("coupon.type.discount") : t("coupon.discountHint").replace("{threshold}", c.threshold).replace("{value}", c.value)}）`,
                 }))}
               />
             </div>
             <div className="flex items-center justify-between gap-3">
               <span className="text-slate-600">
-                使用积分抵扣
+                {t("cart.usePoints")}
                 <Tag className="ml-2" color="orange">
-                  可用 {points} 分（约 ¥{(points / 100).toFixed(2)}）
+                  {t("cart.pointsAvailable").replace("{n}", String(points))}（约 ¥{(points / 100).toFixed(2)}）
                 </Tag>
               </span>
               <Checkbox checked={usePoints} onChange={(e) => setUsePoints(e.target.checked)}>
-                抵 {pDisc ? `¥${pDisc.toFixed(2)}` : "0 元"}
+                {t("cart.deduct")} {pDisc ? `¥${pDisc.toFixed(2)}` : t("cart.zeroYuan")}
               </Checkbox>
             </div>
           </div>
@@ -183,7 +185,7 @@ export default function Cart() {
 
         <Card className="rounded-2xl shadow-sm border-0">
           <div className="flex items-center justify-between">
-            <span className="text-slate-500">合计</span>
+            <span className="text-slate-500">{t("common.total")}</span>
             <div className="flex items-center gap-2">
               {cDisc + pDisc > 0 && (
                 <span className="text-slate-400 text-sm line-through">¥{money(subtotal)}</span>
@@ -193,19 +195,19 @@ export default function Cart() {
           </div>
           {cDisc + pDisc > 0 && (
             <div className="text-right text-sm text-emerald-600 mt-1">
-              已省 ¥{money(cDisc + pDisc)}
+              {t("cart.saved").replace("{x}", money(cDisc + pDisc))}
             </div>
           )}
           <Input.TextArea
             rows={2}
-            placeholder="收货地址（5-500 字）"
+            placeholder={t("cart.addressPlaceholder")}
             value={address}
             onChange={(e) => setAddress(e.target.value)}
             maxLength={500}
             className="mt-4"
           />
           <Button type="primary" block className="mt-3" loading={submitting} onClick={onCheckout}>
-            提交订单
+            {t("cart.submit")}
           </Button>
         </Card>
       </div>

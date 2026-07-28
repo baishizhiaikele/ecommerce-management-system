@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import type { AxiosError } from "axios";
-import { Card, Button, Modal, Form, Input, Switch, Popconfirm, message, Empty } from "antd";
+import { Card, Button, Modal, Form, Input, Switch, Popconfirm, message, Empty, Tag } from "antd";
 import { Plus, Edit, Delete, MapPin } from "lucide-react";
 import { listAddresses, createAddress, updateAddress, deleteAddress, AddressOut } from "../api";
+import { useI18n } from "../i18n";
 
 export default function AddressBook() {
+  const { t } = useI18n();
   const [list, setList] = useState<AddressOut[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<AddressOut | null>(null);
@@ -36,35 +38,35 @@ export default function AddressBook() {
     try {
       if (editing) await updateAddress(editing.id, v);
       else await createAddress(v);
-      message.success("已保存");
+      message.success(t("address.saved"));
       setOpen(false);
       load();
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      if (err.response?.status !== 422) message.error(err.response?.data?.detail || "保存失败");
+      if (err.response?.status !== 422) message.error(err.response?.data?.detail || t("common.operationFailed"));
     }
   };
   const del = async (id: string) => {
     try {
       await deleteAddress(id);
-      message.success("已删除");
+      message.success(t("common.success"));
       load();
     } catch {
-      message.error("删除失败");
+      message.error(t("address.deleteFail"));
     }
   };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold m-0">收货地址</h2>
+        <h2 className="text-xl font-bold m-0">{t("page.address.title")}</h2>
         <Button type="primary" icon={<Plus size={16} />} onClick={openAdd}>
-          新增地址
+          {t("address.new")}
         </Button>
       </div>
 
       {list.length === 0 ? (
-        <Empty className="py-16" description="还没有收货地址" />
+        <Empty className="py-16" description={t("empty.address")} />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {list.map((a) => (
@@ -75,7 +77,7 @@ export default function AddressBook() {
                   <div className="flex items-center gap-2">
                     <span className="font-semibold">{a.receiver}</span>
                     <span className="text-slate-400 text-sm">{a.phone}</span>
-                    {a.is_default && <Tag color="green">默认</Tag>}
+                    {a.is_default && <Tag color="green">{t("address.default")}</Tag>}
                   </div>
                   <div className="text-slate-500 text-sm mt-1">
                     {a.province}
@@ -87,11 +89,11 @@ export default function AddressBook() {
               </div>
               <div className="flex justify-end gap-2 mt-3">
                 <Button size="small" icon={<Edit size={14} />} onClick={() => openEdit(a)}>
-                  编辑
+                  {t("common.edit")}
                 </Button>
-                <Popconfirm title="确认删除该地址？" onConfirm={() => del(a.id)}>
+                <Popconfirm title={t("address.confirmDelete")} onConfirm={() => del(a.id)}>
                   <Button size="small" danger icon={<Delete size={14} />}>
-                    删除
+                    {t("common.delete")}
                   </Button>
                 </Popconfirm>
               </div>
@@ -101,35 +103,35 @@ export default function AddressBook() {
       )}
 
       <Modal
-        title={editing ? "编辑地址" : "新增地址"}
+        title={editing ? t("address.edit") : t("address.new")}
         open={open}
         onCancel={() => setOpen(false)}
         onOk={submit}
-        okText="保存"
+        okText={t("common.save")}
         destroyOnClose
       >
         <Form form={form} layout="vertical" className="mt-4">
-          <Form.Item name="receiver" label="收货人" rules={[{ required: true, message: "请输入收货人" }]}>
-            <Input placeholder="收货人姓名" />
+          <Form.Item name="receiver" label={t("address.name")} rules={[{ required: true, message: t("address.reqReceiver") }]}>
+            <Input placeholder={t("address.phReceiver")} />
           </Form.Item>
-          <Form.Item name="phone" label="手机号" rules={[{ required: true, message: "请输入手机号" }]}>
-            <Input placeholder="11 位手机号" />
+          <Form.Item name="phone" label={t("address.phone")} rules={[{ required: true, message: t("address.reqPhone") }]}>
+            <Input placeholder={t("address.phPhone")} />
           </Form.Item>
           <div className="grid grid-cols-3 gap-2">
-            <Form.Item name="province" label="省" rules={[{ required: true, message: "省" }]}>
-              <Input placeholder="省" />
+            <Form.Item name="province" label={t("address.province")} rules={[{ required: true, message: t("address.reqProvince") }]}>
+              <Input placeholder={t("address.province")} />
             </Form.Item>
-            <Form.Item name="city" label="市" rules={[{ required: true, message: "市" }]}>
-              <Input placeholder="市" />
+            <Form.Item name="city" label={t("address.city")} rules={[{ required: true, message: t("address.reqCity") }]}>
+              <Input placeholder={t("address.city")} />
             </Form.Item>
-            <Form.Item name="district" label="区/县" rules={[{ required: true, message: "区" }]}>
-              <Input placeholder="区/县" />
+            <Form.Item name="district" label={t("address.district")} rules={[{ required: true, message: t("address.reqDistrict") }]}>
+              <Input placeholder={t("address.district")} />
             </Form.Item>
           </div>
-          <Form.Item name="detail" label="详细地址" rules={[{ required: true, message: "请输入详细地址" }]}>
-            <Input.TextArea rows={2} placeholder="街道、门牌号等" />
+          <Form.Item name="detail" label={t("address.detail")} rules={[{ required: true, message: t("address.reqDetail") }]}>
+            <Input.TextArea rows={2} placeholder={t("address.phDetail")} />
           </Form.Item>
-          <Form.Item name="is_default" label="设为默认地址" valuePropName="checked">
+          <Form.Item name="is_default" label={t("address.setDefault")} valuePropName="checked">
             <Switch />
           </Form.Item>
         </Form>

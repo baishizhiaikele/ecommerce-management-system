@@ -36,3 +36,26 @@ async def search_qa(
 ) -> dict:
     """AI 智能搜索问答：自然语言 → 解析筛选 → 召回商品并生成回答。"""
     return await search_service.search_qa(db, question, user_id=user.id)
+
+
+@router.get("/facets")
+async def product_facets(
+    db: AsyncSession = Depends(get_db),
+    keyword: str = Query(None),
+    category_id: str = Query(None),
+    min_price: float = Query(None, ge=0),
+    max_price: float = Query(None, ge=0),
+):
+    """分面检索数据（P1-6）：类目计数 / 价格区间 / 评分分桶 / 排序选项。"""
+    return await search_service.facets(
+        db, keyword=keyword, category_id=category_id, min_price=min_price, max_price=max_price
+    )
+
+
+@router.get("/suggest", response_model=list[str])
+async def suggest(
+    q: str = Query(..., min_length=1, max_length=50),
+    db: AsyncSession = Depends(get_db),
+):
+    """搜索联想（P1-7）：热门关键词前缀匹配 + 商品名包含匹配。"""
+    return await search_service.suggest(db, q)

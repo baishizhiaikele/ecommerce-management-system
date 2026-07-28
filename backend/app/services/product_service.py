@@ -37,6 +37,7 @@ async def list_products(
     sort: str | None = None,
     min_price: float | None = None,
     max_price: float | None = None,
+    min_rating: float | None = None,
     in_stock: bool = False,
     merchant_id: str | None = None,
     page: int = 1,
@@ -62,6 +63,15 @@ async def list_products(
         base = base.where(Product.price <= max_price)
     if in_stock:
         base = base.where(Product.stock > 0)
+    if min_rating is not None:
+        _avg = (
+            select(Review.product_id, func.avg(Review.rating).label("avg_rating"))
+            .group_by(Review.product_id)
+            .subquery()
+        )
+        base = base.where(
+            Product.id.in_(select(_avg.c.product_id).where(_avg.c.avg_rating >= min_rating))
+        )
 
     count_stmt = select(Product.id)
     if only_active:
@@ -79,6 +89,15 @@ async def list_products(
         count_stmt = count_stmt.where(Product.price <= max_price)
     if in_stock:
         count_stmt = count_stmt.where(Product.stock > 0)
+    if min_rating is not None:
+        _avg = (
+            select(Review.product_id, func.avg(Review.rating).label("avg_rating"))
+            .group_by(Review.product_id)
+            .subquery()
+        )
+        count_stmt = count_stmt.where(
+            Product.id.in_(select(_avg.c.product_id).where(_avg.c.avg_rating >= min_rating))
+        )
     # P2：直接数据库计数，避免先取全部 id 再 len()（大表会拉爆内存）
     total = await db.scalar(count_stmt.with_only_columns(func.count(Product.id))) or 0
 

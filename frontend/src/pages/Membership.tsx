@@ -13,6 +13,7 @@ import {
 import { CrownOutlined, GiftOutlined } from "@ant-design/icons";
 import EmptyState from "../components/EmptyState";
 import { getMembership, listTasks, claimTask, MembershipOut, TaskOut } from "../api";
+import { useI18n } from "../i18n";
 
 const { Paragraph, Text } = Typography;
 
@@ -24,6 +25,7 @@ const TIER_COLOR: Record<string, string> = {
 };
 
 export default function Membership() {
+  const { t: tr } = useI18n();
   const [member, setMember] = useState<MembershipOut | null>(null);
   const [tasks, setTasks] = useState<TaskOut[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,17 +52,17 @@ export default function Membership() {
     setClaiming(key);
     try {
       const r = await claimTask(key);
-      message.success(`领取成功，+${r.gained} 积分`);
+      message.success(tr("membership.claimSuccess").replace("{n}", String(r.gained)));
       await load();
     } catch (e: unknown) {
-      message.error((e as { message?: string })?.message || "领取失败");
+      message.error((e as { message?: string })?.message || tr("membership.claimFail"));
     } finally {
       setClaiming(null);
     }
   };
 
   if (loading) return <div className="text-center py-20"><Spin /></div>;
-  if (!member) return <EmptyState title="加载失败" />;
+  if (!member) return <EmptyState title={tr("common.loadFailed")} />;
 
   const color = TIER_COLOR[member.level] || "#6366f1";
 
@@ -72,12 +74,12 @@ export default function Membership() {
       >
         <div className="flex items-center justify-between">
           <div>
-            <div className="opacity-80 text-sm">当前会员等级</div>
+            <div className="opacity-80 text-sm">{tr("membership.currentTier")}</div>
             <div className="text-3xl font-bold my-1 flex items-center gap-2">
               <CrownOutlined /> {member.level_name}
             </div>
             <Tag color="gold" className="!text-black/80">
-              成长值 {member.growth_value}
+              {tr("membership.growth")} {member.growth_value}
             </Tag>
           </div>
           <CrownOutlined style={{ fontSize: 64, opacity: 0.85 }} />
@@ -85,32 +87,34 @@ export default function Membership() {
         <div className="mt-4">
           <div className="text-xs opacity-90 mb-1">
             {member.next_level_name
-              ? `距「${member.next_level_name}」还需 ${Math.max((member.next_growth ?? 0) - member.growth_value, 0)} 成长值`
-              : "已达最高等级"}
+              ? tr("membership.toNextGrowth")
+                  .replace("{name}", member.next_level_name)
+                  .replace("{n}", String(Math.max((member.next_growth ?? 0) - member.growth_value, 0)))
+              : tr("membership.maxTier")}
           </div>
-          <Progress percent={Math.round(member.progress * 100)} showInfo={false} strokeColor="#fff" trailColor="rgba(255,255,255,0.3)" />
+          <Progress percent={Math.round((member.progress ?? 0) * 100)} showInfo={false} strokeColor="#fff" trailColor="rgba(255,255,255,0.3)" />
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           {member.discount < 1 && (
-            <Tag color="cyan" className="!text-black/80">会员折扣 {(member.discount * 10).toFixed(1)} 折</Tag>
+            <Tag color="cyan" className="!text-black/80">{tr("membership.discount")} {(member.discount * 10).toFixed(1)}{tr("membership.zhe")}</Tag>
           )}
-          {member.free_shipping && <Tag color="green" className="!text-black/80">全场包邮</Tag>}
+          {member.free_shipping && <Tag color="green" className="!text-black/80">{tr("membership.freeShipAll")}</Tag>}
         </div>
       </Card>
 
-      <Card className="rounded-2xl mb-4 soft-card fade-up" title="会员权益">
-        {member.benefits.length ? (
+      <Card className="rounded-2xl mb-4 soft-card fade-up" title={tr("membership.perks")}>
+        {member.benefits?.length ? (
           <ul className="m-0 pl-5 text-slate-600">
             {member.benefits.map((b) => (
               <li key={b}>{b}</li>
             ))}
           </ul>
         ) : (
-          <Paragraph className="m-0 text-slate-500">暂无额外权益，继续消费升级解锁更多。</Paragraph>
+          <Paragraph className="m-0 text-slate-500">{tr("membership.noPerks")}</Paragraph>
         )}
       </Card>
 
-      <Divider orientation="left">任务中心</Divider>
+      <Divider orientation="left">{tr("membership.tasks")}</Divider>
       <Card className="rounded-2xl soft-card fade-up">
         <List
           dataSource={tasks}
@@ -118,7 +122,7 @@ export default function Membership() {
             <List.Item
               actions={[
                 task.claimed ? (
-                  <Tag color="success" key="c">已领取</Tag>
+                  <Tag color="success" key="c">{tr("membership.claimed")}</Tag>
                 ) : task.done ? (
                   <Button
                     type="primary"
@@ -127,11 +131,11 @@ export default function Membership() {
                     icon={<GiftOutlined />}
                     onClick={() => onClaim(task.key)}
                   >
-                    领取 +{task.points}
+                    {tr("membership.claim")} +{task.points}
                   </Button>
                 ) : (
                   <Button key="undone" disabled>
-                    未完成
+                    {tr("membership.undone")}
                   </Button>
                 ),
               ]}

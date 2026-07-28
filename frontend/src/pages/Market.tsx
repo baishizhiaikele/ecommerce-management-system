@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AxiosError } from "axios";
 import { useNavigate } from "react-router-dom";
-import { Carousel, Card, Button, Input, Row, Col, Empty, Spin, Tag, message, Select, Switch, InputNumber, Rate, Space } from "antd";
+import { Carousel, Card, Button, Input, Row, Col, Empty, Spin, Tag, message, Select, Switch, InputNumber, Rate, Space, AutoComplete } from "antd";
 import { Search, Sparkles, Flame, Zap, ShoppingBag, Clock, Store, Gift, TrendingUp } from "lucide-react";
 import { useCart } from "../store/cart";
 import {
@@ -14,24 +14,31 @@ import {
   listShops,
   searchHot,
   searchRecord,
+  listCoupons,
+  claimCoupon,
+  searchSuggest,
+  searchFacets,
   ProductOut,
   CategoryOut,
   BannerOut,
   PromotionOut,
+  CouponOut,
+  Facets,
 } from "../api";
-import { useI18n } from "../i18n";
+import { useI18n, translate } from "../i18n";
 import { money } from "../utils/format";
 import ProductImage from "../components/ProductImage";
 import Reveal from "../components/Reveal";
 
 function FlashCountdown({ endAt }: { endAt?: string | null }) {
   const [left, setLeft] = useState("");
+  const { t } = useI18n();
   useEffect(() => {
     if (!endAt) return;
     const tick = () => {
       const diff = new Date(endAt).getTime() - Date.now();
       if (diff <= 0) {
-        setLeft("已结束");
+        setLeft(t("market.ended"));
         return;
       }
       const h = Math.floor(diff / 3.6e6);
@@ -40,8 +47,8 @@ function FlashCountdown({ endAt }: { endAt?: string | null }) {
       setLeft(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`);
     };
     tick();
-    const t = setInterval(tick, 1000);
-    return () => clearInterval(t);
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
   }, [endAt]);
   return (
     <span className="inline-flex items-center gap-1 font-mono text-sm text-rose-600">
@@ -71,6 +78,16 @@ export default function Market() {
   const [recs, setRecs] = useState<ProductOut[]>([]);
   const [hot, setHot] = useState<string[]>([]);
   const [history, setHistory] = useState<string[]>([]);
+  const [coupons, setCoupons] = useState<CouponOut[]>([]);
+  const [recent, setRecent] = useState<ProductOut[]>([]);
+  const [rating, setRating] = useState<number | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [facets, setFacets] = useState<Facets | null>(null);
+  // 以 ref 持有最新筛选条件，保证 setX + setTimeout(load, 0) 读取到最新值（P1-6 分面检索）
+  const filterRef = useRef({ kw, cat, sort, minPrice, maxPrice, inStock, rating, page: 1 });
+  useEffect(() => {
+    filterRef.current = { kw, cat, sort, minPrice, maxPrice, inStock, rating, page: 1 };
+  });
 
   const HISTORY_KEY = "market_search_history";
   useEffect(() => {
@@ -112,21 +129,39 @@ export default function Market() {
   const subOf = (pid?: string) => cats.filter((c) => c.parent_id === pid);
 
   const load = async () => {
+    const f = filterRef.current;
     setLoading(true);
     try {
       const data = await listProducts({
-        keyword: kw || undefined,
-        category_id: cat,
-        sort,
-        min_price: minPrice || undefined,
-        max_price: maxPrice || undefined,
-        in_stock: inStock,
+        keyword: f.kw || undefined,
+        category_id: f.cat,
+        sort: f.sort,
+        min_price: f.minPrice || undefined,
+        max_price: f.maxPrice || undefined,
+        min_rating: f.rating || undefined,
+        in_stock: f.inStock,
+        page: f.page,
+        page_size: 20,
       });
       setItems(data);
     } catch {
       /* 忽略 */
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSuggest = async (q: string) => {
+    const term = (q || "").trim();
+    if (!term) {
+      setSuggestions([]);
+      return;
+    }
+    try {
+      const s = await searchSuggest(term);
+      setSuggestions(s);
+    } catch {
+      /* 忽略联想失败 */
     }
   };
 
@@ -137,8 +172,16 @@ export default function Market() {
     getBanners().then(setBanners).catch(() => {});
     getPromotions("flash").then(setPromos).catch(() => {});
     listShops().then(setShops).catch(() => {});
-    listProducts({ sort: "sales", limit: 6 }).then(setTopSales).catch(() => {});
-    listProducts({ sort: "top_rating", limit: 6 }).then(setTopRating).catch(() => {});
+    listProducts({ sort: "sales", page_size: 6 }).then(setTopSales).catch(() => {});
+    listProducts({ sort: "top_rating", page_size: 6 }).then(setTopRating).catch(() => {});
+    listCoupons().then(setCoupons).catch(() => {});
+    searchFacets().then(setFacets).catch(() => {});
+    try {
+      const r = JSON.parse(localStorage.getItem("browse_history") || "[]");
+      if (Array.isArray(r)) setRecent(r.slice(0, 12));
+    } catch {
+      /* 忽略 */
+    }
   }, []);
 
   const onAdd = async (p: ProductOut) => {
@@ -149,6 +192,17 @@ export default function Market() {
     } catch (e) {
       const err = e as AxiosError<any, any>;
       message.error(err.response?.data?.detail || "加入失败");
+    }
+  };
+
+  const onClaim = async (c: CouponOut) => {
+    try {
+      await claimCoupon(c.id);
+      message.success(t("coupon.claimSuccess"));
+      setCoupons((s) => s.filter((x) => x.id !== c.id));
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || t("coupon.claimFail"));
     }
   };
 
@@ -179,7 +233,7 @@ export default function Market() {
           <span className="text-sm align-top mr-0.5">¥</span>
           {money(p.price)}
         </span>
-        <Tag color={p.stock > 0 ? "green" : "red"}>{p.stock > 0 ? "有货" : "缺货"}</Tag>
+        <Tag color={p.stock > 0 ? "green" : "red"}>{p.stock > 0 ? t("market.inStock") : t("market.outStock")}</Tag>
       </div>
       <Button
         block
@@ -191,7 +245,7 @@ export default function Market() {
           onAdd(p);
         }}
       >
-        加入购物车
+        {t("pd.addCart")}
       </Button>
     </Card>
   );
@@ -217,23 +271,68 @@ export default function Market() {
       {/* 快捷入口 */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "领券中心", icon: <Gift size={20} />, go: () => navigate("/coupons") },
-          { label: "逛店铺", icon: <Store size={20} />, go: () => navigate("/shops") },
-          { label: "积分中心", icon: <Sparkles size={20} />, go: () => navigate("/points") },
-          { label: "我的收藏", icon: <ShoppingBag size={20} />, go: () => navigate("/favorites") },
+          { labelKey: "market.quick.coupon", icon: <Gift size={20} />, go: () => navigate("/coupons") },
+          { labelKey: "market.quick.shop", icon: <Store size={20} />, go: () => navigate("/shops") },
+          { labelKey: "market.quick.points", icon: <Sparkles size={20} />, go: () => navigate("/points") },
+          { labelKey: "market.quick.fav", icon: <ShoppingBag size={20} />, go: () => navigate("/favorites") },
         ].map((q) => (
           <button
-            key={q.label}
+            key={q.labelKey}
             onClick={q.go}
             className="flex items-center gap-3 rounded-2xl bg-white border border-[#EEF0F3] p-4 hover:border-[#4F46E5] hover:shadow-sm transition"
           >
             <span className="glow-icon" style={{ width: 42, height: 42, fontSize: 20 }}>
               {q.icon}
             </span>
-            <span className="font-medium text-slate-700">{q.label}</span>
+            <span className="font-medium text-slate-700">{t(q.labelKey)}</span>
           </button>
         ))}
       </section>
+
+      {/* 领券中心 */}
+      {coupons.length > 0 && (
+        <section>
+          <div className="section-title flex items-center gap-2">
+            <Gift size={16} className="text-[#4F46E5]" />
+            <span className="st-text">{t("market.couponCenter")}</span>
+            <Button type="link" size="small" onClick={() => navigate("/coupons")}>
+              {t("market.moreOffers")}
+            </Button>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-2">
+            {coupons.map((c) => (
+              <div
+                key={c.id}
+                className="!w-56 shrink-0 flex rounded-2xl overflow-hidden border border-slate-100 shadow-sm"
+              >
+                <div
+                  className="w-24 flex flex-col items-center justify-center text-white"
+                  style={{ background: "#4F46E5" }}
+                >
+                  <div className="text-xl font-bold">
+                    {c.type === "discount"
+                      ? `${(Number(c.value) * 10).toFixed(1)}${t("membership.zhe")}`
+                      : `¥${c.value}`}
+                  </div>
+                  <div className="text-[10px] opacity-90 mt-1 px-1 text-center">
+                    {c.type === "discount"
+                      ? translate("coupon.noThresholdDiscount")
+                      : translate("coupon.thresholdHint").replace("{threshold}", c.threshold)}
+                  </div>
+                </div>
+                <div className="flex-1 flex items-center justify-between px-3 py-2">
+                  <div className="min-w-0">
+                    <div className="font-semibold truncate text-sm">{c.name}</div>
+                  </div>
+                  <Button type="primary" size="small" onClick={() => onClaim(c)}>
+                    {t("coupon.receive")}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* 限时秒杀 */}
       {promos.length > 0 && (
@@ -241,11 +340,11 @@ export default function Market() {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Zap className="text-rose-500" size={20} />
-              <span className="font-bold text-lg text-rose-600">限时秒杀</span>
+              <span className="font-bold text-lg text-rose-600">{t("market.flash")}</span>
               <FlashCountdown endAt={promos[0]?.end_at} />
             </div>
             <Button size="small" type="primary" ghost onClick={() => navigate("/coupons")}>
-              更多优惠
+              {t("market.moreOffers")}
             </Button>
           </div>
           <div className="flex gap-3 overflow-x-auto pb-1">
@@ -258,7 +357,7 @@ export default function Market() {
                 <ProductImage name={pr.product_name || "秒杀"} image_url={pr.product_image || ""} height={120} rounded={8} />
                 <div className="mt-2 text-sm font-medium truncate">{pr.product_name}</div>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-rose-600 font-bold">¥{money(pr.discount_price || pr.original_price)}</span>
+                  <span className="text-rose-600 font-bold">¥{money(pr.discount_price || pr.original_price || 0)}</span>
                   {pr.original_price && (
                     <span className="text-xs text-slate-400 line-through">¥{money(pr.original_price)}</span>
                   )}
@@ -272,7 +371,7 @@ export default function Market() {
       {/* 多级分类导航 */}
       <section>
         <div className="section-title">
-          <span className="st-text">全部分类</span>
+          <span className="st-text">{t("market.allCats")}</span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {topCats.map((tc) => (
@@ -306,14 +405,14 @@ export default function Market() {
       {/* 双榜单：热销榜 / 好评榜 */}
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {[
-          { title: "热销榜", icon: <Flame size={16} className="text-rose-500" />, data: topSales, key: "sales" },
-          { title: "好评榜", icon: <TrendingUp size={16} className="text-[#4F46E5]" />, data: topRating, key: "rating" },
+          { titleKey: "market.topSales", icon: <Flame size={16} className="text-rose-500" />, data: topSales, key: "sales" },
+          { titleKey: "market.topRating", icon: <TrendingUp size={16} className="text-[#4F46E5]" />, data: topRating, key: "rating" },
         ].map((board) => (
           <div key={board.key} className="bg-white border border-[#EEF0F3] rounded-2xl p-4">
             <div className="flex items-center gap-2 mb-3">
               {board.icon}
-              <span className="font-bold">{board.title}</span>
-              <span className="ml-auto text-xs text-slate-400">TOP {board.data.length}</span>
+              <span className="font-bold">{t(board.titleKey)}</span>
+              <span className="ml-auto text-xs text-slate-400">{t("market.topPrefix")} {board.data.length}</span>
             </div>
             <div className="space-y-2">
               {board.data.map((p, i) => (
@@ -335,7 +434,7 @@ export default function Market() {
                     <div className="text-[#4F46E5] font-bold text-sm">¥{money(p.price)}</div>
                   </div>
                   {board.key === "sales" ? (
-                    <span className="text-xs text-slate-400">已售 {p.sales_count}</span>
+                    <span className="text-xs text-slate-400">{t("market.sold")} {p.sales_count}</span>
                   ) : (
                     <Rate disabled value={5} style={{ fontSize: 12 }} />
                   )}
@@ -351,9 +450,9 @@ export default function Market() {
         <section>
           <div className="section-title flex items-center gap-2">
             <Store size={16} className="text-[#4F46E5]" />
-            <span className="st-text">店铺街</span>
+            <span className="st-text">{t("market.shopStreet")}</span>
             <Button type="link" size="small" onClick={() => navigate("/shops")}>
-              全部店铺
+              {t("market.allShops")}
             </Button>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -370,7 +469,7 @@ export default function Market() {
                   </div>
                   <div className="min-w-0">
                     <div className="font-semibold truncate">{s.name}</div>
-                    <Tag color="cyan">{s.product_count} 件在售</Tag>
+                    <Tag color="cyan">{s.product_count} {t("market.itemsOnSale")}</Tag>
                   </div>
                 </div>
               </Card>
@@ -383,8 +482,8 @@ export default function Market() {
       {recs.length > 0 && (
         <section>
           <div className="section-title">
-            <span className="st-text">猜你喜欢</span>
-            <Tag color="purple">AI 推荐</Tag>
+            <span className="st-text">{t("market.guessYouLike")}</span>
+            <Tag color="purple">{t("market.aiRec")}</Tag>
           </div>
           <div className="flex gap-3 overflow-x-auto pb-2">
             {recs.map((p, i) => (
@@ -400,9 +499,9 @@ export default function Market() {
 
       {/* 主题频道 */}
       <section>
-        <div className="section-title">
-          <span className="st-text">主题频道</span>
-        </div>
+          <div className="section-title">
+            <span className="st-text">{t("market.themeChannels")}</span>
+          </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {topCats.map((tc, i) => (
             <div
@@ -417,38 +516,81 @@ export default function Market() {
               />
               <div className="relative z-10 h-full flex flex-col justify-center px-5 text-white">
                 <div className="text-lg font-bold">{tc.name}</div>
-                <div className="text-sm opacity-90">精选好物 · 立即选购</div>
+                <div className="text-sm opacity-90">{t("market.pickNow")}</div>
               </div>
             </div>
           ))}
         </div>
       </section>
 
+      {/* 最近浏览 */}
+      {recent.length > 0 && (
+        <section>
+          <div className="section-title">
+            <span className="st-text">{t("market.recentView")}</span>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-2">
+            {recent.map((p, i) => (
+              <div key={p.id} className="!w-44 shrink-0">
+                <Reveal delay={i * 40}>
+                  <CardItem p={p as ProductOut} />
+                </Reveal>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* 精选好物 + 筛选 */}
       <section>
         <div className="section-title">
-          <span className="st-text">{cat ? cats.find((c) => c.id === cat)?.name : "精选好物"}</span>
+          <span className="st-text">{cat ? cats.find((c) => c.id === cat)?.name : t("market.featured")}</span>
         </div>
         <div className="bg-white border border-[#EEF0F3] rounded-2xl p-4 mb-3 flex gap-3 flex-wrap items-center">
-          <Input.Search
-            placeholder={t("searchPlaceholder")}
+          <AutoComplete
+            placeholder={t("market.searchPlaceholder")}
             allowClear
-            enterButton="搜索"
-            value={kw}
-            onChange={(e) => setKw(e.target.value)}
-            onSearch={(v) => doSearch(v)}
             style={{ width: 280 }}
+            value={kw}
+            options={suggestions.map((s) => ({ value: s }))}
+            onChange={(v) => setKw(v)}
+            onSearch={(v) => {
+              setKw(v);
+              fetchSuggest(v);
+            }}
+            onSelect={(v) => doSearch(v)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") doSearch(kw);
+            }}
           />
           <Select
-            placeholder="全部分类"
+            placeholder={t("market.allCats")}
             allowClear
             style={{ width: 140 }}
             value={cat}
             onChange={(v) => pickCat(v)}
-            options={cats.map((c) => ({ value: c.id, label: c.name }))}
+            options={cats.map((c) => {
+              const cnt = facets?.categories.find((f) => f.id === c.id)?.count;
+              return { value: c.id, label: cnt != null ? `${c.name} (${cnt})` : c.name };
+            })}
           />
           <Select
-            placeholder="综合排序"
+            placeholder={t("market.rating")}
+            allowClear
+            style={{ width: 140 }}
+            value={rating ?? undefined}
+            onChange={(v) => {
+              setRating(v ?? null);
+              setTimeout(load, 0);
+            }}
+            options={[
+              { value: 4.5, label: "4.5★+" },
+              { value: 4, label: "4★+" },
+              { value: 3, label: "3★+" },
+            ]}
+          />
+          <Select
+            placeholder={t("market.sortDefault")}
             allowClear
             style={{ width: 140 }}
             value={sort}
@@ -457,17 +599,17 @@ export default function Market() {
               setTimeout(load, 0);
             }}
             options={[
-              { value: "price_asc", label: "价格从低到高" },
-              { value: "price_desc", label: "价格从高到低" },
-              { value: "sales", label: "销量优先" },
-              { value: "top_rating", label: "好评优先" },
-              { value: "newest", label: "最新上架" },
+              { value: "price_asc", label: t("market.priceAsc") },
+              { value: "price_desc", label: t("market.priceDesc") },
+              { value: "sales", label: t("market.sortSales") },
+              { value: "top_rating", label: t("market.sortRating") },
+              { value: "newest", label: t("market.sortNewest") },
             ]}
           />
-          <InputNumber placeholder="最低价" min={0} style={{ width: 100 }} value={minPrice} onChange={(v) => setMinPrice(v)} />
-          <InputNumber placeholder="最高价" min={0} style={{ width: 100 }} value={maxPrice} onChange={(v) => setMaxPrice(v)} />
+          <InputNumber placeholder={t("market.minPrice")} min={0} style={{ width: 100 }} value={minPrice} onChange={(v) => setMinPrice(v)} />
+          <InputNumber placeholder={t("market.maxPrice")} min={0} style={{ width: 100 }} value={maxPrice} onChange={(v) => setMaxPrice(v)} />
           <span className="flex items-center gap-1 text-slate-500">
-            仅看有货
+            {t("market.inStockOnly")}
             <Switch
               size="small"
               checked={inStock}
@@ -478,7 +620,7 @@ export default function Market() {
             />
           </span>
           <Button type="primary" onClick={load}>
-            查询
+            {t("market.query")}
           </Button>
           {(cat || kw || sort || minPrice || maxPrice || inStock) && (
             <Button
@@ -489,10 +631,11 @@ export default function Market() {
                 setMinPrice(null);
                 setMaxPrice(null);
                 setInStock(false);
+                setRating(null);
                 setTimeout(load, 0);
               }}
             >
-              重置
+              {t("common.reset")}
             </Button>
           )}
         </div>
@@ -502,7 +645,7 @@ export default function Market() {
           <div className="flex flex-wrap items-center gap-2 mb-5 text-sm">
             {hot.length > 0 && (
               <Space size={[6, 6]} wrap>
-                <span className="text-slate-400">{t("hotSearch")}</span>
+                <span className="text-slate-400">{t("market.hotSearch")}</span>
                 {hot.map((h) => (
                   <Tag
                     key={h}
@@ -517,7 +660,7 @@ export default function Market() {
             )}
             {history.length > 0 && (
               <Space size={[6, 6]} wrap>
-                <span className="text-slate-400">{t("searchHistory")}</span>
+                <span className="text-slate-400">{t("market.searchHistory")}</span>
                 {history.map((h) => (
                   <Tag
                     key={h}
@@ -535,7 +678,7 @@ export default function Market() {
                   </Tag>
                 ))}
                 <Button type="link" size="small" onClick={clearHistory}>
-                  {t("clear")}
+                  {t("common.clear")}
                 </Button>
               </Space>
             )}
@@ -557,7 +700,7 @@ export default function Market() {
             ))}
           </Row>
         ) : items.length === 0 ? (
-          <Empty className="py-20" description="暂无商品" />
+          <Empty className="py-20" description={t("market.noProducts")} />
         ) : (
           <Row gutter={[16, 16]}>
             {items.map((p, i) => (

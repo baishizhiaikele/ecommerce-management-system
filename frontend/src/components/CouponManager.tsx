@@ -29,25 +29,31 @@ import {
   CouponCreate,
 } from "../api";
 import { money } from "../utils/format";
-
-function renderValue(r: CouponOut) {
-  if (r.type === "discount") return `${(Number(r.value) * 10).toFixed(1)}折`;
-  return `满${money(r.threshold)}减${money(r.value)}`;
-}
-function renderPeriod(r: CouponOut) {
-  if (!r.start_at && !r.end_at) return "长期有效";
-  const s = r.start_at ? dayjs(r.start_at).format("YYYY-MM-DD HH:mm") : "—";
-  const e = r.end_at ? dayjs(r.end_at).format("YYYY-MM-DD HH:mm") : "—";
-  return `${s} ~ ${e}`;
-}
+import { useI18n } from "../i18n";
 
 export default function CouponManager({ mode }: { mode: "admin" | "merchant" }) {
+  const { t, lang } = useI18n();
   const [items, setItems] = useState<CouponOut[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<CouponOut | null>(null);
   const [form] = Form.useForm();
   const [saving, setSaving] = useState(false);
+
+  const renderValue = (r: CouponOut) => {
+    if (r.type === "discount") {
+      return lang === "zh"
+        ? `${(Number(r.value) * 10).toFixed(1)}折`
+        : `${Math.round((1 - Number(r.value)) * 100)}% OFF`;
+    }
+    return t("coupon.full", { min: money(r.threshold), val: money(r.value) });
+  };
+  const renderPeriod = (r: CouponOut) => {
+    if (!r.start_at && !r.end_at) return t("coupon.permanent");
+    const s = r.start_at ? dayjs(r.start_at).format("YYYY-MM-DD HH:mm") : "—";
+    const e = r.end_at ? dayjs(r.end_at).format("YYYY-MM-DD HH:mm") : "—";
+    return `${s} ~ ${e}`;
+  };
 
   const load = async () => {
     setLoading(true);
@@ -105,16 +111,16 @@ export default function CouponManager({ mode }: { mode: "admin" | "merchant" }) 
     try {
       if (editing) {
         await updateCoupon(editing.id, payload);
-        message.success("已更新");
+        message.success(t("common.updated"));
       } else {
         await createCoupon(payload);
-        message.success("已创建");
+        message.success(t("common.created"));
       }
       setOpen(false);
       load();
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || "操作失败");
+      message.error(err.response?.data?.detail || t("common.operationFailed"));
     } finally {
       setSaving(false);
     }
@@ -122,11 +128,11 @@ export default function CouponManager({ mode }: { mode: "admin" | "merchant" }) 
   const onDelete = async (id: string) => {
     try {
       await deleteCoupon(id);
-      message.success("已下架");
+      message.success(t("coupon.delisted"));
       load();
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || "下架失败");
+      message.error(err.response?.data?.detail || t("coupon.delFail"));
     }
   };
   const onToggleActive = async (r: CouponOut, checked: boolean) => {
@@ -135,39 +141,39 @@ export default function CouponManager({ mode }: { mode: "admin" | "merchant" }) 
       load();
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || "操作失败");
+      message.error(err.response?.data?.detail || t("common.operationFailed"));
     }
   };
 
   const columns: TableColumnsType<CouponOut> = [
-    { title: "名称", dataIndex: "name" },
+    { title: t("col.name"), dataIndex: "name" },
     {
-      title: "范围",
+      title: t("coupon.scope"),
       render: (_: unknown, r: CouponOut) =>
-        r.merchant_id ? <Tag color="blue">店铺券</Tag> : <Tag color="purple">平台券</Tag>,
+        r.merchant_id ? <Tag color="blue">{t("coupon.shopCoupon")}</Tag> : <Tag color="purple">{t("coupon.platformCoupon")}</Tag>,
     },
-    { title: "优惠", render: (_: unknown, r: CouponOut) => renderValue(r) },
+    { title: t("mp.discount"), render: (_: unknown, r: CouponOut) => renderValue(r) },
     {
-      title: "发放 / 总量",
-      render: (_: unknown, r: CouponOut) => `${r.issued ?? 0} / ${r.total || "不限"}`,
+      title: t("coupon.issued"),
+      render: (_: unknown, r: CouponOut) => `${r.issued ?? 0} / ${r.total || t("coupon.unlimited")}`,
     },
-    { title: "有效期", render: (_: unknown, r: CouponOut) => renderPeriod(r) },
+    { title: t("coupon.validity"), render: (_: unknown, r: CouponOut) => renderPeriod(r) },
     {
-      title: "状态",
+      title: t("common.status"),
       render: (_: unknown, r: CouponOut) => (
         <Switch checked={r.is_active} onChange={(c) => onToggleActive(r, c)} />
       ),
     },
     {
-      title: "操作",
+      title: t("common.action"),
       render: (_: unknown, r: CouponOut) => (
         <Space>
           <Button type="link" onClick={() => openEdit(r)}>
-            编辑
+            {t("common.edit")}
           </Button>
-          <Popconfirm title="确认下架该券？" onConfirm={() => onDelete(r.id)}>
+          <Popconfirm title={t("coupon.confirmDel")} onConfirm={() => onDelete(r.id)}>
             <Button type="link" danger>
-              下架
+              {t("coupon.delist")}
             </Button>
           </Popconfirm>
         </Space>
@@ -177,11 +183,11 @@ export default function CouponManager({ mode }: { mode: "admin" | "merchant" }) 
 
   return (
     <Card
-      title={mode === "admin" ? "优惠券管理（平台）" : "我的优惠券"}
+      title={mode === "admin" ? t("coupon.adminTitle") : t("coupon.myTitle")}
       className="soft-card"
       extra={
         <Button type="primary" onClick={openCreate}>
-          新建优惠券
+          {t("coupon.create")}
         </Button>
       }
     >
@@ -193,28 +199,28 @@ export default function CouponManager({ mode }: { mode: "admin" | "merchant" }) 
         <Table rowKey="id" dataSource={items} pagination={false} columns={columns} />
       )}
       <Drawer
-        title={editing ? "编辑优惠券" : "新建优惠券"}
+        title={editing ? t("coupon.edit") : t("coupon.create")}
         open={open}
         onClose={() => setOpen(false)}
         width={420}
         destroyOnClose
       >
         <Form form={form} layout="vertical" onFinish={onSubmit}>
-          <Form.Item name="name" label="券名称" rules={[{ required: true, message: "请输入名称" }]}>
-            <Input placeholder="如：新人专享券" />
+          <Form.Item name="name" label={t("coupon.name")} rules={[{ required: true, message: t("mprod.reqName") }]}>
+            <Input placeholder={t("coupon.namePlaceholder")} />
           </Form.Item>
-          <Form.Item name="type" label="类型" rules={[{ required: true }]}>
+          <Form.Item name="type" label={t("common.type")} rules={[{ required: true }]}>
             <Select
               options={[
-                { value: "full_reduce", label: "满减券" },
-                { value: "discount", label: "折扣券" },
+                { value: "full_reduce", label: t("coupon.fullReduce") },
+                { value: "discount", label: t("coupon.discount") },
               ]}
             />
           </Form.Item>
           <Form.Item noStyle shouldUpdate={(p, c) => p.type !== c.type}>
             {({ getFieldValue }) =>
               getFieldValue("type") === "full_reduce" ? (
-                <Form.Item name="threshold" label="使用门槛（满 X 元）">
+                <Form.Item name="threshold" label={t("coupon.threshold")}>
                   <InputNumber min={0} className="w-full" />
                 </Form.Item>
               ) : null
@@ -222,34 +228,30 @@ export default function CouponManager({ mode }: { mode: "admin" | "merchant" }) 
           </Form.Item>
           <Form.Item
             name="value"
-            label="优惠值（满减=减免金额；折扣=系数，0.8 即 8 折）"
-            rules={[{ required: true, message: "请输入优惠值" }]}
+            label={t("coupon.value")}
+            rules={[{ required: true, message: t("coupon.valuePlaceholder") }]}
           >
             <InputNumber min={0} step={0.1} className="w-full" />
           </Form.Item>
-          <Form.Item name="total" label="发行总量（0 表示不限量）">
+          <Form.Item name="total" label={t("coupon.total")}>
             <InputNumber min={0} className="w-full" />
           </Form.Item>
           {mode === "admin" && (
-            <Form.Item
-              name="merchant_id"
-              label="归属商家 ID（留空=平台券；填商家 ID=店铺券）"
-              tooltip="商家视角无需填写，自动归属本人"
-            >
-              <Input placeholder="留空表示平台券" />
+            <Form.Item name="merchant_id" label={t("coupon.owner")} tooltip={t("coupon.ownerTip")}>
+              <Input placeholder={t("coupon.ownerPlaceholder")} />
             </Form.Item>
           )}
-          <Form.Item name="start_at" label="生效时间">
+          <Form.Item name="start_at" label={t("coupon.startTime")}>
             <DatePicker showTime className="w-full" />
           </Form.Item>
-          <Form.Item name="end_at" label="失效时间">
+          <Form.Item name="end_at" label={t("coupon.endTime")}>
             <DatePicker showTime className="w-full" />
           </Form.Item>
-          <Form.Item name="is_active" label="立即启用" valuePropName="checked">
+          <Form.Item name="is_active" label={t("coupon.enableNow")} valuePropName="checked">
             <Switch />
           </Form.Item>
           <Button type="primary" htmlType="submit" loading={saving} block>
-            保存
+            {t("common.save")}
           </Button>
         </Form>
       </Drawer>

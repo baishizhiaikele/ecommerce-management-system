@@ -1,124 +1,119 @@
-import { useEffect, useState } from "react";
-import { Outlet, useNavigate, Link, useLocation } from "react-router-dom";
-import { Layout, Menu, Button, Dropdown, Tooltip, Input, Badge } from "antd";
-import {
-  SafetyCertificateOutlined,
-  BellOutlined,
-  LogoutOutlined,
-  SearchOutlined,
-} from "@ant-design/icons";
+import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../store/auth";
-import { logout, unreadCount } from "../api";
+import { useI18n } from "../i18n";
+import {
+  BarChart3,
+  Users,
+  Package,
+  Star,
+  ShieldCheck,
+  Activity,
+  Ticket,
+  ArrowLeft,
+  User,
+  LogOut,
+  Languages,
+} from "lucide-react";
 
-const { Header, Sider, Content } = Layout;
+const MENU = [
+  { key: "dashboard", labelKey: "nav.dashboard", path: "/admin", icon: <BarChart3 size={18} /> },
+  { key: "users", labelKey: "page.admin.users", path: "/admin/users", icon: <Users size={18} /> },
+  { key: "products", labelKey: "page.admin.products", path: "/admin/products", icon: <Package size={18} /> },
+  { key: "reviews", labelKey: "page.admin.reviews", path: "/admin/reviews", icon: <Star size={18} /> },
+  { key: "audit", labelKey: "page.admin.audit", path: "/admin/audit", icon: <ShieldCheck size={18} /> },
+  { key: "auditDashboard", labelKey: "page.admin.auditDashboard", path: "/admin/audit-dashboard", icon: <Activity size={18} /> },
+  { key: "coupons", labelKey: "page.admin.coupons", path: "/admin/coupons", icon: <Ticket size={18} /> },
+];
+
+const MOBILE_NAV = [
+  { key: "dashboard", labelKey: "nav.dashboard", path: "/admin", icon: <BarChart3 size={20} /> },
+  { key: "users", labelKey: "page.admin.users", path: "/admin/users", icon: <Users size={20} /> },
+  { key: "products", labelKey: "page.admin.products", path: "/admin/products", icon: <Package size={20} /> },
+  { key: "reviews", labelKey: "page.admin.reviews", path: "/admin/reviews", icon: <Star size={20} /> },
+  { key: "audit", labelKey: "page.admin.audit", path: "/admin/audit", icon: <ShieldCheck size={20} /> },
+];
 
 export default function AdminLayout() {
+  const { user, logout } = useAuth();
+  const { t, lang, setLang } = useI18n();
   const navigate = useNavigate();
-  const loc = useLocation();
-  const user = useAuth((s) => s.user);
-  const doLogout = useAuth((s) => s.logout);
-  const [unread, setUnread] = useState(0);
-
-  useEffect(() => {
-    unreadCount()
-      .then((d) => setUnread(d.count))
-      .catch(() => {});
-  }, []);
-
-  const onLogout = async () => {
-    try {
-      await logout();
-    } catch {
-      /* 忽略 */
-    }
-    doLogout();
-    navigate("/login");
-  };
-
-  const menuItems = [
-    { key: "/admin", label: <Link to="/admin">平台仪表板</Link> },
-    { key: "/admin/products", label: <Link to="/admin/products">商品审核</Link> },
-    { key: "/admin/users", label: <Link to="/admin/users">用户管理</Link> },
-    { key: "/admin/coupons", label: <Link to="/admin/coupons">优惠券管理</Link> },
-    { key: "/admin/reviews", label: <Link to="/admin/reviews">负面评价</Link> },
-    { key: "/admin/audit", label: <Link to="/admin/audit">审计日志</Link> },
-    { key: "/admin/audit-dashboard", label: <Link to="/admin/audit-dashboard">审计看板</Link> },
-  ];
+  const location = useLocation();
+  const isActive = (path: string) => location.pathname === path;
 
   return (
-    <Layout style={{ minHeight: "100vh" }}>
-      <Sider
-        theme="light"
-        width={236}
-        collapsible
-        breakpoint="lg"
-        className="glass"
-        style={{ borderRight: "1px solid #EEF0F3", overflow: "hidden" }}
-      >
-        <Link to="/admin">
-          <div className="bg-slate-50 m-3 rounded-2xl p-4 flex items-center gap-3" style={{ position: "relative" }}>
-            <span className="glow-icon" style={{ width: 40, height: 40, fontSize: 20 }}>
-              <SafetyCertificateOutlined />
-            </span>
-            <div className="text-slate-800">
-              <div className="font-bold leading-tight">管理后台</div>
-              <div className="text-[11px] text-slate-500">Admin Console</div>
-            </div>
-          </div>
+    <div className="min-h-screen flex flex-col lg:flex-row bg-slate-50">
+      <aside className="hidden lg:flex w-60 shrink-0 bg-slate-900 text-slate-200 flex-col">
+        <Link to="/" className="h-16 flex items-center gap-2 px-5 border-b border-white/10">
+          <span className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-white font-bold">
+            C
+          </span>
+          <span className="font-bold text-white">{t("nav.brand")} · {t("nav.dashboard")}</span>
         </Link>
-        <Menu
-          mode="inline"
-          selectedKeys={[loc.pathname]}
-          items={menuItems}
-          className="!border-0 !bg-transparent px-2"
-        />
-      </Sider>
-      <Layout>
-        <Header
-          className="glass sticky top-0 z-10"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "0 24px",
-            borderBottom: "1px solid #EEF0F3",
-          }}
-        >
-          <span className="text-slate-500 text-sm">实时运营概览</span>
-          <div className="flex items-center gap-2">
-            <Input
-              prefix={<SearchOutlined className="text-slate-400" />}
-              placeholder="搜索…"
-              variant="filled"
-              className="!w-56 hidden md:block !rounded-full"
-            />
-            <Tooltip title="通知">
-              <Badge count={unread} size="small">
-                <Button type="text" icon={<BellOutlined />} onClick={() => navigate("/admin/audit")} />
-              </Badge>
-            </Tooltip>
-            <Dropdown
-              menu={{
-                items: [{ key: "logout", icon: <LogoutOutlined />, label: "退出登录" }],
-                onClick: onLogout,
-              }}
+        <nav className="flex-1 p-3 space-y-1">
+          {MENU.map((m) => (
+            <Link
+              key={m.key}
+              to={m.path}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-slate-300 hover:bg-white/10"
             >
-              <Button className="!rounded-full">
-                <span
-                  className="w-6 h-6 rounded-full inline-flex items-center justify-center text-white text-xs mr-1"
-                  style={{ background: "#4F46E5" }}
-                >
-                  {(user?.username || "?")[0]?.toUpperCase()}
-                </span>
-                {user?.username}
-              </Button>
-            </Dropdown>
+              {m.icon}
+              {t(m.labelKey)}
+            </Link>
+          ))}
+        </nav>
+        <Link
+          to="/"
+          className="m-3 flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm text-slate-400 hover:bg-white/10"
+        >
+          <ArrowLeft size={18} /> {t("nav.home")}
+        </Link>
+      </aside>
+
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="h-16 flex items-center gap-3 px-4 bg-white border-b border-slate-100 sticky top-0 z-20">
+          <span className="font-bold lg:hidden">{t("nav.dashboard")}</span>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => setLang(lang === "zh" ? "en" : "zh")}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-100"
+              title={t("nav.language")}
+            >
+              <Languages size={16} />
+              {lang === "zh" ? "EN" : "中"}
+            </button>
+            <div className="flex items-center gap-2 px-2.5 py-1.5">
+              <span className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-medium">
+                {(user?.username || "A").slice(0, 1).toUpperCase()}
+              </span>
+              <span className="text-sm font-medium hidden sm:block">{user?.username}</span>
+            </div>
+            <button
+              onClick={() => logout()}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-sm text-rose-600 hover:bg-rose-50"
+            >
+              <LogOut size={16} /> <span className="hidden sm:inline">{t("nav.logout")}</span>
+            </button>
           </div>
-        </Header>
-        <Content style={{ maxWidth: 1480, margin: "0 auto", padding: 24, width: "100%" }}>
-          <Outlet />
-        </Content>
-      </Layout>
-    </Layout>
+        </header>
+
+        <main className="flex-1 p-4 lg:p-6 pb-24 lg:pb-6"><Outlet /></main>
+      </div>
+
+      {/* 移动端底部导航 */}
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur border-t border-slate-100 grid grid-cols-5">
+        {MOBILE_NAV.map((m) => (
+          <Link
+            key={m.key}
+            to={m.path}
+            className={`flex flex-col items-center justify-center gap-0.5 py-2 text-[11px] ${
+              isActive(m.path) ? "text-indigo-600" : "text-slate-500"
+            }`}
+          >
+            {m.icon}
+            {t(m.labelKey)}
+          </Link>
+        ))}
+      </nav>
+    </div>
   );
 }

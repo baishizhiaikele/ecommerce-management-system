@@ -1,96 +1,64 @@
-import { useEffect, useRef, useState } from "react";
-import { Drawer, Input, Button, Avatar, Spin, message } from "antd";
-import { RobotOutlined, UserOutlined, SendOutlined } from "@ant-design/icons";
-import { chat } from "../api";
+import { useState } from "react";
+import { Input, Button, Avatar } from "antd";
+import { RobotOutlined, SendOutlined } from "@ant-design/icons";
+import { chat, ChatResponse, ProductOut } from "../api";
+import { useI18n } from "../i18n";
 
-interface Props {
-  productId: string;
-  productName: string;
-  onClose: () => void;
-}
+type ProductChatMessage = { role: "user" | "assistant"; content: string };
 
-interface Msg {
-  role: "user" | "ai";
-  content: string;
-}
-
-export default function ProductChat({ productId, productName, onClose }: Props) {
-  const [messages, setMessages] = useState<Msg[]>([
-    {
-      role: "ai",
-      content: `你好，我是「${productName}」的智能导购，有什么可以帮你的？`,
-    },
+export default function ProductChat({ product }: { product: ProductOut }) {
+  const { t } = useI18n();
+  const [messages, setMessages] = useState<ProductChatMessage[]>([
+    { role: "assistant", content: t("chat.greeting", { name: product.name }) },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const endRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
 
   const send = async () => {
     const text = input.trim();
-    if (!text || loading) return;
+    if (!text) return;
+    const next: ProductChatMessage[] = [...messages, { role: "user", content: text }];
+    setMessages(next);
     setInput("");
-    setMessages((m) => [...m, { role: "user", content: text }]);
     setLoading(true);
     try {
-      const res = await chat({ product_id: productId, message: text });
-      setMessages((m) => [...m, { role: "ai", content: res.reply }]);
-    } catch (e: any) {
-      message.error(e?.response?.data?.detail || "咨询失败，请稍后再试");
+      const r: ChatResponse = await chat({ product_id: product.id, message: text });
+      setMessages([...next, { role: "assistant", content: r.reply }]);
+    } catch {
+      setMessages([...next, { role: "assistant", content: t("chat.fail") }]);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Drawer
-      title={`智能客服 · ${productName}`}
-      placement="right"
-      width={420}
-      open
-      onClose={onClose}
-    >
-      <div className="flex flex-col h-full">
-        <div className="flex-1 overflow-auto space-y-3 pr-1">
-          {messages.map((m, i) => (
-            <div
-              key={i}
-              className={`flex gap-2 ${m.role === "user" ? "flex-row-reverse" : ""}`}
-            >
-              <Avatar
-                icon={m.role === "ai" ? <RobotOutlined /> : <UserOutlined />}
-                style={{
-                  background: m.role === "ai" ? "#4F46E5" : "#94a3b8",
-                }}
-              />
-              <div
-                className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${
-                  m.role === "ai"
-                    ? "bg-slate-100 text-slate-700"
-                    : "bg-[#4F46E5] text-white"
-                }`}
-              >
-                {m.content}
-              </div>
-            </div>
-          ))}
-          {loading && <Spin />}
-          <div ref={endRef} />
-        </div>
-        <div className="flex gap-2 pt-3 border-t">
-          <Input
-            placeholder="输入问题…"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onPressEnter={send}
-            disabled={loading}
-          />
-          <Button type="primary" icon={<SendOutlined />} onClick={send} loading={loading} />
-        </div>
+    <div className="flex flex-col h-96">
+      <div className="flex items-center gap-2 px-3 py-2 border-b font-medium">
+        <Avatar size="small" icon={<RobotOutlined />} style={{ background: "#4F46E5" }} />
+        {t("chat.title", { name: product.name })}
       </div>
-    </Drawer>
+      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+        {messages.map((m, i) => (
+          <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+            <div
+              className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm ${
+                m.role === "user" ? "bg-[#4F46E5] text-white" : "bg-slate-100 text-slate-700"
+              }`}
+            >
+              {m.content}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2 p-2 border-t">
+        <Input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onPressEnter={send}
+          placeholder={t("chat.placeholder")}
+        />
+        <Button type="primary" icon={<SendOutlined />} loading={loading} onClick={send} />
+      </div>
+    </div>
   );
 }

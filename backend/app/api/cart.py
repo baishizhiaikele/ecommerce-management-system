@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
+from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api._product_snapshot import load_product_map, snapshot_name
@@ -15,7 +16,16 @@ from app.services.audit_service import record
 router = APIRouter(prefix="/cart", tags=["cart"])
 
 
-def _serialize(item: CartItem, snapshot: dict) -> CartItemOut:
+def _variant_label(variant: Optional[ProductVariant]) -> Optional[str]:
+    if not variant:
+        return None
+    specs = variant.specs_dict()
+    if not specs:
+        return None
+    return " / ".join(f"{k}:{v}" for k, v in specs.items())
+
+
+def _serialize(item: CartItem, snapshot: dict, variant_label: Optional[str] = None) -> CartItemOut:
     product = snapshot.get(item.product_id)
     return CartItemOut(
         id=item.id,
@@ -26,6 +36,7 @@ def _serialize(item: CartItem, snapshot: dict) -> CartItemOut:
         stock=product.stock if product else 0,
         quantity=item.quantity,
         variant_id=item.variant_id,
+        variant_label=variant_label,
     )
 
 
@@ -35,7 +46,19 @@ async def get_cart(
 ) -> list[CartItemOut]:
     rows = list(await db.scalars(select(CartItem).where(CartItem.user_id == user.id)))
     snapshot = await load_product_map(db, [it.product_id for it in rows])
-    return [_serialize(it, snapshot) for it in rows]
+    variant_ids = [it.variant_id for it in rows if it.variant_id]
+    variant_map: dict[str, Optional[str]] = {}
+    if variant_ids:
+        variants = list(
+            await db.scalars(
+                select(ProductVariant).where(ProductVariant.id.in_(variant_ids))
+            )
+        )
+        for v in variants:
+            variant_map[v.id] = _variant_label(v)
+    return [
+        _serialize(it, snapshot, variant_map.get(it.variant_id)) for it in rows
+    ]
 
 
 @router.post("/items", response_model=CartItemOut, status_code=201)
@@ -69,7 +92,7 @@ async def add_item(
         new_qty = min(existing.quantity + data.quantity, 99)
         await record(db, user.id, "cart.add", "cart", existing.id, f"商品 {product.id} x{new_qty}")
         await db.commit()
-        return _serialize(existing, {product.id: product})
+        return _serialize(existing, {product.id: product}, _variant_label(variant))
     item = CartItem(
         user_id=user.id,
         product_id=data.product_id,
@@ -79,7 +102,7 @@ async def add_item(
     db.add(item)
     await record(db, user.id, "cart.add", "cart", item.id, f"商品 {data.product_id} x{data.quantity}")
     await db.commit()
-    return _serialize(item, {product.id: product})
+    return _serialize(item, {product.id: product}, _variant_label(variant))
 
 
 @router.put("/items/{item_id}", response_model=CartItemOut)
@@ -95,10 +118,14 @@ async def update_item(
     product = await db.get(Product, item.product_id)
     if product and product.stock < data.quantity:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="库存不足")
+    variant_label = None
+    if item.variant_id:
+        variant = await db.get(ProductVariant, item.variant_id)
+        variant_label = _variant_label(variant)
     item.quantity = data.quantity
     await record(db, user.id, "cart.update", "cart", item.id, f"数量->{data.quantity}")
     await db.commit()
-    return _serialize(item, {product.id: product} if product else {})
+    return _serialize(item, {product.id: product} if product else {}, variant_label)
 
 
 @router.delete("/items/{item_id}", status_code=204)

@@ -1,0 +1,57 @@
+# AI 全托管小店 —— 本地一体化栈（docker-compose）
+#
+# 一键启动：后端（FastAPI，镜像内已构建前端并同源托管）+ PostgreSQL。
+# 用法：
+#   1. 复制 .env.example 为 .env 并填写 SECRET_KEY（必填）与可选 AI_API_KEY。
+#   2. 执行 `docker compose up --build`。
+#   3. 访问 http://localhost:8000 （后端同源托管前端 SPA）。
+#
+# 说明：
+#   - 后端镜像在构建期完成 Alembic 迁移与建表（见 backend/Dockerfile + app.main 生命周期）。
+#   - SECRET_KEY 为必填项（缺失则后端启动失败）；生产务必使用强随机值。
+#   - 演示种子数据默认开启（SEED_DEMO=true），正式环境请改为 false。
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ai_shop}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ai_shop}
+      POSTGRES_DB: ${POSTGRES_DB:-ai_shop}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ai_shop} -d ${POSTGRES_DB:-ai_shop}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      # 同步驱动连接串，应用会自动转换为 asyncpg 异步驱动
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ai_shop}:${POSTGRES_PASSWORD:-ai_shop}@db:5432/${POSTGRES_DB:-ai_shop}
+      SECRET_KEY: ${SECRET_KEY:?请通过 .env 设置 SECRET_KEY}
+      FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:8000}
+      SEED_DEMO: ${SEED_DEMO:-true}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_BASE_URL: ${AI_BASE_URL:-https://api.openai.com/v1}
+      AI_MODEL: ${AI_MODEL:-gpt-4o-mini}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  pgdata:

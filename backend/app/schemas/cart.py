@@ -23,3 +23,4 @@ class CartItemOut(BaseModel):
     stock: int
     quantity: int
     variant_id: Optional[str] = None
+    variant_label: Optional[str] = None

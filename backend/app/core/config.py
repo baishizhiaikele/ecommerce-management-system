@@ -29,6 +29,10 @@ class Settings(BaseSettings):
 
     # 支付网关（P0 真实支付接入）：默认 sandbox 自测网关，生产切换为 alipay/wechat 并注入密钥
     PAYMENT_GATEWAY: str = "sandbox"
+
+    # 业务规则（P2-16 / P2-18）
+    MAX_COUPONS_PER_ORDER: int = 1  # 每单最多使用的优惠券张数
+    DEFAULT_LOW_STOCK_THRESHOLD: int = 10  # 商品未单独设置阈值时的默认低库存阈值
     PAYMENT_SECRET: str = "change-me-in-prod-payment-secret"
     PAYMENT_NOTIFY_BASE_URL: str = ""
 

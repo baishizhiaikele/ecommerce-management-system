@@ -9,9 +9,11 @@ router = APIRouter(tags=["ws"])
 
 @router.websocket("/ws/notifications")
 async def ws_notifications(websocket: WebSocket, token: str = "") -> None:
-    # 令牌可来自 query 参数或 Authorization 头
+    # 令牌可来自 query 参数、Authorization 头或 HttpOnly Cookie（前端 JS 拿不到 cookie，走此通道）
     if not token:
         token = websocket.headers.get("Authorization", "").replace("Bearer ", "")
+    if not token:
+        token = websocket.cookies.get("access_token", "")
     try:
         payload = decode_token(token)
         user_id = payload.get("sub")

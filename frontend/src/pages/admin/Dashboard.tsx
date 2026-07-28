@@ -28,6 +28,7 @@ import { money } from "../../utils/format";
 import StatCard from "../../components/StatCard";
 import PageHeader from "../../components/PageHeader";
 import Reveal from "../../components/Reveal";
+import { useI18n } from "../../i18n";
 
 // 简约单色透明度阶梯（统一品牌色，避免多色花哨）
 const PIE_COLORS = [
@@ -41,6 +42,7 @@ const PIE_COLORS = [
 ];
 
 export default function AdminDashboard() {
+  const { t } = useI18n();
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [an, setAn] = useState<DashboardAnalytics | null>(null);
@@ -48,9 +50,9 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     Promise.all([adminStats(), adminTrend(7), adminDashboardAnalytics()])
-      .then(([s, t, a]) => {
+      .then(([s, tr, a]) => {
         setStats(s);
-        setTrend(t);
+        setTrend(tr);
         setAn(a);
       })
       .catch(() => {})
@@ -64,34 +66,34 @@ export default function AdminDashboard() {
       </div>
     );
 
-  const gmvSpark = trend.map((t) => Number(t.amount));
+  const gmvSpark = trend.map((tr) => Number(tr.amount));
   const cards = [
     {
-      title: "平台 GMV",
+      title: t("admin.gmv"),
       value: an.comparison.gmv_now,
       format: (n: number) => `¥${money(n)}`,
       icon: <Coins size={20} />,
       accent: "#4F46E5",
       delta: an.comparison.gmv_rate,
-      deltaLabel: "较上周",
+      deltaLabel: t("admin.weekly"),
       spark: gmvSpark,
     },
     {
-      title: "订单数",
+      title: t("admin.orders"),
       value: an.comparison.orders_now,
       icon: <ShoppingBag size={20} />,
       accent: "#4F46E5",
       delta: an.comparison.orders_rate,
-      deltaLabel: "较上周",
+      deltaLabel: t("admin.weekly"),
     },
     {
-      title: "注册用户",
+      title: t("admin.users"),
       value: stats.user_count,
       icon: <Users size={20} />,
       accent: "#4F46E5",
     },
     {
-      title: "在售商品",
+      title: t("admin.products"),
       value: stats.product_count,
       icon: <Package size={20} />,
       accent: "#4F46E5",
@@ -102,8 +104,8 @@ export default function AdminDashboard() {
     <div>
       <PageHeader
         icon={<TrendingUp size={24} />}
-        title="平台仪表板"
-        subtitle="实时运营数据总览 · 科技渐变看板"
+        title={t("admin.dashboardTitle")}
+        subtitle={t("admin.dashboardSub")}
       />
 
       <Row gutter={[16, 16]}>
@@ -121,10 +123,10 @@ export default function AdminDashboard() {
           <Reveal>
             <Card className="chart-card mt-4" styles={{ body: { padding: 20 } }}>
               <div className="section-title">
-                <span className="st-text">近 7 天 GMV 趋势</span>
+                <span className="st-text">{t("admin.gmvTrend")}</span>
               </div>
               <ResponsiveContainer width="100%" height={280}>
-                <AreaChart data={trend.map((t) => ({ date: t.date, 金额: Number(t.amount) }))}>
+                <AreaChart data={trend.map((tr) => ({ date: tr.date, amount: Number(tr.amount) }))}>
                   <defs>
                     <linearGradient id="gmvGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#4F46E5" stopOpacity={0.45} />
@@ -135,7 +137,7 @@ export default function AdminDashboard() {
                   <XAxis dataKey="date" stroke="#94A3B8" />
                   <YAxis stroke="#94A3B8" />
                   <Tooltip />
-                  <Area type="monotone" dataKey="金额" stroke="#4F46E5" strokeWidth={2.5} fill="url(#gmvGrad)" />
+                  <Area type="monotone" dataKey="amount" name={t("common.amount")} stroke="#4F46E5" strokeWidth={2.5} fill="url(#gmvGrad)" />
                 </AreaChart>
               </ResponsiveContainer>
             </Card>
@@ -145,7 +147,7 @@ export default function AdminDashboard() {
           <Reveal delay={80}>
             <Card className="chart-card mt-4" styles={{ body: { padding: 20 } }}>
               <div className="section-title">
-                <span className="st-text">品类销售占比</span>
+                <span className="st-text">{t("admin.categoryShare")}</span>
               </div>
               <ResponsiveContainer width="100%" height={280}>
                 <PieChart>
@@ -185,7 +187,7 @@ export default function AdminDashboard() {
           <Reveal>
             <Card className="chart-card mt-4" styles={{ body: { padding: 20 } }}>
               <div className="section-title">
-                <span className="st-text">转化漏斗</span>
+                <span className="st-text">{t("admin.funnel")}</span>
               </div>
               <ResponsiveContainer width="100%" height={260}>
                 <FunnelChart>
@@ -206,11 +208,11 @@ export default function AdminDashboard() {
           <Reveal delay={80}>
             <Card className="chart-card mt-4" styles={{ body: { padding: 20 } }}>
               <div className="section-title">
-                <span className="st-text">热销商品 Top 5</span>
+                <span className="st-text">{t("admin.topProducts")}</span>
               </div>
               <div className="space-y-3">
                 {an.top_products.length === 0 && (
-                  <div className="text-slate-400 text-sm">暂无销售数据</div>
+                  <div className="text-slate-400 text-sm">{t("admin.noSales")}</div>
                 )}
                 {an.top_products.map((p, i) => {
                   const max = an.top_products[0]?.revenue || 1;

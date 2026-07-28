@@ -14,6 +14,7 @@ import {
   Empty,
   Popconfirm,
   Tooltip,
+  Drawer,
 } from "antd";
 import {
   ShoppingCartOutlined,
@@ -56,7 +57,7 @@ export default function ProductDetail() {
       setReviews(rv);
       setVariants(vs);
     } catch {
-      message.error("加载失败");
+      message.error(t("common.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -65,6 +66,22 @@ export default function ProductDetail() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // 记录浏览历史（本地，用于首页「最近浏览」）
+  useEffect(() => {
+    if (!p?.id) return;
+    try {
+      const raw = localStorage.getItem("browse_history") || "[]";
+      const arr: any[] = JSON.parse(raw);
+      const next = [
+        { id: p.id, name: p.name, price: p.price, image_url: p.image_url, stock: p.stock },
+        ...arr.filter((x) => x.id !== p.id),
+      ].slice(0, 20);
+      localStorage.setItem("browse_history", JSON.stringify(next));
+    } catch {
+      /* 忽略 */
+    }
+  }, [p]);
 
   // 由变体推导规格分组
   const specGroups = useMemo(() => {
@@ -103,16 +120,16 @@ export default function ProductDetail() {
   const stock = matchedVariant ? matchedVariant.stock : p?.stock ?? 0;
 
   if (loading) return <div className="text-center py-20"><Spin /></div>;
-  if (!p) return <EmptyState title="商品不存在" description="可能已下架" />;
+  if (!p) return <EmptyState title={t("pd.notFound")} description={t("pd.maybeOff")} />;
 
   const addToCart = async () => {
     if (!user) {
-      message.warning("请先登录");
+      message.warning(t("common.loginFirst"));
       navigate("/login");
       return;
     }
     if (variants.length && !matchedVariant) {
-      message.warning("请选择完整规格");
+      message.warning(t("pd.selectSpec"));
       return;
     }
     try {
@@ -122,11 +139,11 @@ export default function ProductDetail() {
         name: p.name,
         price: displayPrice,
         quantity: qty,
-        image_url: matchedVariant?.image_url || p.image_url,
+        image_url: matchedVariant?.image_url || p.image_url || undefined,
       });
-      message.success("已加入购物车");
+      message.success(t("pd.addedCart"));
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "加入购物车失败");
+      message.error(e?.response?.data?.detail || t("pd.addCartFail"));
     }
   };
 
@@ -147,7 +164,7 @@ export default function ProductDetail() {
         name: p.name,
         price: displayPrice,
         quantity: qty,
-        image_url: matchedVariant?.image_url || p.image_url,
+        image_url: matchedVariant?.image_url || p.image_url || undefined,
       });
       navigate("/cart");
     } catch (e: any) {
@@ -168,7 +185,7 @@ export default function ProductDetail() {
             {p.image_url ? (
               <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
             ) : (
-              <EmptyState title="暂无图片" />
+              <EmptyState title={t("pd.noImage")} />
             )}
           </div>
         </Col>
@@ -176,8 +193,8 @@ export default function ProductDetail() {
           <h1 className="text-2xl font-extrabold text-slate-800">{p.name}</h1>
           <div className="flex items-center gap-3 mt-2 text-slate-500 text-sm">
             <Rate disabled allowHalf value={avgRating} style={{ fontSize: 16 }} />
-            <span>{reviews.length} 条评价</span>
-            <span>已售 {p.sales_count}</span>
+            <span>{reviews.length} {t("pd.reviewCount")}</span>
+            <span>{t("market.sold")} {p.sales_count}</span>
           </div>
 
           <div className="mt-4 px-4 py-3 rounded-xl bg-[#4F46E5]/5 border border-[#4F46E5]/10">
@@ -222,10 +239,10 @@ export default function ProductDetail() {
           )}
 
           <div className="mt-4 flex items-center gap-3">
-            <span className="text-slate-500">数量</span>
+            <span className="text-slate-500">{t("pd.quantity")}</span>
             <InputNumber min={1} max={Math.max(stock, 1)} value={qty} onChange={(v) => setQty(v || 1)} />
             <span className="text-slate-400 text-sm">
-              库存 {stock} 件
+              {t("pd.stockInfo").replace("{n}", String(stock))}
             </span>
           </div>
 
@@ -239,14 +256,14 @@ export default function ProductDetail() {
               onClick={addToCart}
               disabled={stock <= 0}
             >
-              {t("addToCart")}
+              {t("pd.addCart")}
             </Button>
             <Button size="large" onClick={buyNow} disabled={stock <= 0}>
-              {t("buyNow")}
+              {t("pd.buyNow")}
             </Button>
             <Tooltip title="AI 智能客服">
               <Button size="large" icon={<RobotOutlined />} onClick={() => setChatOpen(true)}>
-                {t("askAI")}
+                {t("pd.chat")}
               </Button>
             </Tooltip>
           </div>
@@ -262,24 +279,29 @@ export default function ProductDetail() {
         items={[
           {
             key: "desc",
-            label: "商品详情",
+            label: t("pd.detail"),
             children: (
               <div className="prose max-w-none text-slate-600 whitespace-pre-wrap py-2">
-                {p.description || "暂无描述"}
+                {p.description || t("pd.noDesc")}
               </div>
             ),
           },
           {
             key: "reviews",
-            label: `评价 (${reviews.length})`,
-            children: <ProductReviews productId={p.id} reviews={reviews} />,
+            label: `${t("pd.reviews")} (${reviews.length})`,
+            children: <ProductReviews productId={p.id} />,
           },
         ]}
       />
 
-      {chatOpen && (
-        <ProductChat productId={p.id} productName={p.name} onClose={() => setChatOpen(false)} />
-      )}
+      <Drawer
+        title={t("pd.chat")}
+        width={420}
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+      >
+        <ProductChat product={p} />
+      </Drawer>
     </div>
   );
 }

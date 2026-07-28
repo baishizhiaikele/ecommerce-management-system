@@ -3,8 +3,10 @@ import type { AxiosError } from "axios";
 import { Table, Tag, message, Card, Select, Switch, Spin } from "antd";
 import EmptyState from "../../components/EmptyState";
 import { adminListUsers, adminUpdateUser, UserOut, Role } from "../../api";
+import { useI18n } from "../../i18n";
 
 export default function AdminUsers() {
+  const { t } = useI18n();
   const [items, setItems] = useState<UserOut[]>([]);
   const [loading, setLoading] = useState(true);
   const load = async () => {
@@ -24,26 +26,26 @@ export default function AdminUsers() {
   const toggleActive = async (u: UserOut) => {
     try {
       await adminUpdateUser(u.id, { is_active: !u.is_active });
-      message.success("已更新");
+      message.success(t("common.updated"));
       load();
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || "操作失败");
+      message.error(err.response?.data?.detail || t("common.operationFailed"));
     }
   };
   const changeRole = async (u: UserOut, role: Role) => {
     try {
       await adminUpdateUser(u.id, { role });
-      message.success("已更新");
+      message.success(t("common.updated"));
       load();
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || "操作失败");
+      message.error(err.response?.data?.detail || t("common.operationFailed"));
     }
   };
 
   return (
-    <Card title="用户管理" className="soft-card">
+    <Card title={t("admin.userMgmt")} className="soft-card">
       {loading ? (
         <div className="text-center py-10">
           <Spin />
@@ -54,13 +56,13 @@ export default function AdminUsers() {
           dataSource={items}
           pagination={false}
           locale={{
-            emptyText: <EmptyState title="暂无用户" description="平台还没有注册用户" />,
+            emptyText: <EmptyState title={t("admin.noUsers")} description={t("admin.noUsersDesc")} />,
           }}
           columns={[
-            { title: "用户名", dataIndex: "username" },
-            { title: "邮箱", dataIndex: "email" },
+            { title: t("admin.username"), dataIndex: "username" },
+            { title: t("admin.email"), dataIndex: "email" },
             {
-              title: "角色",
+              title: t("admin.role"),
               dataIndex: "role",
               render: (r, u) => (
                 <Select
@@ -69,28 +71,28 @@ export default function AdminUsers() {
                   disabled={u.role === "admin"}
                   onChange={(v) => changeRole(u, v)}
                   options={[
-                    { value: "buyer", label: "买家" },
-                    { value: "merchant", label: "商家" },
-                    { value: "admin", label: "管理员" },
+                    { value: "buyer", label: t("role.buyer") },
+                    { value: "merchant", label: t("role.merchant") },
+                    { value: "admin", label: t("role.admin") },
                   ]}
                 />
               ),
             },
             {
-              title: "状态",
+              title: t("common.status"),
               dataIndex: "is_active",
               render: (v, u) => (
                 <Switch
                   checked={v}
                   disabled={u.role === "admin"}
-                  checkedChildren="正常"
-                  unCheckedChildren="禁用"
+                  checkedChildren={t("common.normal")}
+                  unCheckedChildren={t("common.disabled")}
                   onChange={() => toggleActive(u)}
                 />
               ),
             },
             {
-              title: "注册时间",
+              title: t("admin.regTime"),
               dataIndex: "created_at",
               render: (v) => new Date(v).toLocaleString(),
             },

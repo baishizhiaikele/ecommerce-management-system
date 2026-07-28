@@ -4,10 +4,12 @@ import { Card, Button, Tag, message } from "antd";
 import { Package, Gift, MapPin, Heart, Bell, Ticket, Sparkles, Store } from "lucide-react";
 import { useAuth } from "../store/auth";
 import { signIn, listAddresses } from "../api";
+import { useI18n } from "../i18n";
 
 export default function Me() {
   const navigate = useNavigate();
   const user = useAuth((s) => s.user);
+  const { t } = useI18n();
   const [points, setPoints] = useState(user?.points ?? 0);
   const [signed, setSigned] = useState(false);
   const [gained, setGained] = useState(0);
@@ -25,21 +27,21 @@ export default function Me() {
       setSigned(r.signed_today);
       setGained(r.gained);
       setPoints(r.points);
-      if (r.signed_today) message.info("今日已签到");
-      else message.success(`签到成功，获得 ${r.gained} 积分`);
+      if (r.signed_today) message.info(t("me.signedToday"));
+      else message.success(t("me.signInSuccess").replace("{n}", String(r.gained)));
     } catch {
-      message.error("签到失败");
+      message.error(t("me.signInFail"));
     }
   };
 
   const tiles = [
-    { label: "我的订单", icon: <Package size={20} />, go: () => navigate("/orders") },
-    { label: "积分中心", icon: <Gift size={20} />, go: () => navigate("/points") },
-    { label: "收货地址", icon: <MapPin size={20} />, badge: addrCount, go: () => navigate("/addresses") },
-    { label: "我的收藏", icon: <Heart size={20} />, go: () => navigate("/favorites") },
-    { label: "消息中心", icon: <Bell size={20} />, go: () => navigate("/notifications") },
-    { label: "优惠券", icon: <Ticket size={20} />, go: () => navigate("/coupons") },
-    { label: "积分商城", icon: <Sparkles size={20} />, go: () => navigate("/mall") },
+    { labelKey: "page.orders.title", icon: <Package size={20} />, go: () => navigate("/orders") },
+    { labelKey: "me.tiles.points", icon: <Gift size={20} />, go: () => navigate("/points") },
+    { labelKey: "page.address.title", icon: <MapPin size={20} />, badge: addrCount, go: () => navigate("/addresses") },
+    { labelKey: "page.favorites.title", icon: <Heart size={20} />, go: () => navigate("/favorites") },
+    { labelKey: "page.notifications.title", icon: <Bell size={20} />, go: () => navigate("/notifications") },
+    { labelKey: "page.coupons.title", icon: <Ticket size={20} />, go: () => navigate("/coupons") },
+    { labelKey: "page.mall.title", icon: <Sparkles size={20} />, go: () => navigate("/mall") },
   ];
 
   return (
@@ -52,21 +54,21 @@ export default function Me() {
           <div className="flex-1">
             <div className="text-xl font-bold">{user?.username}</div>
             <Tag color="purple" className="mt-1">
-              积分 {points}
+              {t("me.points")} {points}
             </Tag>
           </div>
           <Button type="primary" size="large" icon={<Sparkles size={16} />} onClick={doSign}>
-            {signed ? "今日已签到" : `签到${gained ? ` +${gained}` : ""}`}
+            {signed ? t("me.signedToday") : `${t("me.signIn")}${gained ? ` +${gained}` : ""}`}
           </Button>
         </div>
       </Card>
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        {tiles.map((t) => (
-          <Card key={t.label} hoverable className="soft-card text-center" onClick={t.go}>
-            <div className="flex justify-center mb-2 text-[#4F46E5]">{t.icon}</div>
-            <div className="font-medium">{t.label}</div>
-            {t.badge ? <div className="text-xs text-slate-400 mt-0.5">共 {t.badge} 条</div> : null}
+        {tiles.map((tile) => (
+          <Card key={tile.labelKey} hoverable className="soft-card text-center" onClick={tile.go}>
+            <div className="flex justify-center mb-2 text-[#4F46E5]">{tile.icon}</div>
+            <div className="font-medium">{t(tile.labelKey)}</div>
+            {tile.badge ? <div className="text-xs text-slate-400 mt-0.5">{t("me.totalItems").replace("{n}", String(tile.badge))}</div> : null}
           </Card>
         ))}
       </div>

@@ -1,41 +1,56 @@
 import { OrderStatus, Sentiment, ProductStatus } from "../api";
+import { translate } from "../i18n";
 
 export const money = (v: string | number) => {
   const n = typeof v === "string" ? parseFloat(v) : v;
   return isNaN(n) ? "0.00" : n.toFixed(2);
 };
 
-export const orderStatusMeta: Record<string, { label: string; color: string }> = {
-  pending_payment: { label: "待付款", color: "orange" },
-  paid: { label: "已付款", color: "blue" },
-  shipped: { label: "已发货", color: "cyan" },
-  completed: { label: "已完成", color: "green" },
-  refund_requested: { label: "退款中", color: "volcano" },
-  refunded: { label: "已退款", color: "red" },
-  refund_rejected: { label: "退款被拒", color: "red" },
-};
+type Meta = { color: string; label: string };
 
-export const productStatusMeta: Record<string, { label: string; color: string }> = {
-  draft: { label: "草稿", color: "default" },
-  pending: { label: "待审核", color: "gold" },
-  active: { label: "已上架", color: "green" },
-  rejected: { label: "已驳回", color: "red" },
-};
+/** 把带 key 的元数据转成「访问时才翻译」的代理，切换语言时自动刷新。 */
+function i18nMeta<T extends string>(raw: Record<T, { color: string; key: string }>): Record<T, Meta> {
+  return new Proxy(raw, {
+    get(target, prop: string | symbol) {
+      const m = (target as Record<string, { color: string; key: string }>)[prop as string];
+      if (!m) return undefined;
+      return { color: m.color, label: translate(m.key) };
+    },
+  }) as unknown as Record<T, Meta>;
+}
 
-export const sentimentMeta: Record<Sentiment, { label: string; color: string }> = {
-  positive: { label: "正面", color: "green" },
-  neutral: { label: "中性", color: "default" },
-  negative: { label: "负面", color: "red" },
-};
+export const orderStatusMeta = i18nMeta({
+  pending_payment: { color: "orange", key: "order.status.unpaid" },
+  paid: { color: "blue", key: "order.status.paid" },
+  shipped: { color: "cyan", key: "order.status.shipped" },
+  completed: { color: "green", key: "order.status.completed" },
+  refund_requested: { color: "volcano", key: "order.status.refunding" },
+  refunded: { color: "red", key: "order.status.refunded" },
+  refund_rejected: { color: "red", key: "order.status.refund_rejected" },
+});
 
+export const productStatusMeta = i18nMeta({
+  draft: { color: "default", key: "product.status.draft" },
+  pending: { color: "gold", key: "product.status.pending" },
+  active: { color: "green", key: "product.status.active" },
+  rejected: { color: "red", key: "product.status.rejected" },
+});
+
+export const sentimentMeta = i18nMeta({
+  positive: { color: "green", key: "sentiment.positive" },
+  neutral: { color: "default", key: "sentiment.neutral" },
+  negative: { color: "red", key: "sentiment.negative" },
+});
+
+// 值为 i18n key，调用方需用 translate() 包裹。
 export const actionLabel: Record<OrderStatus, string> = {
-  paid: "支付",
-  shipped: "发货",
-  completed: "确认收货",
-  refund_requested: "申请退款",
-  refunded: "处理退款",
-  pending_payment: "待付款",
-  refund_rejected: "重新申请退款",
+  pending_payment: "order.status.unpaid",
+  paid: "order.next.pay",
+  shipped: "order.action.ship",
+  completed: "order.action.confirm",
+  refund_requested: "order.action.refund",
+  refunded: "order.action.process",
+  refund_rejected: "order.next.refund",
 };
 
 // 依据「当前状态 + 当前角色」返回可执行的目标状态
