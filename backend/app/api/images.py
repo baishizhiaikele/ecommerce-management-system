@@ -21,6 +21,8 @@ ALLOWED_HOSTS = {
     "commons.wikimedia.org",
     "images.unsplash.com",
     "source.unsplash.com",
+    # 演示种子数据商品图使用 loremflickr，需放行以正常加载
+    "loremflickr.com",
 }
 MAX_BYTES = 5 * 1024 * 1024  # 单图上限 5MB
 CACHE_DIR = Path(__file__).resolve().parents[2] / ".cache" / "img"
