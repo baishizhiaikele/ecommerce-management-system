@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, Tag, Empty, Spin, Segmented, Row, Col } from "antd";
-import { Flame, Zap, Gift } from "lucide-react";
+import { Flame, Zap, Gift, PackagePlus, Percent, Boxes } from "lucide-react";
 import { getPromotions, type PromotionOut, type PromotionType } from "../api";
 import { money } from "../utils/format";
 import { useI18n, translate } from "../i18n";
@@ -12,7 +12,23 @@ const TYPE_META: Record<PromotionType, { label: string; color: string; icon: JSX
   flash: { label: "promo.flash", color: "#f43f5e", icon: <Flame size={16} /> },
   discount: { label: "promo.discount", color: "#f59e0b", icon: <Zap size={16} /> },
   full_reduce: { label: "promo.fullReducePromo", color: "#10b981", icon: <Gift size={16} /> },
+  gift: { label: "promo.gift", color: "#a855f7", icon: <PackagePlus size={16} /> },
+  second_half: { label: "promo.secondHalf", color: "#06b6d4", icon: <Percent size={16} /> },
+  bundle: { label: "promo.bundle", color: "#3b82f6", icon: <Boxes size={16} /> },
 };
+
+function promoRule(p: PromotionOut, t: (k: string) => string): string | null {
+  if (p.type === "gift")
+    return t("promo.giftRule")
+      .replace("{amount}", String(p.threshold_amount ?? "-"))
+      .replace("{gift}", p.gift_product_name || "-");
+  if (p.type === "second_half") return t("promo.secondHalfRule");
+  if (p.type === "bundle")
+    return t("promo.bundleRule")
+      .replace("{count}", String(p.bundle_count ?? "-"))
+      .replace("{price}", String(p.bundle_price ?? "-"));
+  return null;
+}
 
 function finalPrice(p: PromotionOut): number | null {
   if (p.discount_price != null) return Number(p.discount_price);
@@ -79,6 +95,9 @@ export default function Promotions() {
             { label: t("promo.seckill"), value: "flash" },
             { label: t("promo.discount"), value: "discount" },
             { label: t("promo.fullReduce"), value: "full_reduce" },
+            { label: t("promo.gift"), value: "gift" },
+            { label: t("promo.secondHalf"), value: "second_half" },
+            { label: t("promo.bundle"), value: "bundle" },
           ]}
         />
       </div>
@@ -123,6 +142,11 @@ export default function Promotions() {
                           <div className="text-xs text-slate-400 truncate mb-2">
                             {p.product_name}
                           </div>
+                          {promoRule(p, t) && (
+                            <div className="text-xs font-medium mb-1" style={{ color: TYPE_META[p.type].color }}>
+                              {promoRule(p, t)}
+                            </div>
+                          )}
                           <div className="flex items-end gap-2">
                             {fp != null ? (
                               <>

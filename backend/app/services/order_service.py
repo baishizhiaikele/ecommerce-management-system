@@ -16,6 +16,7 @@ from app.models.user import User
 from app.models.points import PointAction
 from app.state_machine import can_transition
 from app.services.audit_service import record
+from app.services.promo_engine import apply_item_promotions
 from app.services.coupon_service import compute_discount, find_usable_user_coupon, use_coupon
 from app.services.inventory_service import record_cancel_return, record_sale
 from app.services.points_service import POINTS_REDEEM_RATE, add_points
@@ -79,6 +80,7 @@ async def checkout(
     total = 0.0
     merchant_subtotals: dict[str, float] = {}
     out_of_stock: list[str] = []
+    promo_input: list[tuple[str, int, float]] = []
     for item in cart_rows:
         product = pmap.get(item.product_id)
         if not product or product.status != ProductStatus.ACTIVE:
@@ -110,6 +112,7 @@ async def checkout(
         if product.stock == 0:
             out_of_stock.append(product.id)
         total += unit_price * item.quantity
+        promo_input.append((product.id, item.quantity, unit_price))
         merchant_subtotals[product.merchant_id] = (
             merchant_subtotals.get(product.merchant_id, 0.0) + unit_price * item.quantity
         )
@@ -130,6 +133,20 @@ async def checkout(
 
     subtotal = round(total, 2)
     discount = 0.0
+    # 商品级促销：第二件半价 / N 元任选 M 件 / 满赠（与会员折扣、优惠券叠加）
+    promo_discount, gift_ids, _promo_hits = await apply_item_promotions(db, promo_input)
+    discount += promo_discount
+    for gid in gift_ids:
+        gift_product = pmap.get(gid) or await db.get(Product, gid)
+        if (
+            gift_product
+            and gift_product.status == ProductStatus.ACTIVE
+            and gift_product.stock >= 1
+        ):
+            await record_sale(db, gift_product, 1)
+            db.add(
+                OrderItem(order_id=order.id, product_id=gid, quantity=1, price=0)
+            )
     # 会员等级专属折扣（青铜 discount=1.0 不打折，不影响既有订单）
     tier = get_tier(buyer.growth_value or 0)
     discount += round(subtotal * (1 - tier["discount"]), 2)

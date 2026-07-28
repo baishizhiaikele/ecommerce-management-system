@@ -31,6 +31,9 @@ const TYPE_META: Record<PromotionType, { labelKey: string; color: string }> = {
   flash: { labelKey: "mp.typeFlash", color: "red" },
   discount: { labelKey: "mp.typeDiscount", color: "orange" },
   full_reduce: { labelKey: "mp.typeFull", color: "green" },
+  gift: { labelKey: "mp.typeGift", color: "purple" },
+  second_half: { labelKey: "mp.typeSecondHalf", color: "cyan" },
+  bundle: { labelKey: "mp.typeBundle", color: "blue" },
 };
 
 export default function MerchantPromotions() {
@@ -78,6 +81,14 @@ export default function MerchantPromotions() {
     if (v.type === "flash") payload.discount_price = Number(v.discount_price || 0);
     if (v.type === "discount") payload.discount_rate = Number(v.discount_rate || 1);
     if (v.type === "full_reduce") payload.discount_price = Number(v.discount_price || 0);
+    if (v.type === "gift") {
+      payload.threshold_amount = Number(v.threshold_amount || 0);
+      payload.gift_product_id = v.gift_product_id;
+    }
+    if (v.type === "bundle") {
+      payload.bundle_count = Number(v.bundle_count || 0);
+      payload.bundle_price = Number(v.bundle_price || 0);
+    }
     try {
       await createPromotion(payload);
       message.success(t("mp.created"));
@@ -114,14 +125,24 @@ export default function MerchantPromotions() {
     { title: t("col.product"), dataIndex: "product_name", render: (title: string) => title || "-" },
     {
       title: t("mp.discount"),
-      render: (_: unknown, r: PromotionOut) =>
-        r.discount_price != null
+      render: (_: unknown, r: PromotionOut) => {
+        if (r.type === "gift")
+          return t("mp.giftRule")
+            .replace("{amount}", String(r.threshold_amount ?? "-"))
+            .replace("{gift}", r.gift_product_name || "-");
+        if (r.type === "second_half") return translate("mp.typeSecondHalf");
+        if (r.type === "bundle")
+          return t("mp.bundleRule")
+            .replace("{count}", String(r.bundle_count ?? "-"))
+            .replace("{price}", String(r.bundle_price ?? "-"));
+        return r.discount_price != null
           ? `¥${r.discount_price}`
           : r.discount_rate != null
           ? lang === "zh"
             ? `${(Number(r.discount_rate) * 10).toFixed(1)} 折`
             : `${Math.round((1 - Number(r.discount_rate)) * 100)}% OFF`
-          : "—",
+          : "—";
+      },
     },
     {
       title: t("mp.time"),
@@ -191,6 +212,9 @@ export default function MerchantPromotions() {
                 { value: "flash", label: translate("mp.typeFlash") },
                 { value: "discount", label: translate("mp.typeDiscount") },
                 { value: "full_reduce", label: translate("mp.typeFull") },
+                { value: "gift", label: translate("mp.typeGift") },
+                { value: "second_half", label: translate("mp.typeSecondHalf") },
+                { value: "bundle", label: translate("mp.typeBundle") },
               ]}
             />
           </Form.Item>
@@ -211,6 +235,47 @@ export default function MerchantPromotions() {
             <Form.Item name="discount_price" label={t("mp.reduceAmount")}>
               <InputNumber className="w-full" min={0} precision={2} />
             </Form.Item>
+          )}
+          {type === "gift" && (
+            <>
+              <Form.Item
+                name="threshold_amount"
+                label={t("mp.thresholdAmount")}
+                rules={[{ required: true, message: t("mp.reqThreshold") }]}
+              >
+                <InputNumber className="w-full" min={0.01} precision={2} />
+              </Form.Item>
+              <Form.Item
+                name="gift_product_id"
+                label={t("mp.giftProduct")}
+                rules={[{ required: true, message: t("mp.reqGift") }]}
+              >
+                <Select
+                  showSearch
+                  placeholder={t("mp.selectProduct")}
+                  optionFilterProp="label"
+                  options={products.map((p) => ({ value: p.id, label: p.name }))}
+                />
+              </Form.Item>
+            </>
+          )}
+          {type === "bundle" && (
+            <>
+              <Form.Item
+                name="bundle_count"
+                label={t("mp.bundleCount")}
+                rules={[{ required: true, message: t("mp.reqBundle") }]}
+              >
+                <InputNumber className="w-full" min={2} precision={0} />
+              </Form.Item>
+              <Form.Item
+                name="bundle_price"
+                label={t("mp.bundlePrice")}
+                rules={[{ required: true, message: t("mp.reqBundle") }]}
+              >
+                <InputNumber className="w-full" min={0.01} precision={2} />
+              </Form.Item>
+            </>
           )}
           <Form.Item label={t("mp.optionalTime")}>
             <Space>

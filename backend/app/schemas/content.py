@@ -31,10 +31,15 @@ class PromotionOut(BaseModel):
     start_at: Optional[datetime] = None
     end_at: Optional[datetime] = None
     is_active: bool = True
+    threshold_amount: Optional[Decimal] = None
+    gift_product_id: Optional[str] = None
+    bundle_count: Optional[int] = None
+    bundle_price: Optional[Decimal] = None
     # 前端展示用冗余字段（由接口填充）
     product_name: Optional[str] = None
     product_image: Optional[str] = None
     original_price: Optional[Decimal] = None
+    gift_product_name: Optional[str] = None
 
 
 class PromotionCreate(BaseModel):
@@ -46,6 +51,10 @@ class PromotionCreate(BaseModel):
     start_at: Optional[datetime] = None
     end_at: Optional[datetime] = None
     is_active: bool = True
+    threshold_amount: Optional[Decimal] = None
+    gift_product_id: Optional[str] = None
+    bundle_count: Optional[int] = None
+    bundle_price: Optional[Decimal] = None
 
 
 class AddressBase(BaseModel):

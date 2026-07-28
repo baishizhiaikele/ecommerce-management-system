@@ -237,7 +237,7 @@ export interface BannerOut {
   link_url?: string | null;
   sort_order: number;
 }
-export type PromotionType = "flash" | "discount" | "full_reduce";
+export type PromotionType = "flash" | "discount" | "full_reduce" | "gift" | "second_half" | "bundle";
 export interface PromotionOut {
   id: string;
   title: string;
@@ -247,9 +247,14 @@ export interface PromotionOut {
   discount_rate?: string | null;
   start_at?: string | null;
   end_at?: string | null;
+  threshold_amount?: string | null;
+  gift_product_id?: string | null;
+  bundle_count?: number | null;
+  bundle_price?: string | null;
   product_name?: string | null;
   product_image?: string | null;
   original_price?: string | null;
+  gift_product_name?: string | null;
 }
 export interface AddressOut {
   id: string;
@@ -280,6 +285,10 @@ export const createPromotion = (p: {
   start_at?: string;
   end_at?: string;
   is_active?: boolean;
+  threshold_amount?: number;
+  gift_product_id?: string;
+  bundle_count?: number;
+  bundle_price?: number;
 }) => api.post<PromotionOut>("/promotions", p).then((r) => r.data);
 export const deletePromotion = (id: string) =>
   api.delete(`/promotions/${id}`).then((r) => r.data);

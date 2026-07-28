@@ -39,6 +39,10 @@ async def list_promotions(
                 item.product_name = prod.name
                 item.product_image = prod.image_url
                 item.original_price = prod.price
+        if p.gift_product_id:
+            gift = await db.get(Product, p.gift_product_id)
+            if gift:
+                item.gift_product_name = gift.name
         result.append(item)
     return result
 
@@ -69,6 +73,10 @@ async def my_promotions(
             item.product_name = prod.name
             item.product_image = prod.image_url
             item.original_price = prod.price
+        if p.gift_product_id:
+            gift = await db.get(Product, p.gift_product_id)
+            if gift:
+                item.gift_product_name = gift.name
         result.append(item)
     return result
 
@@ -79,12 +87,28 @@ async def create_promotion(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role(Role.MERCHANT)),
 ) -> PromotionOut:
-    """商家为自己的商品创建促销活动（秒杀 / 折扣 / 满减）。"""
+    """商家为自己的商品创建促销活动（秒杀 / 折扣 / 满减 / 满赠 / 第二件半价 / N 元任选）。"""
     product = await db.get(Product, data.product_id)
     if not product or product.merchant_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="商品不存在或不属于你",
+        )
+    if data.type == PromotionType.GIFT:
+        if not data.threshold_amount or not data.gift_product_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="满赠需填写门槛金额与赠品"
+            )
+        gift = await db.get(Product, data.gift_product_id)
+        if not gift or gift.merchant_id != user.id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="赠品不存在或不属于你"
+            )
+    if data.type == PromotionType.BUNDLE and (
+        not data.bundle_count or data.bundle_count < 2 or not data.bundle_price
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="N 元任选需填写件数（≥2）与打包价"
         )
     promo = Promotion(
         title=data.title,
@@ -95,6 +119,10 @@ async def create_promotion(
         start_at=data.start_at,
         end_at=data.end_at,
         is_active=1 if data.is_active else 0,
+        threshold_amount=data.threshold_amount,
+        gift_product_id=data.gift_product_id,
+        bundle_count=data.bundle_count,
+        bundle_price=data.bundle_price,
     )
     db.add(promo)
     await db.commit()

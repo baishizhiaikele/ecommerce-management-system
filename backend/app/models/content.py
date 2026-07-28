@@ -12,6 +12,9 @@ class PromotionType(str, enum.Enum):
     FLASH = "flash"            # 限时秒杀
     DISCOUNT = "discount"      # 限时折扣
     FULL_REDUCE = "full_reduce"  # 满减活动
+    GIFT = "gift"              # 满赠（购满门槛送赠品）
+    SECOND_HALF = "second_half"  # 第二件半价
+    BUNDLE = "bundle"          # N 元任选 M 件
 
 
 class Banner(Base):
@@ -46,10 +49,16 @@ class Promotion(Base):
     # 秒杀库存（原子扣减防超卖）：stock_limit 为秒杀总库存，stock_sold 已售出
     stock_limit = Column(Integer, nullable=True)
     stock_sold = Column(Integer, default=0, nullable=False, server_default="0")
+    # 促销扩展：满赠（threshold_amount 满 X 元赠 gift_product_id）；
+    # N 元任选 M 件（bundle_count 件共 bundle_price 元）；第二件半价无需额外字段
+    threshold_amount = Column(Numeric(12, 2), nullable=True)
+    gift_product_id = Column(String(36), ForeignKey("products.id"), nullable=True)
+    bundle_count = Column(Integer, nullable=True)
+    bundle_price = Column(Numeric(12, 2), nullable=True)
     is_active = Column(Integer, default=1, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
-    product = relationship("Product")
+    product = relationship("Product", foreign_keys=[product_id])
 
 
 class Address(Base):
