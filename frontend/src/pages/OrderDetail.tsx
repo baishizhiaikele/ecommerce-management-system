@@ -20,6 +20,11 @@ import {
   createProductReview,
   requestRefund,
   reviewRefund,
+  returnShip,
+  confirmReturnReceived,
+  requestExchange,
+  openDispute,
+  reviewDispute,
   getLogistics,
   addLogistics,
   OrderOut,
@@ -49,6 +54,12 @@ export default function OrderDetail() {
   });
   const [logTrack, setLogTrack] = useState("");
   const [logDesc, setLogDesc] = useState("");
+  const [returnShipOpen, setReturnShipOpen] = useState(false);
+  const [returnTrackingNo, setReturnTrackingNo] = useState("");
+  const [returnCarrier, setReturnCarrier] = useState("");
+  const [returnShipNote, setReturnShipNote] = useState("");
+  const [disputeOpen, setDisputeOpen] = useState(false);
+  const [disputeReason, setDisputeReason] = useState("");
 
   const load = async () => {
     if (!id) return;
@@ -121,6 +132,76 @@ export default function OrderDetail() {
     try {
       await reviewRefund(order.id, approve);
       message.success(approve ? t("od.approveRefund") : t("od.rejectRefund"));
+      load();
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "操作失败");
+    }
+  };
+
+  const submitReturnShip = async () => {
+    if (!order || !returnTrackingNo.trim() || !returnCarrier.trim()) return;
+    try {
+      await returnShip(order.id, {
+        tracking_no: returnTrackingNo.trim(),
+        carrier: returnCarrier.trim(),
+        note: returnShipNote.trim(),
+      });
+      message.success(t("od.returnShipSubmitted"));
+      setReturnShipOpen(false);
+      setReturnTrackingNo("");
+      setReturnCarrier("");
+      setReturnShipNote("");
+      load();
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || t("od.applyFail"));
+    }
+  };
+
+  const confirmReturnReceive = async () => {
+    if (!order) return;
+    try {
+      await confirmReturnReceived(order.id);
+      message.success(t("od.confirmReturnReceive"));
+      load();
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "操作失败");
+    }
+  };
+
+  const doExchange = async () => {
+    if (!order) return;
+    try {
+      await requestExchange(order.id);
+      message.success(t("od.exchangeSuccess"));
+      load();
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || "操作失败");
+    }
+  };
+
+  const submitDispute = async () => {
+    if (!order || !disputeReason.trim()) return;
+    try {
+      await openDispute(order.id, disputeReason.trim());
+      message.success(t("od.disputeSubmitted"));
+      setDisputeOpen(false);
+      setDisputeReason("");
+      load();
+    } catch (e) {
+      const err = e as AxiosError<any, any>;
+      message.error(err.response?.data?.detail || t("od.applyFail"));
+    }
+  };
+
+  const reviewDisputeAdmin = async (approve: boolean) => {
+    if (!order) return;
+    try {
+      await reviewDispute(order.id, approve);
+      message.success(approve ? t("od.refundApproved") : t("od.disputeMaintain"));
       load();
     } catch (e) {
       const err = e as AxiosError<any, any>;
@@ -219,15 +300,26 @@ export default function OrderDetail() {
         )}
 
         <div className="mt-4 flex flex-wrap gap-3">
-          {user?.role === "buyer" && ["paid", "shipped"].includes(order.status) && (
+          {user?.role === "buyer" && ["paid", "shipped", "completed"].includes(order.status) && (
             <Button danger onClick={() => setRefundOpen(true)}>
               {t("od.applyRefund")}
             </Button>
           )}
+          {user?.role === "buyer" && order.status === "return_requested" && (
+            <Button onClick={() => setReturnShipOpen(true)}>{t("order.action.return_ship")}</Button>
+          )}
+          {user?.role === "buyer" && ["return_shipped", "return_received"].includes(order.status) && (
+            <Tag color="gold">{t("od.awaitMerchant")}</Tag>
+          )}
           {user?.role === "buyer" &&
-            ["shipped", "completed", "refund_requested", "refunded"].includes(order.status) && (
-              <Button onClick={openLogistics}>{t("od.viewLogistics")}</Button>
-            )}
+            ["shipped", "completed", "refund_requested", "return_requested", "return_shipped", "return_received"].includes(
+              order.status
+            ) && <Button onClick={openLogistics}>{t("od.viewLogistics")}</Button>}
+          {user?.role === "buyer" && ["return_requested", "return_shipped", "return_received"].includes(order.status) && (
+            <Button danger onClick={() => setDisputeOpen(true)}>
+              {t("order.action.dispute")}
+            </Button>
+          )}
           {user?.role === "merchant" && order.status === "refund_requested" && (
             <>
               <Button type="primary" onClick={() => doRefundReview(true)}>
@@ -236,6 +328,30 @@ export default function OrderDetail() {
               <Button danger onClick={() => doRefundReview(false)}>
                 {t("od.rejectRefund")}
               </Button>
+            </>
+          )}
+          {user?.role === "merchant" && order.status === "return_shipped" && (
+            <Button type="primary" onClick={confirmReturnReceive}>
+              {t("order.action.return_receive")}
+            </Button>
+          )}
+          {user?.role === "merchant" && order.status === "return_received" && (
+            <>
+              <Button type="primary" onClick={() => doRefundReview(true)}>
+                {t("od.approveRefund")}
+              </Button>
+              <Button onClick={doExchange}>{t("order.action.exchange")}</Button>
+              <Button danger onClick={() => doRefundReview(false)}>
+                {t("od.rejectReturn")}
+              </Button>
+            </>
+          )}
+          {user?.role === "admin" && order.status === "dispute" && (
+            <>
+              <Button type="primary" onClick={() => reviewDisputeAdmin(true)}>
+                {t("od.refundApproved")}
+              </Button>
+              <Button onClick={() => reviewDisputeAdmin(false)}>{t("od.disputeMaintain")}</Button>
             </>
           )}
           {user?.role === "merchant" &&
@@ -275,6 +391,50 @@ export default function OrderDetail() {
           placeholder={t("od.refundReasonPlaceholder")}
           value={refundReason}
           onChange={(e) => setRefundReason(e.target.value)}
+        />
+      </Modal>
+
+      <Modal
+        title={t("od.returnShipTitle")}
+        open={returnShipOpen}
+        onCancel={() => setReturnShipOpen(false)}
+        onOk={submitReturnShip}
+        okText={t("common.submit")}
+      >
+        <div className="mb-2 text-slate-500">{t("od.returnShipHint")}</div>
+        <Input
+          placeholder={t("od.carrier")}
+          className="mb-2"
+          value={returnCarrier}
+          onChange={(e) => setReturnCarrier(e.target.value)}
+        />
+        <Input
+          placeholder={t("od.trackingNo")}
+          className="mb-2"
+          value={returnTrackingNo}
+          onChange={(e) => setReturnTrackingNo(e.target.value)}
+        />
+        <Input.TextArea
+          rows={3}
+          placeholder={t("od.returnShipNote")}
+          value={returnShipNote}
+          onChange={(e) => setReturnShipNote(e.target.value)}
+        />
+      </Modal>
+
+      <Modal
+        title={t("od.disputeTitle")}
+        open={disputeOpen}
+        onCancel={() => setDisputeOpen(false)}
+        onOk={submitDispute}
+        okText={t("common.submit")}
+      >
+        <Input.TextArea
+          rows={4}
+          maxLength={500}
+          placeholder={t("od.disputeReasonPlaceholder")}
+          value={disputeReason}
+          onChange={(e) => setDisputeReason(e.target.value)}
         />
       </Modal>
 

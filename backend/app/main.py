@@ -82,6 +82,13 @@ async def _ensure_demo_columns() -> None:
         "ALTER TABLE reviews ADD COLUMN helpful_count INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE reviews ADD COLUMN report_count INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE products ADD COLUMN warning_threshold INTEGER NOT NULL DEFAULT 10",
+        "ALTER TABLE orders ADD COLUMN return_tracking_no VARCHAR(60)",
+        "ALTER TABLE orders ADD COLUMN return_carrier VARCHAR(60)",
+        "ALTER TABLE orders ADD COLUMN dispute_reason TEXT",
+        "ALTER TABLE orders ADD COLUMN return_requested_at TIMESTAMP",
+        "ALTER TABLE orders ADD COLUMN return_shipped_at TIMESTAMP",
+        "ALTER TABLE orders ADD COLUMN return_received_at TIMESTAMP",
+        "ALTER TABLE orders ADD COLUMN exchange_at TIMESTAMP",
     ]
     async with engine.begin() as conn:
         for stmt in statements:

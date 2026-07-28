@@ -1,5 +1,6 @@
 from collections import defaultdict
 import json
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +13,8 @@ from app.models.product import Product
 from app.models.user import Role, User
 from app.schemas.order import (
     CheckoutRequest,
+    DisputeRequest,
+    ExchangeRequest,
     LogisticsEvent,
     LogisticsUpdate,
     OrderItemOut,
@@ -19,6 +22,7 @@ from app.schemas.order import (
     OrderStatusUpdate,
     RefundRequest,
     RefundReview,
+    ReturnShipRequest,
 )
 from app.services import order_service
 from app.services.audit_service import record
@@ -46,6 +50,9 @@ def _serialize(order: Order, items: list, snapshot: dict) -> OrderOut:
         freight=order.freight,
         refund_amount=order.refund_amount,
         refund_reason=order.refund_reason,
+        return_tracking_no=order.return_tracking_no,
+        return_carrier=order.return_carrier,
+        dispute_reason=order.dispute_reason,
         address=order.address,
         items=item_outs,
         created_at=order.created_at,
@@ -142,15 +149,135 @@ async def request_refund(
     if user.role != Role.BUYER:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅买家可申请退款")
     order = await order_service.get_order(db, order_id, user_id=user.id, role=user.role.value)
-    if order.status not in (OrderStatus.PAID, OrderStatus.SHIPPED):
+    # 2026 合规：未发货走"仅退款"；已发货/已收货走"退货退款"（需寄回并商家确认）
+    if order.status == OrderStatus.PAID:
+        target = OrderStatus.REFUND_REQUESTED
+    elif order.status in (OrderStatus.SHIPPED, OrderStatus.COMPLETED):
+        target = OrderStatus.RETURN_REQUESTED
+    else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="当前订单状态不可申请退款")
     order.refund_reason = data.reason
     order.refund_amount = (
         data.refund_amount if data.refund_amount is not None else float(order.total_amount)
     )
     order = await order_service.transition_status(
-        db, order=order, target=OrderStatus.REFUND_REQUESTED, actor_id=user.id, role="buyer"
+        db, order=order, target=target, actor_id=user.id, role="buyer"
     )
+    return await _load_order_view(db, order)
+
+
+@router.post("/{order_id}/return-ship", response_model=OrderOut)
+async def submit_return_shipment(
+    order_id: str,
+    data: ReturnShipRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> OrderOut:
+    """买家寄回退货并填写退货物流单号。"""
+    if user.role != Role.BUYER:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅买家可填写退货物流")
+    order = await order_service.get_order(db, order_id, user_id=user.id, role=user.role.value)
+    if order.status != OrderStatus.RETURN_REQUESTED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="仅退货申请中可填写退货物流")
+    order.return_tracking_no = data.tracking_no
+    order.return_carrier = data.carrier
+    trace = json.loads(order.logistics or "[]")
+    trace.append({
+        "time": datetime.now(timezone.utc).isoformat(),
+        "location": data.carrier,
+        "description": f"买家寄回：{data.carrier} {data.tracking_no} {data.note}".strip(),
+        "type": "return",
+    })
+    order.logistics = json.dumps(trace, ensure_ascii=False)
+    order = await order_service.transition_status(
+        db, order=order, target=OrderStatus.RETURN_SHIPPED, actor_id=user.id, role="buyer"
+    )
+    return await _load_order_view(db, order)
+
+
+@router.post("/{order_id}/return-receive", response_model=OrderOut)
+async def confirm_return_received(
+    order_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(Role.MERCHANT, Role.ADMIN)),
+) -> OrderOut:
+    """商家确认收到退货（逆向物流闭环，随后才能打款/换货）。"""
+    order = await order_service.get_order(db, order_id, user_id=user.id, role=user.role.value)
+    if user.role == Role.MERCHANT and not await _merchant_owns_order(db, order, user.id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权处理该订单")
+    if order.status != OrderStatus.RETURN_SHIPPED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="仅买家已寄回的退货可确认收货")
+    order = await order_service.transition_status(
+        db, order=order, target=OrderStatus.RETURN_RECEIVED, actor_id=user.id, role=user.role.value
+    )
+    await record(db, user.id, "order.return_received", "order", order.id, order.return_tracking_no or "")
+    await db.commit()
+    return await _load_order_view(db, order)
+
+
+@router.post("/{order_id}/exchange", response_model=OrderOut)
+async def request_exchange(
+    order_id: str,
+    data: ExchangeRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(Role.MERCHANT, Role.ADMIN)),
+) -> OrderOut:
+    """商家在确认收货后发起换货。"""
+    order = await order_service.get_order(db, order_id, user_id=user.id, role=user.role.value)
+    if user.role == Role.MERCHANT and not await _merchant_owns_order(db, order, user.id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权处理该订单")
+    if order.status != OrderStatus.RETURN_RECEIVED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="仅确认收货后可发起换货")
+    order = await order_service.transition_status(
+        db, order=order, target=OrderStatus.EXCHANGE, actor_id=user.id, role=user.role.value
+    )
+    await record(db, user.id, "order.exchange", "order", order.id, data.note)
+    await db.commit()
+    return await _load_order_view(db, order)
+
+
+@router.post("/{order_id}/dispute", response_model=OrderOut)
+async def open_dispute(
+    order_id: str,
+    data: DisputeRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> OrderOut:
+    """买家/平台对退货纠纷发起仲裁（2026 仅退款落幕后的出口）。"""
+    if user.role not in (Role.BUYER, Role.ADMIN):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅买家或管理员可发起仲裁")
+    order = await order_service.get_order(db, order_id, user_id=user.id, role=user.role.value)
+    if order.status not in (
+        OrderStatus.RETURN_REQUESTED,
+        OrderStatus.RETURN_SHIPPED,
+        OrderStatus.RETURN_RECEIVED,
+        OrderStatus.REFUND_REJECTED,
+    ):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="当前状态不可发起平台仲裁")
+    order.dispute_reason = data.reason
+    order = await order_service.transition_status(
+        db, order=order, target=OrderStatus.DISPUTE, actor_id=user.id, role=user.role.value
+    )
+    return await _load_order_view(db, order)
+
+
+@router.post("/{order_id}/dispute-review", response_model=OrderOut)
+async def review_dispute(
+    order_id: str,
+    data: RefundReview,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(Role.ADMIN)),
+) -> OrderOut:
+    """平台管理员裁定仲裁结果：退款或维持完成。"""
+    order = await order_service.get_order(db, order_id, user_id=user.id, role=user.role.value)
+    if order.status != OrderStatus.DISPUTE:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="仅仲裁中订单可裁定")
+    target = OrderStatus.REFUNDED if data.approve else OrderStatus.COMPLETED
+    order = await order_service.transition_status(
+        db, order=order, target=target, actor_id=user.id, role="admin"
+    )
+    await record(db, user.id, f"order.dispute_review.{target.value}", "order", order.id, data.note)
+    await db.commit()
     return await _load_order_view(db, order)
 
 
@@ -164,7 +291,17 @@ async def review_refund(
     order = await order_service.get_order(db, order_id, user_id=user.id, role=user.role.value)
     if user.role == Role.MERCHANT and not await _merchant_owns_order(db, order, user.id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权处理该订单")
-    target = OrderStatus.REFUNDED if data.approve else OrderStatus.REFUND_REJECTED
+    if order.status not in (OrderStatus.REFUND_REQUESTED, OrderStatus.RETURN_RECEIVED):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="当前订单状态不可处理退款")
+    if data.approve:
+        target = OrderStatus.REFUNDED
+    else:
+        # 仅退款驳回 → REFUND_REJECTED；退货驳回 → 退回退货申请（买家可重发或仲裁）
+        target = (
+            OrderStatus.REFUND_REJECTED
+            if order.status == OrderStatus.REFUND_REQUESTED
+            else OrderStatus.RETURN_REQUESTED
+        )
     order = await order_service.transition_status(
         db, order=order, target=target, actor_id=user.id, role=user.role.value
     )
@@ -201,21 +338,21 @@ async def return_logistics(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict:
-    """买家在退款/退货中填写退货物流单号，便于商家收货后退款。"""
+    """买家在退货中补充退货物流轨迹（与 return-ship 互补，便于商家收货后退款）。"""
     order = await order_service.get_order(db, order_id, user_id=user.id, role=user.role.value)
-    if order.status not in (OrderStatus.REFUND_REQUESTED, OrderStatus.REFUNDED):
+    if order.status not in (OrderStatus.RETURN_REQUESTED, OrderStatus.RETURN_SHIPPED):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="仅退款/退货中订单可填写退货物流"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="仅退货中订单可填写退货物流"
         )
     trace = json.loads(order.logistics or "[]")
     event = data.event.model_dump()
     event["type"] = "return"
     trace.append(event)
     if data.tracking_no:
-        order.tracking_no = data.tracking_no
+        order.return_tracking_no = data.tracking_no
     order.logistics = json.dumps(trace, ensure_ascii=False)
     await db.commit()
-    return {"tracking_no": order.tracking_no, "events": trace}
+    return {"tracking_no": order.return_tracking_no, "events": trace}
 
 
 @router.get("/{order_id}/logistics", response_model=dict)

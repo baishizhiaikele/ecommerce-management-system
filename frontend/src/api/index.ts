@@ -11,7 +11,12 @@ export type OrderStatus =
   | "completed"
   | "refund_requested"
   | "refunded"
-  | "refund_rejected";
+  | "refund_rejected"
+  | "return_requested"
+  | "return_shipped"
+  | "return_received"
+  | "exchange"
+  | "dispute";
 export type Sentiment = "positive" | "neutral" | "negative";
 export type CouponType = "full_reduce" | "discount";
 export type NotificationType = "order" | "coupon" | "points" | "review_alert" | "system";
@@ -87,6 +92,9 @@ export interface OrderOut {
   paid_at?: string | null;
   shipped_at?: string | null;
   completed_at?: string | null;
+  return_tracking_no?: string | null;
+  return_carrier?: string | null;
+  dispute_reason?: string | null;
 }
 
 export interface CouponOut {
@@ -852,6 +860,20 @@ export const returnLogistics = (
   tracking_no: string,
   event: { time: string; location: string; description: string }
 ) => api.post(`/orders/${orderId}/return-logistics`, { tracking_no, event }).then((r) => r.data);
+
+// ---------- P3-A 退货退款 / 换货 / 仲裁 ----------
+export const returnShip = (
+  orderId: string,
+  p: { tracking_no: string; carrier: string; note?: string }
+) => api.post<OrderOut>(`/orders/${orderId}/return-ship`, p).then((r) => r.data);
+export const confirmReturnReceived = (orderId: string) =>
+  api.post<OrderOut>(`/orders/${orderId}/return-receive`).then((r) => r.data);
+export const requestExchange = (orderId: string, note?: string) =>
+  api.post<OrderOut>(`/orders/${orderId}/exchange`, { note }).then((r) => r.data);
+export const openDispute = (orderId: string, reason: string) =>
+  api.post<OrderOut>(`/orders/${orderId}/dispute`, { reason }).then((r) => r.data);
+export const reviewDispute = (orderId: string, approve: boolean, note?: string) =>
+  api.post<OrderOut>(`/orders/${orderId}/dispute-review`, { approve, note }).then((r) => r.data);
 
 // ---------- 部分退款 ----------
 export const requestRefundPartial = (

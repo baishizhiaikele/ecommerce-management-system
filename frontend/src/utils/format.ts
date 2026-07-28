@@ -27,6 +27,11 @@ export const orderStatusMeta = i18nMeta({
   refund_requested: { color: "volcano", key: "order.status.refunding" },
   refunded: { color: "red", key: "order.status.refunded" },
   refund_rejected: { color: "red", key: "order.status.refund_rejected" },
+  return_requested: { color: "volcano", key: "order.status.return_requested" },
+  return_shipped: { color: "gold", key: "order.status.return_shipped" },
+  return_received: { color: "geekblue", key: "order.status.return_received" },
+  exchange: { color: "purple", key: "order.status.exchange" },
+  dispute: { color: "magenta", key: "order.status.dispute" },
 });
 
 export const productStatusMeta = i18nMeta({
@@ -51,6 +56,11 @@ export const actionLabel: Record<OrderStatus, string> = {
   refund_requested: "order.action.refund",
   refunded: "order.action.process",
   refund_rejected: "order.next.refund",
+  return_requested: "order.action.return",
+  return_shipped: "order.action.return_ship",
+  return_received: "order.action.return_receive",
+  exchange: "order.action.exchange",
+  dispute: "order.action.dispute",
 };
 
 // 依据「当前状态 + 当前角色」返回可执行的目标状态
@@ -64,6 +74,7 @@ export function nextActions(status: OrderStatus, role: string): OrderStatus[] {
   if (role === "merchant") {
     if (status === "paid") return ["shipped"];
     if (status === "refund_requested") return ["refunded"];
+    if (status === "return_shipped") return ["return_received"];
   }
   if (role === "admin") {
     if (status === "refund_requested") return ["refunded"];

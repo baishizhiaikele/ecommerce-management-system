@@ -212,7 +212,8 @@ async def get_order(db: AsyncSession, order_id: str, *, user_id: str, role: str)
 async def transition_status(
     db: AsyncSession, *, order: Order, target: OrderStatus, actor_id: str, role: str
 ) -> Order:
-    if not can_transition(order.status, target, role):
+    prev = order.status
+    if not can_transition(prev, target, role):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"不允许从 {order.status.value} 流转到 {target.value}",
@@ -223,7 +224,8 @@ async def transition_status(
         order.paid_at = now
     elif target == OrderStatus.SHIPPED:
         order.shipped_at = now
-    elif target == OrderStatus.COMPLETED:
+    elif target == OrderStatus.COMPLETED and prev != OrderStatus.EXCHANGE:
+        # 换货完成后不重复累加销量（首次完成时已计）
         order.completed_at = now
         for it in order.items:
             product = await db.get(Product, it.product_id)
@@ -234,12 +236,29 @@ async def transition_status(
             product = await db.get(Product, it.product_id)
             if product:
                 await record_cancel_return(db, product, it.quantity)
-    elif target == OrderStatus.REFUNDED:
+    elif target == OrderStatus.REFUND_REQUESTED:
+        order.return_requested_at = now
+    elif target == OrderStatus.RETURN_SHIPPED:
+        order.return_shipped_at = now
+    elif target == OrderStatus.RETURN_RECEIVED:
+        # 实物已退回：回补库存并扣减销量（打款在 REFUNDED 时不重复回补）
+        order.return_received_at = now
         for it in order.items:
             product = await db.get(Product, it.product_id)
             if product:
                 await record_cancel_return(db, product, it.quantity)
                 product.sales_count = max((product.sales_count or 0) - it.quantity, 0)
+    elif target == OrderStatus.EXCHANGE:
+        order.exchange_at = now
+    elif target == OrderStatus.REFUNDED:
+        # 仅"未发货仅退款"需要回补库存；已退货的库存已在 RETURN_RECEIVED 回补
+        if prev == OrderStatus.REFUND_REQUESTED:
+            for it in order.items:
+                product = await db.get(Product, it.product_id)
+                if product:
+                    await record_cancel_return(db, product, it.quantity)
+                    product.sales_count = max((product.sales_count or 0) - it.quantity, 0)
+    # DISPUTE: dispute_reason 由 API 设置，无需在此处理
 
     await record(db, actor_id, f"order.{target.value}", "order", order.id, order.order_no)
     await db.commit()
@@ -250,4 +269,8 @@ async def transition_status(
         await bus.publish("order.completed", order_id=order.id, buyer_id=order.buyer_id)
     elif target == OrderStatus.REFUNDED:
         await bus.publish("order.refunded", order_id=order.id, buyer_id=order.buyer_id)
+    elif target == OrderStatus.RETURN_RECEIVED:
+        await bus.publish("order.return_received", order_id=order.id, buyer_id=order.buyer_id)
+    elif target == OrderStatus.DISPUTE:
+        await bus.publish("order.dispute_opened", order_id=order.id, buyer_id=order.buyer_id)
     return order

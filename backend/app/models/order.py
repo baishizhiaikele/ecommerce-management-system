@@ -13,9 +13,18 @@ class OrderStatus(str, enum.Enum):
     PAID = "paid"
     SHIPPED = "shipped"
     COMPLETED = "completed"
+    # 仅退款（未发货，平台直接退）
     REFUND_REQUESTED = "refund_requested"
     REFUND_REJECTED = "refund_rejected"
     REFUNDED = "refunded"
+    # 退货退款（已发货/已收货后申请退货，需买家寄回 + 商家收货确认）
+    RETURN_REQUESTED = "return_requested"
+    RETURN_SHIPPED = "return_shipped"
+    RETURN_RECEIVED = "return_received"
+    # 换货
+    EXCHANGE = "exchange"
+    # 平台仲裁（2026 仅退款落幕后的纠纷出口）
+    DISPUTE = "dispute"
     CANCELLED = "cancelled"
 
 
@@ -32,6 +41,14 @@ class Order(Base):
     address = Column(Text)
     refund_reason = Column(Text)
     refund_amount = Column(Numeric(12, 2), nullable=False, default=0)
+    # 退货退款 / 换货 / 仲裁相关字段
+    return_tracking_no = Column(String(60))
+    return_carrier = Column(String(60))
+    dispute_reason = Column(Text)
+    return_requested_at = Column(DateTime(timezone=True), nullable=True)
+    return_shipped_at = Column(DateTime(timezone=True), nullable=True)
+    return_received_at = Column(DateTime(timezone=True), nullable=True)
+    exchange_at = Column(DateTime(timezone=True), nullable=True)
     tracking_no = Column(String(60))
     logistics = Column(Text)  # JSON 字符串，物流轨迹数组
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

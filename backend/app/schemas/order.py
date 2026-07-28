@@ -30,6 +30,9 @@ class OrderOut(BaseModel):
     freight: Decimal = Decimal("0")
     refund_amount: Decimal = Decimal("0")
     refund_reason: Optional[str] = None
+    return_tracking_no: Optional[str] = None
+    return_carrier: Optional[str] = None
+    dispute_reason: Optional[str] = None
     address: Optional[str]
     items: list[OrderItemOut]
     created_at: datetime
@@ -51,6 +54,20 @@ class RefundRequest(BaseModel):
 class RefundReview(BaseModel):
     approve: bool
     note: str = ""
+
+
+class ReturnShipRequest(BaseModel):
+    tracking_no: str = Field(min_length=1, max_length=60)
+    carrier: str = Field(min_length=1, max_length=60)
+    note: str = ""
+
+
+class ExchangeRequest(BaseModel):
+    note: str = ""
+
+
+class DisputeRequest(BaseModel):
+    reason: str = Field(min_length=1, max_length=500)
 
 
 class LogisticsEvent(BaseModel):
