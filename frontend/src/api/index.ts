@@ -490,6 +490,34 @@ export const merchantTrend = (days = 7) =>
 export const myProducts = () =>
   api.get<ProductOut[]>("/merchant/products").then((r) => r.data);
 
+// ---------- 店铺装修（P3-E） ----------
+export interface DecorationModule {
+  type: "banner" | "notice" | "products";
+  text?: string;
+  title?: string;
+  product_ids?: string[];
+  products?: ProductOut[];
+}
+export interface DecorationConfig {
+  merchant_id: string;
+  theme_color: string;
+  banner_image?: string | null;
+  banner_title?: string | null;
+  banner_subtitle?: string | null;
+  layout: DecorationModule[];
+}
+export const getMyDecoration = () =>
+  api.get<DecorationConfig>("/decoration/mine").then((r) => r.data);
+export const saveMyDecoration = (data: {
+  theme_color: string;
+  banner_image?: string | null;
+  banner_title?: string | null;
+  banner_subtitle?: string | null;
+  layout: DecorationModule[];
+}) => api.put<DecorationConfig>("/decoration/mine", data).then((r) => r.data);
+export const getShopDecoration = (merchantId: string) =>
+  api.get<DecorationConfig>(`/decoration/${merchantId}`).then((r) => r.data);
+
 // ---------- 管理员 ----------
 export const adminListUsers = () =>
   api.get<UserOut[]>("/admin/users").then((r) => r.data);

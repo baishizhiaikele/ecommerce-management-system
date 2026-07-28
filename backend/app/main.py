@@ -44,6 +44,7 @@ from app.api.shipping import router as shipping_router
 from app.api.payments import router as payments_router
 from app.api.agent import router as agent_router
 from app.api.marketing import router as marketing_router
+from app.api.decoration import router as decoration_router
 from app.core.config import settings
 from app.core.seed import seed_demo
 from app.events_handlers import register_handlers
@@ -199,6 +200,7 @@ app.include_router(shipping_router, prefix=settings.API_V1_PREFIX)
 app.include_router(payments_router, prefix=settings.API_V1_PREFIX)
 app.include_router(agent_router, prefix=settings.API_V1_PREFIX)
 app.include_router(marketing_router, prefix=settings.API_V1_PREFIX)
+app.include_router(decoration_router, prefix=settings.API_V1_PREFIX)
 
 
 # ---- 可观测性：Prometheus 风格指标端点（无需鉴权，供监控抓取）----

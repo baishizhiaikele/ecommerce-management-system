@@ -42,6 +42,7 @@ const MerchantInventory = lazy(() => import("./pages/merchant/Inventory"));
 const MerchantReviews = lazy(() => import("./pages/merchant/Reviews"));
 const MerchantPromotions = lazy(() => import("./pages/merchant/Promotions"));
 const MerchantTrend = lazy(() => import("./pages/merchant/TrendInsight"));
+const MerchantDecoration = lazy(() => import("./pages/merchant/Decoration"));
 const AIMall = lazy(() => import("./pages/AIMall"));
 
 function RouteFallback() {
@@ -130,6 +131,7 @@ export default function App() {
             <Route path="/merchant/support" element={<Support />} />
             <Route path="/merchant/coupons" element={<MerchantCoupons />} />
             <Route path="/merchant/trend" element={<MerchantTrend />} />
+            <Route path="/merchant/decoration" element={<MerchantDecoration />} />
           </Route>
           <Route element={<ProtectedRoute roles={["admin"]}><AdminLayout /></ProtectedRoute>}>
             <Route path="/admin" element={<AdminDashboard />} />

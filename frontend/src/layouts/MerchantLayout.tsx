@@ -13,6 +13,7 @@ import {
   LogOut,
   Languages,
   TrendingUp,
+  Paintbrush,
 } from "lucide-react";
 
 const MENU = [
@@ -23,6 +24,7 @@ const MENU = [
   { key: "promotions", labelKey: "nav.merchantPromotions", path: "/merchant/promotions", icon: <Tag size={18} /> },
   { key: "coupons", labelKey: "nav.merchantCoupons", path: "/merchant/coupons", icon: <Ticket size={18} /> },
   { key: "trend", labelKey: "nav.trend", path: "/merchant/trend", icon: <TrendingUp size={18} /> },
+  { key: "decoration", labelKey: "nav.decoration", path: "/merchant/decoration", icon: <Paintbrush size={18} /> },
 ];
 
 const MOBILE_NAV = [

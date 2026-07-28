@@ -9,6 +9,8 @@ import {
   unfollowShop,
   followStatus,
   followersCount,
+  getShopDecoration,
+  DecorationConfig,
   ShopSummary,
   ShopDetail,
 } from "../api";
@@ -57,6 +59,7 @@ export default function Shop() {
   const [loading, setLoading] = useState(true);
   const [followed, setFollowed] = useState(false);
   const [followers, setFollowers] = useState(0);
+  const [deco, setDeco] = useState<DecorationConfig | null>(null);
 
   useEffect(() => {
     if (detail) {
@@ -87,6 +90,7 @@ export default function Shop() {
       getShop(id)
         .then(setDetail)
         .finally(() => setLoading(false));
+      getShopDecoration(id).then(setDeco).catch(() => setDeco(null));
     } else {
       setLoading(true);
       listShops()
@@ -101,9 +105,34 @@ export default function Shop() {
     if (!detail) return <Empty description={t("shop.notFound")} className="py-24" />;
     return (
       <div className="space-y-5">
-        {/* 店铺头图 / 资料卡 */}
+        {/* 店铺头图 / 资料卡（P3-E 支持商家自定义装修） */}
         <div className="relative rounded-3xl overflow-hidden">
-          <div className="h-40 bg-gradient-to-r from-[#4F46E5] via-[#7C3AED] to-[#F97316]" />
+          {deco && (deco.banner_image || deco.banner_title) ? (
+            <div
+              className="h-40 relative flex flex-col justify-center px-8 text-white"
+              style={{
+                background: deco.banner_image
+                  ? undefined
+                  : `linear-gradient(135deg, ${deco.theme_color}, ${deco.theme_color}99)`,
+              }}
+            >
+              {deco.banner_image && (
+                <img
+                  src={deco.banner_image}
+                  alt="banner"
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+              )}
+              <div className="relative z-10 drop-shadow">
+                {deco.banner_title && <div className="text-2xl font-bold">{deco.banner_title}</div>}
+                {deco.banner_subtitle && (
+                  <div className="text-sm mt-1 opacity-90">{deco.banner_subtitle}</div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="h-40 bg-gradient-to-r from-[#4F46E5] via-[#7C3AED] to-[#F97316]" />
+          )}
           <Card className="soft-card -mt-12 mx-3 relative" styles={{ body: { padding: 20 } }}>
             <div className="flex items-end gap-4">
               <div className="w-20 h-20 rounded-2xl overflow-hidden bg-white shadow-md border border-slate-100 -mt-10 shrink-0">
@@ -140,6 +169,49 @@ export default function Shop() {
             </div>
           </Card>
         </div>
+
+        {/* P3-E 装修模块：公告条 + 店长推荐 */}
+        {deco?.layout
+          .filter((m) => m.type === "notice" && m.text)
+          .map((m, i) => (
+            <div
+              key={`notice-${i}`}
+              className="rounded-2xl px-5 py-3 text-sm"
+              style={{ background: `${deco.theme_color}12`, color: deco.theme_color }}
+            >
+              📢 {m.text}
+            </div>
+          ))}
+        {deco?.layout
+          .filter((m) => m.type === "products" && (m.product_ids?.length || 0) > 0 && (m.products?.length || 0) > 0)
+          .map((m, i) => (
+            <div key={`rec-${i}`} className="px-1">
+              <div className="flex items-center gap-2 mb-3">
+                <Star size={18} style={{ color: deco.theme_color }} fill="currentColor" />
+                <h2 className="text-lg font-bold">{m.title || t("shop.recommend")}</h2>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {(m.products || []).map((p) => (
+                  <Card
+                    key={p.id}
+                    hoverable
+                    className="soft-card overflow-hidden"
+                    onClick={() => navigate(`/products/${p.id}`)}
+                    cover={
+                      <div className="h-40 bg-slate-100">
+                        <ProductImage src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
+                      </div>
+                    }
+                  >
+                    <div className="font-medium text-sm line-clamp-1">{p.name}</div>
+                    <div className="font-bold mt-1" style={{ color: deco.theme_color }}>
+                      {money(p.price)}
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          ))}
 
         {/* 商品网格 */}
         <div className="px-1">
