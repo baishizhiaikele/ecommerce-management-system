@@ -21,6 +21,7 @@ from app.models.support import SupportTicket, SupportMessage, TicketStatus, Send
 from app.models.payment import Payment
 from app.models.settlement import Settlement
 from app.models.decoration import ShopDecoration
+from app.models.note import NoteLike, ShoppingNote
 from app.models.marketing import (
     Bargain,
     BargainCut,
@@ -77,4 +78,6 @@ __all__ = [
     "GroupBuyMember",
     "GroupBuyStatus",
     "ShopDecoration",
+    "ShoppingNote",
+    "NoteLike",
 ]

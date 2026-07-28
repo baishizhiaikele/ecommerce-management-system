@@ -44,6 +44,7 @@ const MerchantPromotions = lazy(() => import("./pages/merchant/Promotions"));
 const MerchantTrend = lazy(() => import("./pages/merchant/TrendInsight"));
 const MerchantDecoration = lazy(() => import("./pages/merchant/Decoration"));
 const AIMall = lazy(() => import("./pages/AIMall"));
+const Discover = lazy(() => import("./pages/Discover"));
 
 function RouteFallback() {
   return (
@@ -121,6 +122,7 @@ export default function App() {
             <Route path="/promotions" element={<Promotions />} />
             <Route path="/following" element={<Following />} />
             <Route path="/ai-mall" element={<AIMall />} />
+            <Route path="/discover" element={<Discover />} />
           </Route>
           <Route element={<ProtectedRoute roles={["merchant"]}><MerchantLayout /></ProtectedRoute>}>
             <Route path="/merchant" element={<MerchantDashboard />} />

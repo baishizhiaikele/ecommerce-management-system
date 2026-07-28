@@ -518,6 +518,40 @@ export const saveMyDecoration = (data: {
 export const getShopDecoration = (merchantId: string) =>
   api.get<DecorationConfig>(`/decoration/${merchantId}`).then((r) => r.data);
 
+// ---------- 种草笔记（P3-G） ----------
+export interface NoteProductCard {
+  id: string;
+  name: string;
+  price: number;
+  image_url?: string | null;
+  sales_count: number;
+}
+export interface NoteOut {
+  id: string;
+  author_id: string;
+  author_name: string;
+  title: string;
+  content: string;
+  images: string[];
+  products: NoteProductCard[];
+  likes_count: number;
+  liked: boolean;
+  created_at?: string | null;
+}
+export const listNotes = (params?: { keyword?: string; limit?: number; offset?: number }) =>
+  api.get<NoteOut[]>("/notes", { params }).then((r) => r.data);
+export const createNote = (data: {
+  title: string;
+  content: string;
+  images?: string[];
+  product_ids?: string[];
+}) => api.post<NoteOut>("/notes", data).then((r) => r.data);
+export const toggleNoteLike = (id: string) =>
+  api
+    .post<{ note_id: string; liked: boolean; likes_count: number }>(`/notes/${id}/like`)
+    .then((r) => r.data);
+export const deleteNote = (id: string) => api.delete(`/notes/${id}`).then(() => undefined);
+
 // ---------- 管理员 ----------
 export const adminListUsers = () =>
   api.get<UserOut[]>("/admin/users").then((r) => r.data);

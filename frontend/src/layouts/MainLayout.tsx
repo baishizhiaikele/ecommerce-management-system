@@ -18,6 +18,7 @@ import {
   User,
   LogOut,
   Languages,
+  BookOpen,
 } from "lucide-react";
 
 const NAV = [
@@ -30,6 +31,7 @@ const NAV = [
   { key: "membership", labelKey: "nav.membership", path: "/membership", icon: <Crown size={16} /> },
   { key: "coupons", labelKey: "nav.coupons", path: "/coupons", icon: <Ticket size={16} /> },
   { key: "shops", labelKey: "nav.shops", path: "/shops", icon: <Store size={16} /> },
+  { key: "discover", labelKey: "nav.discover", path: "/discover", icon: <BookOpen size={16} /> },
   { key: "follow", labelKey: "nav.follow", path: "/follow", icon: <UserPlus size={16} /> },
   { key: "promotions", labelKey: "nav.promotions", path: "/promotions", icon: <Tag size={16} /> },
   { key: "ai-mall", labelKey: "nav.aiHome", path: "/ai-mall", icon: <Sparkles size={16} /> },
