@@ -24,6 +24,7 @@ async def _expand_category(db: AsyncSession, pid: str) -> list:
     return [pid, *_desc(pid)]
 from app.schemas.product import ProductCreate, ProductStatusUpdate, ProductUpdate
 from app.events import bus
+from app.services import follow_service
 from app.services.ai_service import ai_service
 from app.services.audit_service import record
 
@@ -162,6 +163,19 @@ async def update_product(
     for field, value in raw.items():
         setattr(product, field, value)
     await record(db, merchant_id, "product.update", "product", product.id, product.name)
+    # 降价动态：写入关注流事件（与主事务一并提交）
+    if "price" in raw and product.price < old_price:
+        await follow_service.record_shop_event(
+            db,
+            merchant_id=merchant_id,
+            event_type="price_drop",
+            product_id=product.id,
+            product_name=product.name,
+            image_url=product.image_url,
+            old_price=old_price,
+            new_price=product.price,
+            commit=False,
+        )
     await db.commit()
     await db.refresh(product)
     # 降价提醒：价格下降时发布事件，由事件总线通知收藏该商品的用户
@@ -206,8 +220,21 @@ async def ai_generate(
 async def set_status(
     db: AsyncSession, *, product: Product, admin_id: str, data: ProductStatusUpdate
 ) -> Product:
+    was_active = product.status == ProductStatus.ACTIVE
     product.status = data.status
     product.reject_reason = data.reject_reason if data.status == ProductStatus.REJECTED else None
+    # 上新动态：首次通过审核上架时写入关注流事件
+    if data.status == ProductStatus.ACTIVE and not was_active:
+        await follow_service.record_shop_event(
+            db,
+            merchant_id=product.merchant_id,
+            event_type="new_product",
+            product_id=product.id,
+            product_name=product.name,
+            image_url=product.image_url,
+            new_price=product.price,
+            commit=False,
+        )
     await record(
         db,
         admin_id,

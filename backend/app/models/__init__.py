@@ -25,6 +25,7 @@ from app.models.note import NoteLike, ShoppingNote
 from app.models.paid_membership import PaidMembership
 from app.models.qna import ProductQuestion, ProductAnswer
 from app.models.view import ProductView
+from app.models.shop_event import ShopEvent
 from app.models.marketing import (
     Bargain,
     BargainCut,
@@ -87,4 +88,5 @@ __all__ = [
     "ProductQuestion",
     "ProductAnswer",
     "ProductView",
+    "ShopEvent",
 ]

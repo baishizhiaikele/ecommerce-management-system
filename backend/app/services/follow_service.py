@@ -3,6 +3,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.follow import FollowShop
+from app.models.shop_event import ShopEvent
 from app.models.user import Role, User
 
 
@@ -61,3 +62,46 @@ async def count_followers(db: AsyncSession, *, merchant_id: str) -> int:
         )
         or 0
     )
+
+
+async def record_shop_event(
+    db: AsyncSession,
+    *,
+    merchant_id: str,
+    event_type: str,
+    product_id: str | None = None,
+    product_name: str | None = None,
+    image_url: str | None = None,
+    old_price=None,
+    new_price=None,
+    commit: bool = True,
+) -> ShopEvent:
+    """记录店铺动态事件（上新/降价）。commit=False 时由调用方统一提交。"""
+    ev = ShopEvent(
+        merchant_id=merchant_id,
+        event_type=event_type,
+        product_id=product_id,
+        product_name=product_name,
+        image_url=image_url,
+        old_price=old_price,
+        new_price=new_price,
+    )
+    db.add(ev)
+    if commit:
+        await db.commit()
+        await db.refresh(ev)
+    return ev
+
+
+async def list_feed(db: AsyncSession, *, user_id: str, limit: int = 50) -> list:
+    """关注流：返回 (ShopEvent, 店铺名) 列表，按时间倒序。"""
+    followed = select(FollowShop.merchant_id).where(FollowShop.user_id == user_id)
+    stmt = (
+        select(ShopEvent, User.username)
+        .join(User, User.id == ShopEvent.merchant_id)
+        .where(ShopEvent.merchant_id.in_(followed))
+        .order_by(ShopEvent.created_at.desc())
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
+    return list(result.all())

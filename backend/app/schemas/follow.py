@@ -11,3 +11,18 @@ class FollowShopOut(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class ShopEventOut(BaseModel):
+    id: str
+    merchant_id: str
+    shop_name: str | None = None
+    product_id: str | None = None
+    event_type: str
+    product_name: str | None = None
+    image_url: str | None = None
+    old_price: float | None = None
+    new_price: float | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

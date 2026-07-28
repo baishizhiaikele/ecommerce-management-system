@@ -44,8 +44,15 @@ async def test_award_growth_recomputes_level():
 
 # ---------- 接口：会员信息 ----------
 @pytest.mark.asyncio
-async def test_membership_default_bronze(client, buyer_headers):
-    r = await client.get("/api/me/membership", headers=buyer_headers)
+async def test_membership_default_bronze(client):
+    # 注册隔离买家，避免共享买家被其他用例累计成长值而污染断言
+    b = await client.post(
+        "/api/auth/register",
+        json={"username": "fresh_bronze", "email": "fresh_bronze@e.com", "password": "Test1234", "role": "buyer"},
+    )
+    assert b.status_code == 200, b.text
+    bh = {"Authorization": f"Bearer {b.json()['access_token']}"}
+    r = await client.get("/api/me/membership", headers=bh)
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["level"] == "bronze"

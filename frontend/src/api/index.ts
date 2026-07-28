@@ -968,6 +968,22 @@ export const listHistory = (limit = 30) =>
 export const listRecentlyBought = () =>
   api.get<BoughtOut[]>(`/me/recently-bought`).then((r) => r.data);
 
+// ---------- 关注流动态 ----------
+export interface ShopEventOut {
+  id: string;
+  merchant_id: string;
+  shop_name?: string | null;
+  product_id?: string | null;
+  event_type: "new_product" | "price_drop";
+  product_name?: string | null;
+  image_url?: string | null;
+  old_price?: number | null;
+  new_price?: number | null;
+  created_at: string;
+}
+export const followFeed = (limit = 50) =>
+  api.get<ShopEventOut[]>(`/follow/feed`, { params: { limit } }).then((r) => r.data);
+
 // ---------- 报表导出 PDF ----------
 export const exportOrdersPdf = () =>
   api

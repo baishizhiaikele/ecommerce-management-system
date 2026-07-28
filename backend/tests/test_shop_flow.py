@@ -8,7 +8,12 @@ async def _merchant_product_id(client, merchant_headers: dict) -> str:
     me = await client.get("/api/auth/me", headers=merchant_headers)
     mid = me.json()["id"]
     prods = await client.get(f"/api/products?merchant_id={mid}")
-    return prods.json()[0]["id"]
+    items = prods.json()
+    # 优先挑库存充足的商品，避免被其他用例新建的小库存商品污染
+    for p in items:
+        if (p.get("stock") or 0) >= 5:
+            return p["id"]
+    return items[0]["id"]
 
 
 async def test_products_listing(client):
