@@ -1,5 +1,6 @@
 import { Package } from "lucide-react";
 import { useState } from "react";
+import { proxyImg } from "../api";
 
 interface Props {
   name?: string;
@@ -56,7 +57,7 @@ export default function ProductImage({
           </div>
         )}
         <img
-          src={usableUrl}
+          src={proxyImg(usableUrl)}
           alt={displayName}
           loading="lazy"
           decoding="async"

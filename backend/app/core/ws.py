@@ -5,6 +5,7 @@ from fastapi import WebSocket
 class ConnectionManager:
     def __init__(self) -> None:
         self.active: dict[str, list[WebSocket]] = {}
+        self.rooms: dict[str, list[WebSocket]] = {}
 
     async def connect(self, user_id: str, ws: WebSocket) -> None:
         await ws.accept()
@@ -24,6 +25,26 @@ class ConnectionManager:
                 await ws.send_json(message)
             except Exception:  # noqa: BLE001
                 self.disconnect(user_id, ws)
+
+    # ---- 直播间弹幕：按房间广播 ----
+    async def connect_room(self, room_id: str, ws: WebSocket) -> None:
+        await ws.accept()
+        self.rooms.setdefault(room_id, []).append(ws)
+
+    def disconnect_room(self, room_id: str, ws: WebSocket) -> None:
+        if room_id not in self.rooms:
+            return
+        if ws in self.rooms[room_id]:
+            self.rooms[room_id].remove(ws)
+        if not self.rooms[room_id]:
+            self.rooms.pop(room_id, None)
+
+    async def broadcast_room(self, room_id: str, message: dict) -> None:
+        for ws in list(self.rooms.get(room_id, [])):
+            try:
+                await ws.send_json(message)
+            except Exception:  # noqa: BLE001
+                self.disconnect_room(room_id, ws)
 
 
 manager = ConnectionManager()

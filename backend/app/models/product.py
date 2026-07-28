@@ -46,4 +46,8 @@ class Product(Base):
         Index("ix_product_merchant", "merchant_id"),
         Index("ix_product_status", "status"),
         Index("ix_product_category", "category_id"),
+        Index("ix_product_price", "price"),
+        Index("ix_product_sales", "sales_count"),
+        Index("ix_product_created", "created_at"),
+        Index("ix_product_cat_status", "category_id", "status"),
     )

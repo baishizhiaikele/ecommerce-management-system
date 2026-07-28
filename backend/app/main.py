@@ -52,6 +52,7 @@ from app.api.views import router as views_router
 from app.api.knowledge import router as knowledge_router
 from app.api.affiliate import router as affiliate_router
 from app.api.live import router as live_router
+from app.api.images import router as images_router
 from app.api.invoices import router as invoices_router
 from app.api.presale import router as presale_router
 from app.api.staff import router as staff_router
@@ -120,6 +121,7 @@ async def _ensure_demo_columns() -> None:
         "ALTER TABLE promotions ADD COLUMN gift_product_id VARCHAR(36)",
         "ALTER TABLE promotions ADD COLUMN bundle_count INTEGER",
         "ALTER TABLE promotions ADD COLUMN bundle_price NUMERIC",
+        "ALTER TABLE invoices ADD COLUMN pdf_url VARCHAR(512)",
     ]
     async with engine.begin() as conn:
         for stmt in statements:
@@ -129,9 +131,33 @@ async def _ensure_demo_columns() -> None:
                 pass
 
 
+async def _ensure_demo_indexes() -> None:
+    """幂等补充索引（兼容既有旧库；新库由 create_all 建好）。"""
+    from sqlalchemy import text
+
+    from app.db.session import engine
+
+    indexes = [
+        "CREATE INDEX IF NOT EXISTS ix_product_price ON products(price)",
+        "CREATE INDEX IF NOT EXISTS ix_product_sales ON products(sales_count)",
+        "CREATE INDEX IF NOT EXISTS ix_product_created ON products(created_at)",
+        "CREATE INDEX IF NOT EXISTS ix_product_cat_status ON products(category_id, status)",
+        "CREATE INDEX IF NOT EXISTS ix_order_created ON orders(created_at)",
+        "CREATE INDEX IF NOT EXISTS ix_order_buyer_created ON orders(buyer_id, created_at)",
+    ]
+    async with engine.begin() as conn:
+        for sql in indexes:
+            try:
+                await conn.execute(text(sql))
+            except Exception:  # noqa: BLE001
+                pass
+
+
 async def run_migrations() -> None:
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, _run_alembic_upgrade)
+    # 补充索引（幂等，兼容旧库）
+    await _ensure_demo_indexes()
     # 建表兜底：仅创建 Alembic 迁移中尚未覆盖的新增表（对已存在表幂等无副作用）
     from app.db.base import Base
     from app.db.session import engine
@@ -230,6 +256,7 @@ app.include_router(affiliate_router, prefix=settings.API_V1_PREFIX)
 app.include_router(live_router, prefix=settings.API_V1_PREFIX)
 app.include_router(invoices_router, prefix=settings.API_V1_PREFIX)
 app.include_router(presale_router, prefix=settings.API_V1_PREFIX)
+app.include_router(images_router, prefix=settings.API_V1_PREFIX)
 app.include_router(staff_router, prefix=settings.API_V1_PREFIX)
 app.include_router(report_router, prefix=settings.API_V1_PREFIX)
 

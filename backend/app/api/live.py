@@ -1,9 +1,12 @@
 """直播带货接口。"""
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, require_role
-from app.db.session import get_db
+from app.core.security import decode_token
+from app.core.ws import manager
+from app.db.session import SessionLocal, get_db
 from app.models.user import Role, User
 from app.schemas.live import (
     LiveMessageCreate,
@@ -88,3 +91,38 @@ async def post_message(
     user: User = Depends(get_current_user),
 ):
     return await live_service.post_message(db, room_id=room_id, user=user, content=body.content)
+
+
+@router.websocket("/{room_id}/ws")
+async def live_ws(websocket: WebSocket, room_id: str):
+    """直播间弹幕 WebSocket：实时收发，替代前端 3 秒轮询。"""
+    token = websocket.cookies.get("access_token") or websocket.query_params.get("token")
+    user = None
+    if token:
+        try:
+            payload = decode_token(token)
+            uid = payload.get("sub")
+            if uid:
+                async with SessionLocal() as db:
+                    user = await db.scalar(select(User).where(User.id == uid))
+        except Exception:  # noqa: BLE001
+            user = None
+    await manager.connect_room(room_id, websocket)
+    try:
+        async with SessionLocal() as db:
+            while True:
+                data = await websocket.receive_json()
+                content = (data.get("content") or "").strip()
+                if not content:
+                    continue
+                if not user:
+                    await websocket.send_json({"type": "error", "detail": "unauthorized"})
+                    continue
+                msg = await live_service.post_message(
+                    db, room_id=room_id, user=user, content=content
+                )
+                await manager.broadcast_room(
+                    room_id, LiveMessageOut.model_validate(msg).model_dump()
+                )
+    except WebSocketDisconnect:
+        manager.disconnect_room(room_id, websocket)

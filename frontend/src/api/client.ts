@@ -1,7 +1,7 @@
 import axios from "axios";
 
 // L7：支持通过 VITE_API_BASE_URL 指定后端地址，默认走 Vite 代理 /api
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
+export const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 
 export const api = axios.create({
   baseURL: API_BASE,

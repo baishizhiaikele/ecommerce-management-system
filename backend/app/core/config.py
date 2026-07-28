@@ -41,6 +41,15 @@ class Settings(BaseSettings):
     IMAGE_BASE_URL: str = ""
     IMAGE_MODEL: str = "gpt-image-1"
 
+    # 通知外发渠道（C10）：配置后真实投递，未配置则降级为本地日志（不阻塞主流程）
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 465
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = ""
+    SMS_API_KEY: str = ""
+    SMS_BASE_URL: str = ""
+
     # 异步任务队列（P2 工程）：默认进程内后台执行，生产可切换 redis/celery
     ASYNC_QUEUE_BACKEND: str = "inprocess"
 

@@ -34,6 +34,17 @@ async def notify(
         )
     except Exception:  # noqa: BLE001
         pass
+
+    # C10：重要通知外发邮件（未配置 SMTP 自动降级，不阻塞主线）
+    try:
+        from app.services.channels import dispatch_outbound
+
+        ntype_value = ntype.value if hasattr(ntype, "value") else ntype
+        await dispatch_outbound(
+            db, user_id=user_id, ntype=ntype_value, title=title, content=content
+        )
+    except Exception:  # noqa: BLE001
+        pass
     return n
 
 

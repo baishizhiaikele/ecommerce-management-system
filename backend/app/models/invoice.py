@@ -32,4 +32,5 @@ class Invoice(Base):
     title = Column(String(100), nullable=False)
     tax_no = Column(String(30), nullable=True)
     amount = Column(Float, nullable=False)
+    pdf_url = Column(String(512), nullable=True)
     issued_at = Column(DateTime(timezone=True), default=_now)

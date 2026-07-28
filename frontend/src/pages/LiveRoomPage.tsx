@@ -6,6 +6,7 @@ import {
   enterLiveRoom,
   getLiveRoom,
   listLiveMessages,
+  liveWsUrl,
   sendLiveMessage,
   type LiveMessageOut,
   type LiveRoomDetail,
@@ -25,6 +26,7 @@ export default function LiveRoomPage() {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const lastIdRef = useRef<string | undefined>(undefined);
+  const wsRef = useRef<WebSocket | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -33,11 +35,15 @@ export default function LiveRoomPage() {
     if (user) enterLiveRoom(id).catch(() => {});
   }, [id, user]);
 
-  // 弹幕轮询（3 秒增量拉取）
+  // 弹幕：优先 WebSocket 实时推送，连接失败/断开时降级为 3 秒轮询
   useEffect(() => {
     if (!id) return;
     let stop = false;
-    const poll = async () => {
+    let timer: number | undefined;
+    const isWsOpen = () => wsRef.current?.readyState === WebSocket.OPEN;
+
+    const fallbackPoll = async () => {
+      if (isWsOpen()) return;
       try {
         const inc = await listLiveMessages(id, lastIdRef.current);
         if (!stop && inc.length) {
@@ -48,11 +54,46 @@ export default function LiveRoomPage() {
         /* ignore */
       }
     };
-    poll();
-    const timer = setInterval(poll, 3000);
+
+    const startWs = () => {
+      try {
+        const ws = new WebSocket(liveWsUrl(id));
+        wsRef.current = ws;
+        ws.onmessage = (ev) => {
+          try {
+            const data = JSON.parse(ev.data);
+            if (data.type === "error") return;
+            const m = data as LiveMessageOut;
+            if (m?.id && m?.content) {
+              setMsgs((prev) => {
+                if (prev.some((x) => x.id === m.id)) return prev;
+                lastIdRef.current = m.id;
+                return [...prev, m].slice(-200);
+              });
+            }
+          } catch {
+            /* ignore */
+          }
+        };
+        ws.onclose = () => {
+          wsRef.current = null;
+          if (!stop) timer = window.setInterval(fallbackPoll, 3000);
+        };
+        ws.onerror = () => {
+          ws.close();
+        };
+      } catch {
+        timer = window.setInterval(fallbackPoll, 3000);
+      }
+    };
+
+    startWs();
+    fallbackPoll();
     return () => {
       stop = true;
-      clearInterval(timer);
+      if (timer) clearInterval(timer);
+      wsRef.current?.close();
+      wsRef.current = null;
     };
   }, [id]);
 
@@ -65,9 +106,14 @@ export default function LiveRoomPage() {
     if (!content || !id) return;
     setSending(true);
     try {
-      const m = await sendLiveMessage(id, content);
-      setMsgs((prev) => [...prev, m].slice(-200));
-      lastIdRef.current = m.id;
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ content }));
+      } else {
+        const m = await sendLiveMessage(id, content);
+        setMsgs((prev) => [...prev, m].slice(-200));
+        lastIdRef.current = m.id;
+      }
       setText("");
     } catch (e: any) {
       message.error(e?.response?.data?.detail || t("common.operationFailed"));

@@ -98,6 +98,17 @@ async def send_due_reports(db: AsyncSession) -> int:
             summary=payload.get("summary", ""),
         )
         db.add(log)
+        # C10：若配置了 SMTP，真实投递报表邮件；否则仅留 EmailLog 记录
+        try:
+            from app.services.channels import send_email
+
+            await send_email(
+                task.email,
+                f"经营报表（{task.frequency.value}）",
+                payload.get("summary", ""),
+            )
+        except Exception:  # noqa: BLE001
+            pass
         task.last_sent_at = now
         sent += 1
     if sent:

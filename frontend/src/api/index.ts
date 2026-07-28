@@ -1,4 +1,5 @@
-import { api } from "./client";
+import { api, API_BASE } from "./client";
+export { API_BASE };
 
 // ---------- 通用类型 ----------
 export type Decimal = string;
@@ -1128,6 +1129,25 @@ export const listLiveMessages = (id: string, afterId?: string) =>
     .then((r) => r.data);
 export const sendLiveMessage = (id: string, content: string) =>
   api.post<LiveMessageOut>(`/live/${id}/messages`, { content }).then((r) => r.data);
+
+/** 直播弹幕 WebSocket 地址：同源走相对路径（开发经 Vite 代理，生产走同源托管）。 */
+export function liveWsUrl(id: string): string {
+  const base = import.meta.env.VITE_API_BASE_URL || "";
+  const path = `/api/live/${id}/ws`;
+  if (base) {
+    const u = new URL(base);
+    const proto = u.protocol === "https:" ? "wss:" : "ws:";
+    return `${proto}//${u.host}${path}`;
+  }
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${proto}//${window.location.host}${path}`;
+}
+
+/** 图片经后端代理转发（仅外部 http(s) 链接走 /api/images/proxy，本地 /uploads 不受影响）。 */
+export function proxyImg(url: string): string {
+  if (!url || !/^https?:\/\//i.test(url)) return url;
+  return `${API_BASE}/images/proxy?u=${encodeURIComponent(url)}`;
+}
 
 // ---------- 电子发票 ----------
 export interface InvoiceOut {

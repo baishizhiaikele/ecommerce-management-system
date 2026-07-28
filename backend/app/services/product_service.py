@@ -1,5 +1,5 @@
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.product import Product, ProductStatus
@@ -47,80 +47,75 @@ async def list_products(
     page = max(1, page)
     page_size = min(max(1, page_size), 100)
 
-    base = select(Product)
-    if only_active:
-        base = base.where(Product.status == ProductStatus.ACTIVE)
-    if merchant_id:
-        base = base.where(Product.merchant_id == merchant_id)
+    # 评分过滤子查询（min_rating），供计数与取数共用
+    rating_filter_ids = None
+    if min_rating is not None:
+        _avg = (
+            select(Review.product_id, func.avg(Review.rating).label("avg_rating"))
+            .group_by(Review.product_id)
+            .subquery()
+        )
+        rating_filter_ids = select(_avg.c.product_id).where(_avg.c.avg_rating >= min_rating)
+
+    cat_ids: list | None = None
     if category_id:
         cat_ids = await _expand_category(db, category_id)
-        base = base.where(Product.category_id.in_(cat_ids))
-    if keyword:
-        like = f"%{keyword.strip()}%"
-        base = base.where((Product.name.ilike(like)) | (Product.description.ilike(like)))
-    if min_price is not None:
-        base = base.where(Product.price >= min_price)
-    if max_price is not None:
-        base = base.where(Product.price <= max_price)
-    if in_stock:
-        base = base.where(Product.stock > 0)
-    if min_rating is not None:
-        _avg = (
-            select(Review.product_id, func.avg(Review.rating).label("avg_rating"))
-            .group_by(Review.product_id)
-            .subquery()
-        )
-        base = base.where(
-            Product.id.in_(select(_avg.c.product_id).where(_avg.c.avg_rating >= min_rating))
-        )
 
-    count_stmt = select(Product.id)
-    if only_active:
-        count_stmt = count_stmt.where(Product.status == ProductStatus.ACTIVE)
-    if merchant_id:
-        count_stmt = count_stmt.where(Product.merchant_id == merchant_id)
-    if category_id:
-        count_stmt = count_stmt.where(Product.category_id.in_(cat_ids))
-    if keyword:
-        like = f"%{keyword.strip()}%"
-        count_stmt = count_stmt.where((Product.name.ilike(like)) | (Product.description.ilike(like)))
-    if min_price is not None:
-        count_stmt = count_stmt.where(Product.price >= min_price)
-    if max_price is not None:
-        count_stmt = count_stmt.where(Product.price <= max_price)
-    if in_stock:
-        count_stmt = count_stmt.where(Product.stock > 0)
-    if min_rating is not None:
-        _avg = (
-            select(Review.product_id, func.avg(Review.rating).label("avg_rating"))
-            .group_by(Review.product_id)
-            .subquery()
-        )
-        count_stmt = count_stmt.where(
-            Product.id.in_(select(_avg.c.product_id).where(_avg.c.avg_rating >= min_rating))
-        )
+    # B7：过滤条件仅构造一次，计数与取数复用，避免两处重复且容易漂移
+    def _apply_filters(stmt):
+        if only_active:
+            stmt = stmt.where(Product.status == ProductStatus.ACTIVE)
+        if merchant_id:
+            stmt = stmt.where(Product.merchant_id == merchant_id)
+        if cat_ids is not None:
+            stmt = stmt.where(Product.category_id.in_(cat_ids))
+        if keyword:
+            like = f"%{keyword.strip()}%"
+            stmt = stmt.where((Product.name.ilike(like)) | (Product.description.ilike(like)))
+        if min_price is not None:
+            stmt = stmt.where(Product.price >= min_price)
+        if max_price is not None:
+            stmt = stmt.where(Product.price <= max_price)
+        if in_stock:
+            stmt = stmt.where(Product.stock > 0)
+        if rating_filter_ids is not None:
+            stmt = stmt.where(Product.id.in_(rating_filter_ids))
+        return stmt
+
+    filtered = _apply_filters(select(Product))
     # P2：直接数据库计数，避免先取全部 id 再 len()（大表会拉爆内存）
-    total = await db.scalar(count_stmt.with_only_columns(func.count(Product.id))) or 0
+    total = await db.scalar(select(func.count()).select_from(filtered.subquery())) or 0
 
-    order = Product.created_at.desc()
-    if sort == "price_asc":
-        order = Product.price.asc()
-    elif sort == "price_desc":
-        order = Product.price.desc()
-    elif sort == "sales":
-        order = Product.sales_count.desc()
-    elif sort == "top_rating":
-        rating_subq = (
-            select(func.coalesce(func.avg(Review.rating), 0.0))
-            .where(Review.product_id == Product.id)
-            .correlate(Product)
-            .scalar_subquery()
-        )
-        order = rating_subq.desc()
-    elif sort == "newest":
+    # B5：相关性排序（含关键词时默认）。标题命中权重高于描述命中，再按销量兜底
+    if (sort in (None, "relevance")) and keyword:
+        kw = keyword.strip()
+        title_hit = Product.name.ilike(f"%{kw}%")
+        desc_hit = Product.description.ilike(f"%{kw}%")
+        relevance = case((title_hit, 2), else_=0) + case((desc_hit, 1), else_=0)
+        order = (relevance * 1000 + Product.sales_count).desc()
+    else:
         order = Product.created_at.desc()
+        if sort == "price_asc":
+            order = Product.price.asc()
+        elif sort == "price_desc":
+            order = Product.price.desc()
+        elif sort == "sales":
+            order = Product.sales_count.desc()
+        elif sort == "top_rating":
+            rating_subq = (
+                select(func.coalesce(func.avg(Review.rating), 0.0))
+                .where(Review.product_id == Product.id)
+                .correlate(Product)
+                .scalar_subquery()
+            )
+            order = rating_subq.desc()
+        elif sort == "newest":
+            order = Product.created_at.desc()
+        elif sort == "relevance":
+            # 无关键词时相关性无意义，退回最新
+            order = Product.created_at.desc()
 
-    rows = await db.scalars(base.order_by(order).limit(page_size).offset((page - 1) * page_size))
+    rows = await db.scalars(filtered.order_by(order).limit(page_size).offset((page - 1) * page_size))
     items = list(rows)
     return items, total
 

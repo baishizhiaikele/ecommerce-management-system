@@ -42,3 +42,19 @@ async def my_invoices(
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
     return await invoice_service.my_invoices(db, user.id)
+
+
+@router.get("/{invoice_id}/pdf")
+async def download_invoice_pdf(
+    invoice_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from fastapi.responses import Response
+
+    data = await invoice_service.build_pdf(db, invoice_id)
+    return Response(
+        content=data,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="invoice_{invoice_id}.pdf"'},
+    )

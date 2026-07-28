@@ -43,6 +43,22 @@ npm run dev
 | 商家 | merchant | merchant123 |
 | 管理员 | admin | admin123 |
 
+## 演示级 / Mock 能力标注
+
+本项目定位为**全栈作品集演示**，以下能力在默认配置下为「演示级 / 降级实现」，接入真实密钥或服务后即生效：
+
+| 能力 | 默认行为（未配置） | 接入后真实行为 | 配置项 |
+|---|---|---|---|
+| AI 文案 / 定价 / 客服 / 营销 | 本地规则 mock 生成 | 调用 LLM 真实生成 | `AI_API_KEY` 等 |
+| AI 一句话搜商品 | 关键词/规则解析降级 | LLM 结构化解析查询意图 | `AI_API_KEY` 等 |
+| AI 商品图 | picsum 占位图 | 文生图真实生成 | `IMAGE_API_KEY` 等 |
+| 支付 | sandbox 自测网关即时成功 | 真实网关 + webhook 验签 + 托管结算 | `PAYMENT_GATEWAY` 等 |
+| 通知外发（邮件/短信） | 仅站内信 + 本地日志记录 | SMTP/SMS 真实投递 | `SMTP_*` / `SMS_*` |
+| 定时报表邮件 | 仅写入 `EmailLog` 记录 | 配置 SMTP 后真实外发 | `SMTP_*` |
+| 商品/评价图片 | 外链 picsum / Wikimedia | 经本地 `/api/images/proxy` 转发并缓存，规避外链不稳 | 无需配置（白名单内自动） |
+
+> 任何「演示级」路径都做了**优雅降级**：缺密钥/服务时不影响主流程，仅功能降级，便于本地零配置跑通。
+
 ## 角色与权限
 
 - **buyer**：浏览（热搜/搜索历史）、SKU 规格选择加购、加购、下单（优惠券+积分抵扣）、收藏、关注店铺、评价/回复、积分成长、通知中心（WebSocket 实时推送）、申请退款、转人工工单、逛店铺、促销活动专区、个性化推荐
@@ -82,6 +98,15 @@ npm run dev
 | 实时通知 | WS /ws/notifications | WebSocket 推送未读通知 |
 | 商家 | GET /merchant/dashboard/stats, GET /merchant/products, GET /merchant/reports/orders(CSV) | 商家数据 + 报表 |
 | 管理员 | GET /admin/users, PATCH /admin/users/{id}, GET /admin/products, GET /admin/dashboard/stats, GET /admin/audit-logs, GET /admin/audit-stats | 平台管理 + 审计看板 |
+| 预售 | POST/GET /presales, POST /presales/{id}/orders, GET /presales/{id}/orders | 预售订单（定金 + 尾款） |
+| 发票 | POST /invoices(开票), GET /invoices/mine, GET /invoices/{id}/pdf | 电子发票（含 PDF 导出） |
+| 直播弹幕 | WS /live/{id}/ws, POST /live/{id}/messages | 直播间实时弹幕（WebSocket 替代轮询） |
+| 图片代理 | GET /images/proxy?u=外部图片URL | 外链图片本地转发 + 磁盘缓存（SSRF 白名单） |
+| 支付回调 | POST /payments/webhook/{gateway}, GET /payments/{id}/status | 支付/退款回调验签 + 托管结算 |
+| 报表邮件 | POST /merchant/reports/tasks, GET /merchant/reports/tasks, POST /merchant/reports/tasks/{id} | 定时经营报表（配置 SMTP 后真实外发） |
+| 通知外发 | （系统自动）重要通知经 SMTP/SMS 渠道投递 | 站内信 + 邮件/短信（未配置渠道时降级日志） |
+| AI 搜索 | POST /search/qa | 一句话自然语言搜商品（配置 LLM 真实解析，否则降级） |
+| AI 商品图 | POST /products/{id}/ai-image | 文生图（配置图床密钥真实生成，否则占位图降级） |
 
 > 完整接口与模块规划见 `PLAN.md`，运行后访问 `/docs` 查看 Swagger。
 
@@ -114,6 +139,11 @@ npm run dev
 | `FRONTEND_ORIGINS` | 前端来源（同源部署下不影响功能，填服务地址即可） |
 | `AI_API_KEY` | OpenAI 兼容密钥，留空启用 mock 降级 |
 | `AI_BASE_URL` / `AI_MODEL` | AI 接口地址与模型，可指向任意 OpenAI 兼容服务 |
+| `IMAGE_API_KEY` / `IMAGE_BASE_URL` / `IMAGE_MODEL` | 文生图密钥（如 gpt-image-1）；留空则商品图用占位图降级 |
+| `PAYMENT_GATEWAY` | 支付网关：`sandbox`（默认自测）或 `stripe`/`alipay`/`wechat`；生产需注入对应密钥 |
+| `PAYMENT_SECRET` / `PAYMENT_NOTIFY_BASE_URL` | 支付回调验签与异步通知地址 |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` | 邮件外发渠道；留空则通知/报表仅记录不真正发送 |
+| `SMS_API_KEY` / `SMS_BASE_URL` | 短信网关；留空则短信降级为日志 |
 
 ### 本地容器验证
 
