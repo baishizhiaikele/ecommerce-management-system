@@ -43,6 +43,9 @@ class Promotion(Base):
     discount_rate = Column(Numeric(4, 2), nullable=True)  # 如 0.8 表示 8 折
     start_at = Column(DateTime(timezone=True), nullable=True)
     end_at = Column(DateTime(timezone=True), nullable=True)
+    # 秒杀库存（原子扣减防超卖）：stock_limit 为秒杀总库存，stock_sold 已售出
+    stock_limit = Column(Integer, nullable=True)
+    stock_sold = Column(Integer, default=0, nullable=False, server_default="0")
     is_active = Column(Integer, default=1, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 

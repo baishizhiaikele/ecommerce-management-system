@@ -20,6 +20,14 @@ from app.models.follow import FollowShop
 from app.models.support import SupportTicket, SupportMessage, TicketStatus, SenderRole
 from app.models.payment import Payment
 from app.models.settlement import Settlement
+from app.models.marketing import (
+    Bargain,
+    BargainCut,
+    BargainStatus,
+    GroupBuy,
+    GroupBuyMember,
+    GroupBuyStatus,
+)
 
 __all__ = [
     "Role",
@@ -61,4 +69,10 @@ __all__ = [
     "SenderRole",
     "Payment",
     "Settlement",
+    "Bargain",
+    "BargainCut",
+    "BargainStatus",
+    "GroupBuy",
+    "GroupBuyMember",
+    "GroupBuyStatus",
 ]

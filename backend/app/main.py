@@ -43,6 +43,7 @@ from app.api.ws import router as ws_router
 from app.api.shipping import router as shipping_router
 from app.api.payments import router as payments_router
 from app.api.agent import router as agent_router
+from app.api.marketing import router as marketing_router
 from app.core.config import settings
 from app.core.seed import seed_demo
 from app.events_handlers import register_handlers
@@ -92,6 +93,8 @@ async def _ensure_demo_columns() -> None:
         "ALTER TABLE orders ADD COLUMN exchange_at TIMESTAMP",
         "ALTER TABLE payments ADD COLUMN escrow_status VARCHAR(20) NOT NULL DEFAULT 'none'",
         "ALTER TABLE payments ADD COLUMN released_at TIMESTAMP",
+        "ALTER TABLE promotions ADD COLUMN stock_limit INTEGER",
+        "ALTER TABLE promotions ADD COLUMN stock_sold INTEGER NOT NULL DEFAULT 0",
     ]
     async with engine.begin() as conn:
         for stmt in statements:
@@ -191,6 +194,7 @@ app.include_router(ws_router, prefix=settings.API_V1_PREFIX)
 app.include_router(shipping_router, prefix=settings.API_V1_PREFIX)
 app.include_router(payments_router, prefix=settings.API_V1_PREFIX)
 app.include_router(agent_router, prefix=settings.API_V1_PREFIX)
+app.include_router(marketing_router, prefix=settings.API_V1_PREFIX)
 
 
 # ---- 可观测性：Prometheus 风格指标端点（无需鉴权，供监控抓取）----
