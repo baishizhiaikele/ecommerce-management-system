@@ -75,12 +75,12 @@ export default function Cart() {
       load();
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || "删除失败");
+      message.error(err.response?.data?.detail || t("common.operationFailed"));
     }
   };
   const onCheckout = async () => {
     if (!address.trim()) {
-      message.warning("请填写收货地址");
+      message.warning(t("cart.needAddress"));
       return;
     }
     if (deliveryType === "pickup" && !pickupStore.trim()) {
@@ -113,11 +113,11 @@ export default function Cart() {
   const payable = calcPayable(subtotal, cDisc, pDisc);
 
   if (loading) return <div className="text-center py-20"><Spin /></div>;
-  if (items.length === 0) return <Empty description="购物车是空的" className="py-20" />;
+  if (items.length === 0) return <Empty description={t("cart.empty")} className="py-20" />;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-      <Card title="购物车" className="rounded-2xl shadow-sm border-0 lg:col-span-2">
+      <Card title={t("cart.title")} className="rounded-2xl shadow-sm border-0 lg:col-span-2">
         <Table
           dataSource={items}
           rowKey="id"

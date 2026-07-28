@@ -159,12 +159,12 @@ export default function ProductDetail() {
 
   const buyNow = async () => {
     if (!user) {
-      message.warning("请先登录");
+      message.warning(t("common.loginFirst"));
       navigate("/login");
       return;
     }
     if (variants.length && !matchedVariant) {
-      message.warning("请选择完整规格");
+      message.warning(t("pd.selectSpec"));
       return;
     }
     try {
@@ -178,7 +178,7 @@ export default function ProductDetail() {
       });
       navigate("/cart");
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "下单失败");
+      message.error(e?.response?.data?.detail || t("pd.orderFail"));
     }
   };
 
@@ -271,7 +271,7 @@ export default function ProductDetail() {
             <Button size="large" onClick={buyNow} disabled={stock <= 0}>
               {t("pd.buyNow")}
             </Button>
-            <Tooltip title="AI 智能客服">
+            <Tooltip title={t("pd.aiChat")}>
               <Button size="large" icon={<RobotOutlined />} onClick={() => setChatOpen(true)}>
                 {t("pd.chat")}
               </Button>

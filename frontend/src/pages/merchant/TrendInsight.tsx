@@ -73,7 +73,7 @@ export default function TrendInsight() {
     try {
       setData(await trendInsight());
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "获取洞察失败");
+      message.error(e?.response?.data?.detail || t("common.operationFailed"));
     } finally {
       setLoading(false);
     }
@@ -119,7 +119,7 @@ export default function TrendInsight() {
                   ))}
                 </Space>
               ) : (
-                <Empty description="暂无热搜" />
+                <Empty description={t("common.noData")} />
               )}
             </Card>
 
@@ -166,12 +166,12 @@ export default function TrendInsight() {
                   ))}
                 </Row>
               ) : (
-                <Empty description="暂无商品" />
+                <Empty description={t("common.noData")} />
               )}
             </Card>
           </>
         )}
-        {!loading && !data && <Empty description="暂无数据" />}
+        {!loading && !data && <Empty description={t("common.noData")} />}
       </Spin>
     </div>
   );

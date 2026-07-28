@@ -40,11 +40,11 @@ const { Title, Paragraph, Text } = Typography;
 
 const SEGMENTS = ["buyer", "new", "returning", "member"] as const;
 const HOUR_PRESETS = [
-  { label: "06:00 清晨", value: 7 },
-  { label: "12:00 午间", value: 12 },
-  { label: "15:00 午后", value: 15 },
-  { label: "20:00 晚间", value: 20 },
-  { label: "23:30 深夜", value: 23 },
+  { labelKey: "aim.hour.morning", value: 7 },
+  { labelKey: "aim.hour.noon", value: 12 },
+  { labelKey: "aim.hour.afternoon", value: 15 },
+  { labelKey: "aim.hour.evening", value: 20 },
+  { labelKey: "aim.hour.night", value: 23 },
 ];
 
 const imgOf = (img: string | string[] | null | undefined) =>
@@ -52,6 +52,7 @@ const imgOf = (img: string | string[] | null | undefined) =>
 
 function ProductCard({ p }: { p: ProductOut }) {
   const nav = useNavigate();
+  const { t } = useI18n();
   return (
     <Card
       hoverable
@@ -81,7 +82,7 @@ function ProductCard({ p }: { p: ProductOut }) {
               ¥{p.price}
             </Text>
             <Text type="secondary" style={{ fontSize: 12 }}>
-              售{p.sales_count}
+              {t("market.sold")}{p.sales_count}
             </Text>
           </Space>
         }
@@ -133,6 +134,7 @@ function PromotionCard({ p }: { p: PromotionOut }) {
 }
 
 function FloorBody({ floor }: { floor: FloorOut }) {
+  const { t } = useI18n();
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState<ProductOut[]>([]);
   const [promos, setPromos] = useState<PromotionOut[]>([]);
@@ -203,7 +205,7 @@ function FloorBody({ floor }: { floor: FloorOut }) {
   if (loading) return <Spin style={{ margin: 16 }} />;
 
   if (floor.key === "categories") {
-    if (!cats.length) return <Empty description="暂无分类" />;
+    if (!cats.length) return <Empty description={t("common.noData")} />;
     return (
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "4px 0" }}>
         {cats.map((c) => (
@@ -221,12 +223,14 @@ function FloorBody({ floor }: { floor: FloorOut }) {
   }
 
   if (floor.key === "coupon") {
-    if (!coupons.length) return <Empty description="暂无可用券" />;
+    if (!coupons.length) return <Empty description={t("common.noData")} />;
     return (
       <Space wrap>
         {coupons.map((c: any) => (
           <Tag key={c.id} color="red" style={{ fontSize: 13, padding: "4px 10px" }}>
-            {c.type === "full_reduction" ? `满${c.threshold}减${c.value}` : `立减${c.value}`}
+            {c.type === "full_reduction"
+              ? t("coupon.full").replace("{min}", String(c.threshold)).replace("{val}", String(c.value))
+              : t("aim.instantOff").replace("{x}", String(c.value))}
           </Tag>
         ))}
       </Space>
@@ -234,7 +238,7 @@ function FloorBody({ floor }: { floor: FloorOut }) {
   }
 
   if (floor.key === "shops") {
-    if (!shops.length) return <Empty description="暂无店铺" />;
+    if (!shops.length) return <Empty description={t("common.noData")} />;
     return (
       <Row gutter={[12, 12]}>
         {shops.map((s) => (
@@ -243,7 +247,7 @@ function FloorBody({ floor }: { floor: FloorOut }) {
               <Text strong>{s.name}</Text>
               <div>
                 <Text type="secondary" style={{ fontSize: 12 }}>
-                  {s.rating?.toFixed(1)} ★ · {s.product_count} 件
+                  {s.rating?.toFixed(1)} ★ · {s.product_count} {t("aim.itemsUnit")}
                 </Text>
               </div>
             </Card>
@@ -256,13 +260,13 @@ function FloorBody({ floor }: { floor: FloorOut }) {
   if (floor.key === "theme") {
     return (
       <Card size="small" style={{ background: "linear-gradient(90deg,#fff1f0,#f9f0ff)" }}>
-        <Text type="secondary">主题频道：为新品季 / 节日大促预留的场景化入口</Text>
+        <Text type="secondary">{t("aim.themeHint")}</Text>
       </Card>
     );
   }
 
   if (floor.key === "flash") {
-    if (!promos.length) return <Empty description="暂无秒杀" />;
+    if (!promos.length) return <Empty description={t("common.noData")} />;
     return (
       <Row gutter={[12, 12]}>
         {promos.map((p) => (
@@ -274,7 +278,7 @@ function FloorBody({ floor }: { floor: FloorOut }) {
     );
   }
 
-  if (!products.length) return <Empty description="暂无商品" />;
+  if (!products.length) return <Empty description={t("common.noData")} />;
   return (
     <Row gutter={[12, 12]}>
       {products.map((p) => (
@@ -304,7 +308,7 @@ export default function AIMall() {
       const d = await homeArrange({ segment, hour });
       setData(d);
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "编排失败");
+      message.error(e?.response?.data?.detail || t("common.operationFailed"));
     } finally {
       setLoading(false);
     }
@@ -323,7 +327,7 @@ export default function AIMall() {
       setChatReply(res.reply);
       setChatIntent(res.intent || "");
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "代理调用失败");
+      message.error(e?.response?.data?.detail || t("common.operationFailed"));
     } finally {
       setChatLoading(false);
     }
@@ -352,7 +356,12 @@ export default function AIMall() {
           }))}
         />
         <Text>{t("ai.home.hour")}：</Text>
-        <Select value={hour} style={{ width: 140 }} onChange={setHour} options={HOUR_PRESETS} />
+        <Select
+          value={hour}
+          style={{ width: 140 }}
+          onChange={setHour}
+          options={HOUR_PRESETS.map((h) => ({ label: t(h.labelKey), value: h.value }))}
+        />
         <Button icon={<RefreshCw />} onClick={arrange} loading={loading}>
           {t("ai.home.refresh")}
         </Button>
@@ -380,7 +389,7 @@ export default function AIMall() {
             <FloorBody floor={f} />
           </div>
         ))}
-        {!loading && !data && <Empty description="暂无编排" />}
+        {!loading && !data && <Empty description={t("common.noData")} />}
       </Spin>
 
       {/* P3-B：AI 可行动代理层 —— 用户用自然语言触发真实工具操作 */}

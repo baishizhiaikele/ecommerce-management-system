@@ -63,7 +63,7 @@ export default function Favorites() {
       <div className="flex items-center gap-2 mb-4">
         <HeartFilled style={{ color: "#EF4444" }} />
         <h2 className="text-xl font-bold m-0">{t("page.favorites.title")}</h2>
-        <span className="text-slate-400">共 {items.length} 件</span>
+        <span className="text-slate-400">{t("fav.total").replace("{n}", String(items.length))}</span>
       </div>
       {loading ? (
         <div className="flex justify-center py-20">

@@ -149,7 +149,7 @@ export default function Shop() {
                 <div className="flex items-center gap-3 mt-1 text-sm text-slate-500">
                   <span className="flex items-center gap-1 text-amber-500">
                     <Star size={14} fill="currentColor" />
-                    {detail.rating > 0 ? detail.rating.toFixed(1) : "新店"}
+                    {detail.rating > 0 ? detail.rating.toFixed(1) : t("shop.newShop")}
                   </span>
                   <span>· {detail.product_count} {t("shop.productsCount")}</span>
                   <span>· {t("market.sold")} {detail.sales_total}</span>
@@ -238,7 +238,7 @@ export default function Shop() {
                 >
                   <div className="font-medium text-sm line-clamp-1">{p.name}</div>
                   <div className="text-[#F97316] font-bold mt-1">{money(p.price)}</div>
-                  <div className="text-xs text-slate-400 mt-0.5">已售 {p.sales_count}</div>
+                  <div className="text-xs text-slate-400 mt-0.5">{t("market.sold")} {p.sales_count}</div>
                 </Card>
               ))}
             </div>

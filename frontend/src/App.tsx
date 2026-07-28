@@ -8,7 +8,7 @@ import MerchantLayout from "./layouts/MerchantLayout";
 import AdminLayout from "./layouts/AdminLayout";
 import Market from "./pages/Market";
 import Notifications from "./pages/Notifications";
-import { LanguageProvider } from "./i18n";
+import { LanguageProvider, getLang } from "./i18n";
 import { useAuth } from "./store/auth";
 
 // S5：按路由懒加载，把买家二级页、商家后台、管理后台（含 recharts 等较重依赖）拆出首屏包体
@@ -51,7 +51,7 @@ function RouteFallback() {
   return (
     <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
       <Spin size="large" />
-      <div className="text-slate-400 text-sm">加载中…</div>
+      <div className="text-slate-400 text-sm">{getLang() === "zh" ? "加载中…" : "Loading…"}</div>
     </div>
   );
 }
@@ -97,7 +97,7 @@ export default function App() {
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[100] focus:rounded focus:bg-white focus:px-3 focus:py-2 focus:text-sm focus:shadow"
       >
-        跳过导航
+        {getLang() === "zh" ? "跳过导航" : "Skip to content"}
       </a>
       <Suspense fallback={<RouteFallback />}>
         <Routes>

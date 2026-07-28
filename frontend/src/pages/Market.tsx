@@ -188,10 +188,10 @@ export default function Market() {
     try {
       await addCartItem({ product_id: p.id, quantity: 1 });
       add({ product_id: p.id, name: p.name, price: Number(p.price), quantity: 1, image_url: undefined });
-      message.success("已加入购物车");
+      message.success(t("pd.addedCart"));
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || "加入失败");
+      message.error(err.response?.data?.detail || t("pd.addCartFail"));
     }
   };
 
@@ -354,7 +354,7 @@ export default function Market() {
                 onClick={() => pr.product_id && navigate(`/products/${pr.product_id}`)}
                 className="!w-40 shrink-0 bg-white rounded-xl p-2 cursor-pointer hover:shadow"
               >
-                <ProductImage name={pr.product_name || "秒杀"} image_url={pr.product_image || ""} height={120} rounded={8} />
+                <ProductImage name={pr.product_name || t("market.flash")} image_url={pr.product_image || ""} height={120} rounded={8} />
                 <div className="mt-2 text-sm font-medium truncate">{pr.product_name}</div>
                 <div className="flex items-baseline gap-1">
                   <span className="text-rose-600 font-bold">¥{money(pr.discount_price || pr.original_price || 0)}</span>

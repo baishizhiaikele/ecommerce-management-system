@@ -90,7 +90,7 @@ export default function OrderDetail() {
       load();
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || "操作失败");
+      message.error(err.response?.data?.detail || t("common.operationFailed"));
     } finally {
       setActing(false);
     }
@@ -114,7 +114,7 @@ export default function OrderDetail() {
       load();
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || "评价失败");
+      message.error(err.response?.data?.detail || t("common.operationFailed"));
     }
   };
 
@@ -140,7 +140,7 @@ export default function OrderDetail() {
       load();
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || "操作失败");
+      message.error(err.response?.data?.detail || t("common.operationFailed"));
     }
   };
 
@@ -172,7 +172,7 @@ export default function OrderDetail() {
       load();
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || "操作失败");
+      message.error(err.response?.data?.detail || t("common.operationFailed"));
     }
   };
 
@@ -184,7 +184,7 @@ export default function OrderDetail() {
       load();
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || "操作失败");
+      message.error(err.response?.data?.detail || t("common.operationFailed"));
     }
   };
 
@@ -210,7 +210,7 @@ export default function OrderDetail() {
       load();
     } catch (e) {
       const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || "操作失败");
+      message.error(err.response?.data?.detail || t("common.operationFailed"));
     }
   };
 
@@ -245,7 +245,7 @@ export default function OrderDetail() {
   };
 
   if (loading) return <div className="text-center py-20"><Spin /></div>;
-  if (!order) return <div className="text-center py-20">订单不存在</div>;
+  if (!order) return <div className="text-center py-20">{t("od.notFound")}</div>;
 
   const actions = user ? nextActions(order.status, user.role) : [];
 
@@ -254,24 +254,24 @@ export default function OrderDetail() {
       <Button type="link" onClick={() => navigate(-1)}>
         {t("common.back")}
       </Button>
-      <Card title={`订单 ${order.order_no}`} className="mt-2">
+      <Card title={`${t("od.orderNo")} ${order.order_no}`} className="mt-2">
         <Descriptions column={2}>
-          <Descriptions.Item label="状态">
+          <Descriptions.Item label={t("od.status")}>
             <Tag color={orderStatusMeta[order.status].color}>
               {orderStatusMeta[order.status].label}
             </Tag>
           </Descriptions.Item>
           {escrow && escrow.escrow_status !== "none" && (
-            <Descriptions.Item label="担保/资金">
+            <Descriptions.Item label={t("od.escrow")}>
               <Tag color={escrowMeta[escrow.escrow_status].color}>
                 {escrowMeta[escrow.escrow_status].label}
               </Tag>
             </Descriptions.Item>
           )}
-          <Descriptions.Item label="金额">¥{money(order.total_amount)}</Descriptions.Item>
+          <Descriptions.Item label={t("od.amount")}>¥{money(order.total_amount)}</Descriptions.Item>
           {Number(order.discount_amount) > 0 && (
-            <Descriptions.Item label="优惠">
-              <Tag color="green">已省 ¥{money(order.discount_amount)}</Tag>
+            <Descriptions.Item label={t("od.discount")}>
+              <Tag color="green">{t("od.saved").replace("{x}", money(order.discount_amount))}</Tag>
             </Descriptions.Item>
           )}
           <Descriptions.Item label={t("od.deliveryType")}>
@@ -296,8 +296,8 @@ export default function OrderDetail() {
               {new Date(order.picked_up_at).toLocaleString()}
             </Descriptions.Item>
           )}
-          <Descriptions.Item label="收货地址">{order.address || "-"}</Descriptions.Item>
-          <Descriptions.Item label="下单时间">
+          <Descriptions.Item label={t("od.address")}>{order.address || "-"}</Descriptions.Item>
+          <Descriptions.Item label={t("od.createdAt")}>
             {new Date(order.created_at).toLocaleString()}
           </Descriptions.Item>
         </Descriptions>

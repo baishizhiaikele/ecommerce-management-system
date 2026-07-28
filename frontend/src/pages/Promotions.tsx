@@ -32,7 +32,7 @@ function Countdown({ endAt }: { endAt?: string | null }) {
       const h = Math.floor((diff % 8.64e7) / 3.6e6);
       const m = Math.floor((diff % 3.6e6) / 6e4);
       const s = Math.floor((diff % 6e4) / 1000);
-      setLeft(`${d > 0 ? d + "天 " : ""}${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`);
+      setLeft(`${d > 0 ? d + translate("promo.dayUnit") + " " : ""}${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`);
     };
     tick();
     const t = setInterval(tick, 1000);

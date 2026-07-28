@@ -37,7 +37,7 @@ export default function AdminProducts() {
   };
   const reject = async (id: string) => {
     try {
-      await setProductStatus(id, "rejected", "不符合平台规范");
+      await setProductStatus(id, "rejected", t("adm.rejectDefault"));
       message.success(t("admin.rejected"));
       load();
     } catch (e) {

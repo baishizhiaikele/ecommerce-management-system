@@ -85,8 +85,8 @@ export default function Support() {
   const onCreate = async () => {
     if (!newMsg.trim()) return;
     try {
-      await createTicket({ message: newMsg, subject: "客服咨询" });
-      message.success("工单已提交");
+      await createTicket({ message: newMsg, subject: t("support.defaultSubject") });
+      message.success(t("support.submitted"));
       setNewOpen(false);
       setNewMsg("");
       load();
@@ -122,21 +122,23 @@ export default function Support() {
         <List
           className="border border-slate-100 rounded-2xl overflow-hidden"
           dataSource={tickets}
-          renderItem={(t) => (
+          renderItem={(tk) => (
             <List.Item
               className="px-4 cursor-pointer hover:bg-slate-50"
-              onClick={() => openTicket(t.id)}
+              onClick={() => openTicket(tk.id)}
             >
               <List.Item.Meta
                 title={
                   <span className="flex items-center gap-2">
-                    {t.subject || "咨询工单"}
-                    {t.product_name && <Tag color="cyan">{t.product_name}</Tag>}
-                    <Tag color={STATUS[t.status].color}>{STATUS[t.status].label}</Tag>
+                    {tk.subject || t("support.defaultSubject")}
+                    {tk.product_name && <Tag color="cyan">{tk.product_name}</Tag>}
+                    <Tag color={STATUS[tk.status].color}>{STATUS[tk.status].label}</Tag>
                   </span>
                 }
                 description={
-                  isMerchant ? `来自：${t.user_name}` : `最近：${t.messages[t.messages.length - 1]?.content || ""}`
+                  isMerchant
+                    ? `${t("support.from")}${tk.user_name}`
+                    : `${t("support.recent")}${tk.messages[tk.messages.length - 1]?.content || ""}`
                 }
               />
             </List.Item>
