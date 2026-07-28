@@ -87,6 +87,10 @@ export interface OrderOut {
   total_amount: Decimal;
   discount_amount: Decimal;
   address?: string | null;
+  delivery_type?: "express" | "pickup";
+  pickup_store?: string | null;
+  pickup_code?: string | null;
+  picked_up_at?: string | null;
   items: OrderItemOut[];
   created_at: string;
   paid_at?: string | null;
@@ -400,14 +404,26 @@ export const removeCartItem = (itemId: string) =>
 // ---------- 订单 ----------
 export const checkout = (
   address: string,
-  opts?: { coupon_id?: string; use_points?: boolean }
+  opts?: {
+    coupon_id?: string;
+    use_points?: boolean;
+    delivery_type?: "express" | "pickup";
+    pickup_store?: string;
+  }
 ) =>
   api
     .post<OrderOut>("/orders/checkout", {
       address,
       coupon_id: opts?.coupon_id || undefined,
       use_points: opts?.use_points || false,
+      delivery_type: opts?.delivery_type || "express",
+      pickup_store: opts?.pickup_store || undefined,
     })
+    .then((r) => r.data);
+
+export const verifyPickup = (orderId: string, pickup_code: string) =>
+  api
+    .post<OrderOut>(`/orders/${orderId}/pickup-verify`, { pickup_code })
     .then((r) => r.data);
 
 export const requestRefund = (orderId: string, reason: string, image_urls?: string[]) =>

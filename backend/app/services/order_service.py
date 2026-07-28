@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from uuid import uuid4
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -41,6 +42,8 @@ async def checkout(
     address: str,
     coupon_id: str | None = None,
     use_points: bool = False,
+    delivery_type: str = "express",
+    pickup_store: str | None = None,
 ) -> Order:
     cart_rows = list(
         await db.scalars(select(CartItem).where(CartItem.user_id == buyer.id))
@@ -49,11 +52,15 @@ async def checkout(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="购物车为空")
 
     order_no = await _next_order_no(db)
+    if delivery_type == "pickup" and not pickup_store:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="到店自提需选择门店")
     order = Order(
         order_no=order_no,
         buyer_id=buyer.id,
         status=OrderStatus.PENDING_PAYMENT,
         address=address,
+        delivery_type=delivery_type,
+        pickup_store=pickup_store,
     )
     db.add(order)
     await db.flush()
@@ -150,6 +157,9 @@ async def checkout(
     # 会员包邮权益（黄金 / 钻石等级免运费）
     if tier["free_shipping"]:
         freight = 0.0
+    # P3-D 到店自提：无需快递，免运费
+    if delivery_type == "pickup":
+        freight = 0.0
 
     order.freight = freight
     order.total_amount = round(max(subtotal - discount, 0.0) + freight, 2)
@@ -222,8 +232,21 @@ async def transition_status(
     order.status = target
     if target == OrderStatus.PAID:
         order.paid_at = now
+        # P3-D 到店自提：支付成功即生成核销自提码
+        if order.delivery_type == "pickup" and not order.pickup_code:
+            order.pickup_code = uuid4().hex[:8].upper()
     elif target == OrderStatus.SHIPPED:
         order.shipped_at = now
+        # P3-D 自动写入首条物流轨迹（自提为备货通知，快递为揽收事件）
+        trace = json.loads(order.logistics or "[]")
+        if order.delivery_type == "pickup":
+            desc = f"商品已备货，请携自提码到「{order.pickup_store or '门店'}」自提"
+        else:
+            desc = f"包裹已由商家发出{('，运单号 ' + order.tracking_no) if order.tracking_no else ''}"
+        trace.append(
+            {"time": now.isoformat(), "location": order.pickup_store or "商家仓库", "description": desc}
+        )
+        order.logistics = json.dumps(trace, ensure_ascii=False)
     elif target == OrderStatus.COMPLETED and prev != OrderStatus.EXCHANGE:
         # 换货完成后不重复累加销量（首次完成时已计）
         order.completed_at = now
@@ -281,4 +304,37 @@ async def transition_status(
         await bus.publish("order.return_received", order_id=order.id, buyer_id=order.buyer_id)
     elif target == OrderStatus.DISPUTE:
         await bus.publish("order.dispute_opened", order_id=order.id, buyer_id=order.buyer_id)
+    return order
+
+
+async def verify_pickup(
+    db: AsyncSession, *, order: Order, pickup_code: str, actor_id: str
+) -> Order:
+    """P3-D 商家核销自提码：备货中(shipped)订单凭码完成履约。"""
+    if order.delivery_type != "pickup":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="非自提订单无需核销")
+    if order.status not in (OrderStatus.PAID, OrderStatus.SHIPPED):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="当前订单状态不可核销")
+    if not order.pickup_code or pickup_code.strip().upper() != order.pickup_code:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="自提码不正确")
+    now = datetime.now(timezone.utc)
+    # 已支付但未备货的订单先流转到 shipped（备货完成）再核销
+    if order.status == OrderStatus.PAID:
+        order = await transition_status(
+            db, order=order, target=OrderStatus.SHIPPED, actor_id=actor_id, role="merchant"
+        )
+    order.picked_up_at = now
+    trace = json.loads(order.logistics or "[]")
+    trace.append(
+        {
+            "time": now.isoformat(),
+            "location": order.pickup_store or "门店",
+            "description": "买家到店出示自提码，商家核销完成",
+        }
+    )
+    order.logistics = json.dumps(trace, ensure_ascii=False)
+    # 核销即买家当面确认收货：以买家身份完成订单（触发托管释放/积分）
+    order = await transition_status(
+        db, order=order, target=OrderStatus.COMPLETED, actor_id=order.buyer_id, role="buyer"
+    )
     return order

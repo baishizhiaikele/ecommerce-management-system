@@ -51,6 +51,11 @@ class Order(Base):
     exchange_at = Column(DateTime(timezone=True), nullable=True)
     tracking_no = Column(String(60))
     logistics = Column(Text)  # JSON 字符串，物流轨迹数组
+    # P3-D 履约方式：express=快递配送（默认）；pickup=到店自提
+    delivery_type = Column(String(20), nullable=False, default="express", server_default="express")
+    pickup_store = Column(String(200))  # 自提门店名称/地址
+    pickup_code = Column(String(12), index=True)  # 支付成功后生成的自提核销码
+    picked_up_at = Column(DateTime(timezone=True), nullable=True)  # 核销时间
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     paid_at = Column(DateTime(timezone=True), nullable=True)
     shipped_at = Column(DateTime(timezone=True), nullable=True)

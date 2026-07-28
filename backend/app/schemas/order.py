@@ -11,6 +11,8 @@ class CheckoutRequest(BaseModel):
     address: str = Field(min_length=5, max_length=500)
     coupon_id: Optional[str] = None
     use_points: bool = False
+    delivery_type: str = Field(default="express", pattern="^(express|pickup)$")
+    pickup_store: Optional[str] = Field(default=None, max_length=200)
 
 
 class OrderItemOut(BaseModel):
@@ -34,6 +36,10 @@ class OrderOut(BaseModel):
     return_carrier: Optional[str] = None
     dispute_reason: Optional[str] = None
     address: Optional[str]
+    delivery_type: str = "express"
+    pickup_store: Optional[str] = None
+    pickup_code: Optional[str] = None
+    picked_up_at: Optional[datetime] = None
     items: list[OrderItemOut]
     created_at: datetime
     paid_at: Optional[datetime]
@@ -68,6 +74,10 @@ class ExchangeRequest(BaseModel):
 
 class DisputeRequest(BaseModel):
     reason: str = Field(min_length=1, max_length=500)
+
+
+class PickupVerifyRequest(BaseModel):
+    pickup_code: str = Field(min_length=4, max_length=12)
 
 
 class LogisticsEvent(BaseModel):

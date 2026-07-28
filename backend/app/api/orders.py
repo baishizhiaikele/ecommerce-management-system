@@ -20,6 +20,7 @@ from app.schemas.order import (
     OrderItemOut,
     OrderOut,
     OrderStatusUpdate,
+    PickupVerifyRequest,
     RefundRequest,
     RefundReview,
     ReturnShipRequest,
@@ -54,6 +55,10 @@ def _serialize(order: Order, items: list, snapshot: dict) -> OrderOut:
         return_carrier=order.return_carrier,
         dispute_reason=order.dispute_reason,
         address=order.address,
+        delivery_type=order.delivery_type or "express",
+        pickup_store=order.pickup_store,
+        pickup_code=order.pickup_code,
+        picked_up_at=order.picked_up_at,
         items=item_outs,
         created_at=order.created_at,
         paid_at=order.paid_at,
@@ -81,6 +86,8 @@ async def checkout(
         address=data.address,
         coupon_id=data.coupon_id,
         use_points=data.use_points,
+        delivery_type=data.delivery_type,
+        pickup_store=data.pickup_store,
     )
     return await _load_order_view(db, order)
 
@@ -306,6 +313,27 @@ async def review_refund(
         db, order=order, target=target, actor_id=user.id, role=user.role.value
     )
     await record(db, user.id, f"order.refund_review.{target.value}", "order", order.id, data.note)
+    await db.commit()
+    return await _load_order_view(db, order)
+
+
+# ---------------- 到店自提（P3-D） ----------------
+
+@router.post("/{order_id}/pickup-verify", response_model=OrderOut)
+async def verify_pickup(
+    order_id: str,
+    data: PickupVerifyRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(Role.MERCHANT, Role.ADMIN)),
+) -> OrderOut:
+    """商家扫码/输入自提码核销：备货完成 -> 当面交付 -> 订单完成。"""
+    order = await order_service.get_order(db, order_id, user_id=user.id, role=user.role.value)
+    if user.role == Role.MERCHANT and not await _merchant_owns_order(db, order, user.id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权核销该订单")
+    order = await order_service.verify_pickup(
+        db, order=order, pickup_code=data.pickup_code, actor_id=user.id
+    )
+    await record(db, user.id, "order.pickup_verified", "order", order.id, order.pickup_code or "")
     await db.commit()
     return await _load_order_view(db, order)
 

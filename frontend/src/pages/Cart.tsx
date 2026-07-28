@@ -41,6 +41,8 @@ export default function Cart() {
   const [coupons, setCoupons] = useState<UserCouponOut[]>([]);
   const [couponId, setCouponId] = useState<string>();
   const [usePoints, setUsePoints] = useState(false);
+  const [deliveryType, setDeliveryType] = useState<"express" | "pickup">("express");
+  const [pickupStore, setPickupStore] = useState("");
 
   const load = async () => {
     setLoading(true);
@@ -81,11 +83,17 @@ export default function Cart() {
       message.warning("请填写收货地址");
       return;
     }
+    if (deliveryType === "pickup" && !pickupStore.trim()) {
+      message.warning(t("cart.pickupStoreRequired"));
+      return;
+    }
     setSubmitting(true);
     try {
       const order = await checkout(address.trim(), {
         coupon_id: couponId,
         use_points: usePoints,
+        delivery_type: deliveryType,
+        pickup_store: deliveryType === "pickup" ? pickupStore.trim() : undefined,
       });
       clear();
       message.success(t("cart.orderSuccess"));
@@ -198,9 +206,34 @@ export default function Cart() {
               {t("cart.saved").replace("{x}", money(cDisc + pDisc))}
             </div>
           )}
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <span className="text-slate-600 whitespace-nowrap">{t("cart.deliveryType")}</span>
+            <Select
+              style={{ width: 200 }}
+              value={deliveryType}
+              onChange={(v) => setDeliveryType(v)}
+              options={[
+                { value: "express", label: t("cart.deliveryExpress") },
+                { value: "pickup", label: t("cart.deliveryPickup") },
+              ]}
+            />
+          </div>
+          {deliveryType === "pickup" && (
+            <Input
+              className="mt-3"
+              placeholder={t("cart.pickupStorePlaceholder")}
+              value={pickupStore}
+              onChange={(e) => setPickupStore(e.target.value)}
+              maxLength={200}
+            />
+          )}
           <Input.TextArea
             rows={2}
-            placeholder={t("cart.addressPlaceholder")}
+            placeholder={
+              deliveryType === "pickup"
+                ? t("cart.contactPlaceholder")
+                : t("cart.addressPlaceholder")
+            }
             value={address}
             onChange={(e) => setAddress(e.target.value)}
             maxLength={500}

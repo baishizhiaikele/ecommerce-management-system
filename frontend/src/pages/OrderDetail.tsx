@@ -27,6 +27,7 @@ import {
   reviewDispute,
   getLogistics,
   addLogistics,
+  verifyPickup,
   OrderOut,
   OrderStatus,
   LogisticsEvent,
@@ -62,6 +63,7 @@ export default function OrderDetail() {
   const [returnShipNote, setReturnShipNote] = useState("");
   const [disputeOpen, setDisputeOpen] = useState(false);
   const [disputeReason, setDisputeReason] = useState("");
+  const [pickupInput, setPickupInput] = useState("");
 
   const load = async () => {
     if (!id) return;
@@ -272,6 +274,28 @@ export default function OrderDetail() {
               <Tag color="green">已省 ¥{money(order.discount_amount)}</Tag>
             </Descriptions.Item>
           )}
+          <Descriptions.Item label={t("od.deliveryType")}>
+            {order.delivery_type === "pickup" ? (
+              <Tag color="purple">{t("cart.deliveryPickup")}</Tag>
+            ) : (
+              <Tag>{t("cart.deliveryExpress")}</Tag>
+            )}
+          </Descriptions.Item>
+          {order.delivery_type === "pickup" && (
+            <Descriptions.Item label={t("od.pickupStore")}>
+              {order.pickup_store || "-"}
+            </Descriptions.Item>
+          )}
+          {order.delivery_type === "pickup" && user?.role === "buyer" && order.pickup_code && (
+            <Descriptions.Item label={t("od.pickupCode")}>
+              <Tag color="geekblue" className="text-base font-mono">{order.pickup_code}</Tag>
+            </Descriptions.Item>
+          )}
+          {order.picked_up_at && (
+            <Descriptions.Item label={t("od.pickedUpAt")}>
+              {new Date(order.picked_up_at).toLocaleString()}
+            </Descriptions.Item>
+          )}
           <Descriptions.Item label="收货地址">{order.address || "-"}</Descriptions.Item>
           <Descriptions.Item label="下单时间">
             {new Date(order.created_at).toLocaleString()}
@@ -367,6 +391,36 @@ export default function OrderDetail() {
           {user?.role === "merchant" &&
             !["pending_payment", "completed"].includes(order.status) && (
               <Button onClick={() => setLogOpen(true)}>{t("od.addLogistics")}</Button>
+            )}
+          {["merchant", "admin"].includes(user?.role || "") &&
+            order.delivery_type === "pickup" &&
+            ["paid", "shipped"].includes(order.status) && (
+              <div className="flex gap-2 items-center">
+                <Input
+                  style={{ width: 160 }}
+                  placeholder={t("od.pickupCodePlaceholder")}
+                  value={pickupInput}
+                  onChange={(e) => setPickupInput(e.target.value)}
+                  maxLength={12}
+                />
+                <Button
+                  type="primary"
+                  disabled={!pickupInput.trim()}
+                  onClick={async () => {
+                    try {
+                      await verifyPickup(order.id, pickupInput.trim());
+                      message.success(t("od.pickupVerified"));
+                      setPickupInput("");
+                      load();
+                    } catch (e) {
+                      const err = e as AxiosError<any, any>;
+                      message.error(err.response?.data?.detail || t("od.pickupVerifyFail"));
+                    }
+                  }}
+                >
+                  {t("od.verifyPickup")}
+                </Button>
+              </div>
             )}
         </div>
       </Card>
