@@ -552,6 +552,25 @@ export const toggleNoteLike = (id: string) =>
     .then((r) => r.data);
 export const deleteNote = (id: string) => api.delete(`/notes/${id}`).then(() => undefined);
 
+// ---------- PLUS 付费会员（P3-H） ----------
+export interface PlusPlan {
+  key: string;
+  name: string;
+  price: number;
+  days: number;
+  gift_points: number;
+}
+export interface PlusStatus {
+  active: boolean;
+  plan?: string | null;
+  expire_at?: string | null;
+  plans: PlusPlan[];
+  benefits: string[];
+}
+export const getPlusStatus = () => api.get<PlusStatus>("/plus/status").then((r) => r.data);
+export const subscribePlus = (plan: string) =>
+  api.post<PlusStatus>("/plus/subscribe", { plan }).then((r) => r.data);
+
 // ---------- 管理员 ----------
 export const adminListUsers = () =>
   api.get<UserOut[]>("/admin/users").then((r) => r.data);

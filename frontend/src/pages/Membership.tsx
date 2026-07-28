@@ -10,9 +10,18 @@ import {
   message,
   Divider,
 } from "antd";
-import { CrownOutlined, GiftOutlined } from "@ant-design/icons";
+import { CrownOutlined, GiftOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import EmptyState from "../components/EmptyState";
-import { getMembership, listTasks, claimTask, MembershipOut, TaskOut } from "../api";
+import {
+  getMembership,
+  listTasks,
+  claimTask,
+  getPlusStatus,
+  subscribePlus,
+  MembershipOut,
+  TaskOut,
+  PlusStatus,
+} from "../api";
 import { useI18n } from "../i18n";
 
 const { Paragraph, Text } = Typography;
@@ -30,19 +39,35 @@ export default function Membership() {
   const [tasks, setTasks] = useState<TaskOut[]>([]);
   const [loading, setLoading] = useState(true);
   const [claiming, setClaiming] = useState<string | null>(null);
+  const [plus, setPlus] = useState<PlusStatus | null>(null);
+  const [subscribing, setSubscribing] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [m, t] = await Promise.all([getMembership(), listTasks()]);
+      const [m, t, p] = await Promise.all([getMembership(), listTasks(), getPlusStatus()]);
       setMember(m);
       setTasks(t);
+      setPlus(p);
     } catch {
       /* 忽略 */
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const onSubscribe = async (plan: string) => {
+    setSubscribing(plan);
+    try {
+      const p = await subscribePlus(plan);
+      setPlus(p);
+      message.success(tr("plus.subscribed"));
+    } catch {
+      message.error(tr("plus.subscribeFail"));
+    } finally {
+      setSubscribing(null);
+    }
+  };
 
   useEffect(() => {
     load();
@@ -101,6 +126,58 @@ export default function Membership() {
           {member.free_shipping && <Tag color="green" className="!text-black/80">{tr("membership.freeShipAll")}</Tag>}
         </div>
       </Card>
+
+      {/* P3-H PLUS 付费会员 */}
+      {plus && (
+        <Card
+          className="rounded-2xl mb-4 soft-card fade-up"
+          title={
+            <span className="flex items-center gap-2">
+              <ThunderboltOutlined style={{ color: "#f59e0b" }} />
+              {tr("plus.title")}
+              {plus.active && <Tag color="gold">{tr("plus.active")}</Tag>}
+            </span>
+          }
+        >
+          {plus.active && (
+            <Paragraph className="!mb-3 text-slate-600">
+              {tr("plus.expireAt").replace(
+                "{d}",
+                plus.expire_at ? new Date(plus.expire_at).toLocaleDateString() : "-"
+              )}
+            </Paragraph>
+          )}
+          <ul className="m-0 pl-5 text-slate-600 mb-4">
+            {plus.benefits.map((b) => (
+              <li key={b}>{b}</li>
+            ))}
+          </ul>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {plus.plans.map((p) => (
+              <div
+                key={p.key}
+                className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4 flex items-center justify-between"
+              >
+                <div>
+                  <div className="font-bold">{p.name}</div>
+                  <div className="text-amber-600 font-bold text-lg">¥{p.price}</div>
+                  <div className="text-xs text-slate-400">
+                    {tr("plus.giftPoints").replace("{n}", String(p.gift_points))}
+                  </div>
+                </div>
+                <Button
+                  type="primary"
+                  loading={subscribing === p.key}
+                  onClick={() => onSubscribe(p.key)}
+                  style={{ background: "#f59e0b", borderColor: "#f59e0b" }}
+                >
+                  {plus.active ? tr("plus.renew") : tr("plus.subscribe")}
+                </Button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <Card className="rounded-2xl mb-4 soft-card fade-up" title={tr("membership.perks")}>
         {member.benefits?.length ? (

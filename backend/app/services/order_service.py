@@ -21,6 +21,7 @@ from app.services.inventory_service import record_cancel_return, record_sale
 from app.services.points_service import POINTS_REDEEM_RATE, add_points
 from app.services.shipping_service import compute_freight
 from app.core.member_levels import get_tier
+from app.services.plus_service import PLUS_EXTRA_DISCOUNT, is_plus_active
 from app.events import bus
 
 
@@ -132,6 +133,10 @@ async def checkout(
     # 会员等级专属折扣（青铜 discount=1.0 不打折，不影响既有订单）
     tier = get_tier(buyer.growth_value or 0)
     discount += round(subtotal * (1 - tier["discount"]), 2)
+    # P3-H PLUS 付费会员：全场额外 95 折（与等级折扣叠加）+ 全场包邮
+    plus_active = await is_plus_active(db, buyer.id)
+    if plus_active:
+        discount += round(subtotal * tier["discount"] * (1 - PLUS_EXTRA_DISCOUNT), 2)
     # 优惠券抵扣
     if coupon_id:
         uc = await find_usable_user_coupon(db, buyer.id, coupon_id)
@@ -154,8 +159,8 @@ async def checkout(
     for mid, msub in merchant_subtotals.items():
         freight += await compute_freight(db, mid, msub)
     freight = round(freight, 2)
-    # 会员包邮权益（黄金 / 钻石等级免运费）
-    if tier["free_shipping"]:
+    # 会员包邮权益（黄金 / 钻石等级免运费）；PLUS 付费会员全场包邮
+    if tier["free_shipping"] or plus_active:
         freight = 0.0
     # P3-D 到店自提：无需快递，免运费
     if delivery_type == "pickup":

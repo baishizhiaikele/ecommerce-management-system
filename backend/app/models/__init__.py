@@ -22,6 +22,7 @@ from app.models.payment import Payment
 from app.models.settlement import Settlement
 from app.models.decoration import ShopDecoration
 from app.models.note import NoteLike, ShoppingNote
+from app.models.paid_membership import PaidMembership
 from app.models.marketing import (
     Bargain,
     BargainCut,
@@ -80,4 +81,5 @@ __all__ = [
     "ShopDecoration",
     "ShoppingNote",
     "NoteLike",
+    "PaidMembership",
 ]
