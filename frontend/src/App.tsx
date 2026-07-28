@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { Spin, message } from "antd";
 import Login from "./pages/Auth/Login";
 import ProtectedRoute from "./components/ProtectedRoute";
+import ErrorBoundary from "./components/ErrorBoundary";
 import MainLayout from "./layouts/MainLayout";
 import MerchantLayout from "./layouts/MerchantLayout";
 import AdminLayout from "./layouts/AdminLayout";
@@ -122,9 +123,10 @@ export default function App() {
       >
         {getLang() === "zh" ? "跳过导航" : "Skip to content"}
       </a>
-      <Suspense fallback={<RouteFallback />}>
-        <Routes>
-          <Route path="/login" element={<Login />} />
+      <ErrorBoundary>
+        <Suspense fallback={<RouteFallback />}>
+          <Routes>
+            <Route path="/login" element={<Login />} />
           <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
             <Route path="/" element={<Market />} />
             <Route path="/products/:id" element={<ProductDetail />} />
@@ -183,6 +185,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
+      </ErrorBoundary>
     </LanguageProvider>
   );
 }

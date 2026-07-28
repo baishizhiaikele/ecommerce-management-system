@@ -4,7 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import { ConfigProvider } from "antd";
 import App from "./App";
 import { theme } from "./theme";
-import { ErrorBoundary } from "./components/ErrorBoundary";
+import ErrorBoundary from "./components/ErrorBoundary";
 import { LanguageProvider } from "./i18n";
 import "./index.css";
 

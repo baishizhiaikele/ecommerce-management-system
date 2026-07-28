@@ -28,6 +28,12 @@ MAX_BYTES = 5 * 1024 * 1024  # 单图上限 5MB
 CACHE_DIR = Path(__file__).resolve().parents[2] / ".cache" / "img"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
+# 图片内容在后端已落盘缓存，且演示图床地址稳定，
+# 让浏览器长期缓存以减少重复请求（缓解页面卡顿）。
+CACHE_HEADERS = {
+    "Cache-Control": "public, max-age=86400, immutable",
+}
+
 
 @router.get("/proxy")
 async def proxy_image(
@@ -47,6 +53,7 @@ async def proxy_image(
         return Response(
             content=cached.read_bytes(),
             media_type=mimetypes.guess_type(u)[0] or "image/jpeg",
+            headers=CACHE_HEADERS,
         )
 
     try:
@@ -66,4 +73,4 @@ async def proxy_image(
 
     ctype = resp.headers.get("content-type") or mimetypes.guess_type(u)[0] or "image/jpeg"
     cached.write_bytes(data)
-    return Response(content=data, media_type=ctype)
+    return Response(content=data, media_type=ctype, headers=CACHE_HEADERS)

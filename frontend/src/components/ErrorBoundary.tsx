@@ -1,45 +1,50 @@
-import { Component, type ReactNode } from "react";
-import { getLang } from "../i18n";
+import { Component, ReactNode } from "react";
 
 interface Props {
   children: ReactNode;
-}
-interface State {
-  hasError: boolean;
-  message?: string;
+  fallback?: (error: Error, reset: () => void) => ReactNode;
 }
 
-// S6：捕获渲染期异常，避免单点错误导致整页白屏
-export class ErrorBoundary extends Component<Props, State> {
-  state: State = { hasError: false };
+interface State {
+  error: Error | null;
+}
+
+/**
+ * 全局错误边界：捕获渲染期错误与懒加载 chunk 加载失败。
+ * 没有它时，任意一个懒加载页面（路由组件）的 chunk 加载失败会抛错，
+ * Suspense 只处理「加载中」、不处理「加载失败」，导致整页卡在无限 Spinner 或白屏。
+ */
+export default class ErrorBoundary extends Component<Props, State> {
+  state: State = { error: null };
 
   static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, message: error.message };
+    return { error };
   }
 
   componentDidCatch(error: Error, info: unknown) {
-    console.error("App crashed:", error, info);
+    console.error("ErrorBoundary caught:", error, info);
   }
 
+  reset = () => this.setState({ error: null });
+
   render() {
-    if (this.state.hasError) {
-      const zh = getLang() === "zh";
+    const { error } = this.state;
+    if (error) {
+      if (this.props.fallback) return this.props.fallback(error, this.reset);
       return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
-          <div className="max-w-md w-full bg-white rounded-2xl shadow-sm border border-slate-200 p-8 text-center">
-            <h1 className="text-xl font-bold text-slate-800 mb-2">
-              {zh ? "页面出现了一点问题" : "Something went wrong"}
-            </h1>
-            <p className="text-slate-500 text-sm mb-6">
-              {this.state.message || (zh ? "请刷新页面后重试" : "Please refresh and try again")}
-            </p>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-4 py-2 rounded-lg bg-[#4F46E5] text-white text-sm font-medium"
-            >
-              {zh ? "刷新页面" : "Refresh"}
-            </button>
+        <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3 p-6 text-center">
+          <div className="text-slate-700 text-base font-medium">
+            页面加载出错
           </div>
+          <div className="text-slate-400 text-sm max-w-md break-words">
+            {error.message || "发生未知错误"}
+          </div>
+          <button
+            onClick={this.reset}
+            className="mt-2 rounded-md bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-700"
+          >
+            重试
+          </button>
         </div>
       );
     }
