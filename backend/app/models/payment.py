@@ -27,6 +27,9 @@ class Payment(Base):
     # created | paid | refunded | failed
     status = Column(String(20), nullable=False, default="created")
     raw_data = Column(Text, nullable=True)
+    # P3-F 担保交易：买家付款后资金进入托管(held)，确认收货后释放(released)，退款逆向(reversed)
+    escrow_status = Column(String(20), nullable=False, default="none", index=True)
+    released_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     paid_at = Column(DateTime(timezone=True), nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

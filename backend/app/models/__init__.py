@@ -19,6 +19,7 @@ from app.models.inventory import StockChangeType, StockLog
 from app.models.follow import FollowShop
 from app.models.support import SupportTicket, SupportMessage, TicketStatus, SenderRole
 from app.models.payment import Payment
+from app.models.settlement import Settlement
 
 __all__ = [
     "Role",
@@ -59,4 +60,5 @@ __all__ = [
     "TicketStatus",
     "SenderRole",
     "Payment",
+    "Settlement",
 ]

@@ -58,6 +58,7 @@ class Order(Base):
 
     buyer = relationship("User", back_populates="orders")
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
+    settlement = relationship("Settlement", back_populates="order", uselist=False, cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("ix_order_buyer", "buyer_id"),

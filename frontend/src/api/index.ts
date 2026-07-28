@@ -932,8 +932,18 @@ export const createPayment = (orderId: string) =>
   api.post<PaymentOut>(`/payments/orders/${orderId}/pay`).then((r) => r.data);
 export const confirmPayment = (orderId: string) =>
   api.post<{ status: string }>(`/payments/orders/${orderId}/confirm`).then((r) => r.data);
+export interface PaymentStatus {
+  payment_id: string | null;
+  gateway: string | null;
+  amount: number;
+  status: string;
+  escrow_status: "none" | "held" | "released" | "reversed";
+  transaction_id: string | null;
+  released_at: string | null;
+}
+
 export const getPaymentStatus = (orderId: string) =>
-  api.get<PaymentOut>(`/payments/orders/${orderId}/status`).then((r) => r.data);
+  api.get<PaymentStatus>(`/payments/orders/${orderId}/status`).then((r) => r.data);
 
 // ---------- 商家深度分析（含 RFM / 复购率）----------
 export interface RFMSegment {

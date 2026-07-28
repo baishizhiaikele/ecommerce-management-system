@@ -231,6 +231,10 @@ async def transition_status(
             product = await db.get(Product, it.product_id)
             if product:
                 product.sales_count = (product.sales_count or 0) + it.quantity
+        # 担保交易：买家确认收货，释放托管资金给商家
+        from app.services.payment_service import release_escrow
+
+        await release_escrow(db, order)
     elif target == OrderStatus.CANCELLED:
         for it in order.items:
             product = await db.get(Product, it.product_id)
@@ -258,6 +262,10 @@ async def transition_status(
                 if product:
                     await record_cancel_return(db, product, it.quantity)
                     product.sales_count = max((product.sales_count or 0) - it.quantity, 0)
+        # 担保交易：退款逆向托管资金
+        from app.services.payment_service import reverse_escrow
+
+        await reverse_escrow(db, order)
     # DISPUTE: dispute_reason 由 API 设置，无需在此处理
 
     await record(db, actor_id, f"order.{target.value}", "order", order.id, order.order_no)

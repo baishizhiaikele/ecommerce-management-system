@@ -34,6 +34,13 @@ export const orderStatusMeta = i18nMeta({
   dispute: { color: "magenta", key: "order.status.dispute" },
 });
 
+export const escrowMeta = i18nMeta({
+  none: { color: "default", key: "escrow.none" },
+  held: { color: "gold", key: "escrow.held" },
+  released: { color: "green", key: "escrow.released" },
+  reversed: { color: "red", key: "escrow.reversed" },
+});
+
 export const productStatusMeta = i18nMeta({
   draft: { color: "default", key: "product.status.draft" },
   pending: { color: "gold", key: "product.status.pending" },

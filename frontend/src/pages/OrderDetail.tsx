@@ -31,7 +31,8 @@ import {
   OrderStatus,
   LogisticsEvent,
 } from "../api";
-import { money, orderStatusMeta, nextActions, actionLabel } from "../utils/format";
+import { money, orderStatusMeta, nextActions, actionLabel, escrowMeta } from "../utils/format";
+import { getPaymentStatus, PaymentStatus } from "../api";
 import { useAuth } from "../store/auth";
 import { useI18n } from "../i18n";
 
@@ -41,6 +42,7 @@ export default function OrderDetail() {
   const user = useAuth((s) => s.user);
   const { t } = useI18n();
   const [order, setOrder] = useState<OrderOut | null>(null);
+  const [escrow, setEscrow] = useState<PaymentStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
   const [reviewFor, setReviewFor] = useState<{ product_id: string; name: string } | null>(null);
@@ -66,6 +68,7 @@ export default function OrderDetail() {
     setLoading(true);
     try {
       setOrder(await getOrder(id));
+      setEscrow(await getPaymentStatus(id));
     } catch {
       /* 忽略 */
     } finally {
@@ -256,6 +259,13 @@ export default function OrderDetail() {
               {orderStatusMeta[order.status].label}
             </Tag>
           </Descriptions.Item>
+          {escrow && escrow.escrow_status !== "none" && (
+            <Descriptions.Item label="担保/资金">
+              <Tag color={escrowMeta[escrow.escrow_status].color}>
+                {escrowMeta[escrow.escrow_status].label}
+              </Tag>
+            </Descriptions.Item>
+          )}
           <Descriptions.Item label="金额">¥{money(order.total_amount)}</Descriptions.Item>
           {Number(order.discount_amount) > 0 && (
             <Descriptions.Item label="优惠">

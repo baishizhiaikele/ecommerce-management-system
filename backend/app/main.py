@@ -89,6 +89,8 @@ async def _ensure_demo_columns() -> None:
         "ALTER TABLE orders ADD COLUMN return_shipped_at TIMESTAMP",
         "ALTER TABLE orders ADD COLUMN return_received_at TIMESTAMP",
         "ALTER TABLE orders ADD COLUMN exchange_at TIMESTAMP",
+        "ALTER TABLE payments ADD COLUMN escrow_status VARCHAR(20) NOT NULL DEFAULT 'none'",
+        "ALTER TABLE payments ADD COLUMN released_at TIMESTAMP",
     ]
     async with engine.begin() as conn:
         for stmt in statements:

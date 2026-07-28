@@ -1,15 +1,14 @@
-"""支付服务（P0 真实支付接入）。
+"""支付服务（P3-F：支付抽象化 + 担保交易）。
 
-设计要点：
-- 网关抽象：默认 sandbox 自测网关，生产切换为 alipay / wechat 时仅替换
-  `_verify_webhook` 与 `_charge` 实现，对外接口保持不变。
-- 幂等：webhook 重复回调时，已 PAID 的支付直接返回 already_paid，不重复流转订单。
-- 退款原路：退款时标记对应支付流水为 REFUNDED（资金沿原网关原路退回）。
+关键不变量：
+- 下单(create_charge) 与 退款(refund) 经 `PaymentProvider` 抽象，网关差异被收敛。
+- 支付成功(paid) 时资金进入「托管(held)」，不立即结算给商家。
+- 买家确认收货(COMPLETED) 触发 `release_escrow` 释放资金(settled)；退款触发 `reverse_escrow`(reversed)。
+- 回调幂等：重复回调直接返回已处理状态。
 """
 from __future__ import annotations
 
-import hashlib
-import hmac
+import asyncio
 import json
 from datetime import datetime, timezone
 
@@ -17,37 +16,28 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.models.order import Order, OrderStatus
+from app.models.order import Order, OrderItem, OrderStatus
 from app.models.payment import Payment
-from app.services.order_service import transition_status
+from app.models.product import Product
+from app.models.user import Role
+from app.models.settlement import Settlement
+from app.services import order_service
+from app.services.payment_providers import get_provider, get_order_payment
 
 
-def _sign(canonical: str) -> str:
-    return hmac.new(
-        settings.PAYMENT_SECRET.encode("utf-8"),
-        canonical.encode("utf-8"),
-        hashlib.sha256,
-    ).hexdigest()
-
-
-def _now() -> datetime:
+def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
 async def get_or_create_payment(db: AsyncSession, order: Order) -> Payment:
-    """获取或创建该订单的支付流水（幂等：已存在则复用）。"""
     existing = (
-        await db.scalars(
-            select(Payment)
-            .where(Payment.order_id == order.id)
-            .order_by(Payment.created_at.desc())
-        )
+        await db.scalars(select(Payment).where(Payment.order_id == order.id))
     ).first()
     if existing:
         return existing
     payment = Payment(
         order_id=order.id,
-        gateway=settings.PAYMENT_GATEWAY,
+        gateway=settings.PAYMENT_GATEWAY or "sandbox",
         amount=order.total_amount,
         currency="CNY",
         status="created",
@@ -58,95 +48,163 @@ async def get_or_create_payment(db: AsyncSession, order: Order) -> Payment:
 
 
 async def create_charge(db: AsyncSession, order: Order) -> dict:
-    """买家发起支付：生成支付单并返回跳转地址 / 二维码参数（sandbox 自测）。"""
     payment = await get_or_create_payment(db, order)
+    if payment.status != "created":
+        provider = get_provider(payment.gateway)
+        return provider.build_charge(payment, order)
+    provider = get_provider(payment.gateway)
+    charge = provider.build_charge(payment, order)
+    payment.raw_data = json.dumps(charge, ensure_ascii=False)
     await db.commit()
-    # sandbox 网关：直接给出可用于模拟回调的签名参数，便于前端/测试触发
-    canonical = f"{payment.order_id}.{payment.id}.{payment.amount}"
-    sign = _sign(canonical)
+    await db.refresh(payment)
+    return charge
+
+
+async def confirm_payment(db: AsyncSession, payment: Payment, order: Order) -> Payment:
+    provider = get_provider(payment.gateway)
+    ts = int(_utcnow().timestamp())
+    payload = {
+        "order_id": order.id,
+        "transaction_id": f"TXN-{payment.id[:8]}",
+        "amount": float(payment.amount),
+        "timestamp": ts,
+        "signature": provider._sign(f"{order.id}.TXN-{payment.id[:8]}.{float(payment.amount)}.{ts}"),
+    }
+    return await handle_webhook(db, payment.gateway, payload)
+
+
+async def handle_webhook(db: AsyncSession, gateway: str, payload: dict) -> Payment:
+    provider = get_provider(gateway)
+    order_id = payload.get("order_id")
+    payment = await get_order_payment(db, order_id)
+    if not payment:
+        raise ValueError("订单不存在")
+
+    # 验真：非法签名直接拒绝
+    if not provider.verify_webhook(payload, payment):
+        payment.status = "failed"
+        await db.commit()
+        await db.refresh(payment)
+        raise ValueError("回调签名校验失败")
+
+    if payment.status == "paid":
+        # 幂等：重复回调
+        existing_order = await db.get(Order, order_id)
+        info = await get_payment_status(db, existing_order)
+        info["status"] = "already_paid"
+        return info
+
+    payment.status = "paid"
+    payment.transaction_id = payload.get("transaction_id")
+    payment.paid_at = _utcnow()
+    payment.escrow_status = "held"  # 担保托管：暂不结算给商家
+    payment.raw_data = json.dumps(payload, ensure_ascii=False)
+
+    order = await db.get(Order, order_id)
+    if order and order.status == OrderStatus.PENDING_PAYMENT:
+        await order_service.transition_status(
+            db,
+            order=order,
+            target=OrderStatus.PAID,
+            actor_id=order.buyer_id,
+            role=Role.BUYER,
+        )
+    await db.commit()
+    await db.refresh(payment)
+    return await get_payment_status(db, order)
+
+
+async def get_payment_status(db: AsyncSession, order: Order) -> dict:
+    payment = await get_order_payment(db, order.id)
+    if not payment:
+        return {
+            "status": "none",
+            "escrow_status": "none",
+            "gateway": None,
+            "payment_id": None,
+            "transaction_id": None,
+            "released_at": None,
+        }
     return {
         "payment_id": payment.id,
         "gateway": payment.gateway,
         "amount": float(payment.amount),
-        "currency": payment.currency,
         "status": payment.status,
-        "pay_url": f"/pay/mock?payment_id={payment.id}&sig={sign}",
+        "escrow_status": payment.escrow_status,
+        "transaction_id": payment.transaction_id,
+        "released_at": payment.released_at.isoformat() if payment.released_at else None,
     }
 
 
-async def handle_webhook(db: AsyncSession, gateway: str, payload: dict) -> dict:
-    """处理网关异步回调。
-
-    返回 dict 含 status：paid / already_paid / ignored，或抛 ValueError（验签失败）。
-    """
-    if gateway != settings.PAYMENT_GATEWAY:
-        raise ValueError("unknown gateway")
-
-    order_id = payload.get("order_id")
-    transaction_id = payload.get("transaction_id")
-    amount = payload.get("amount")
-    timestamp = payload.get("timestamp")
-    signature = payload.get("signature", "")
-
-    canonical = f"{order_id}.{transaction_id}.{amount}.{timestamp}"
-    expected = _sign(canonical)
-    if not hmac.compare_digest(expected, signature):
-        raise ValueError("invalid signature")
-
-    order = await db.get(Order, order_id)
-    if not order:
-        raise ValueError("order not found")
-
+async def refund_payment(db: AsyncSession, order: Order) -> Payment:
     payment = await get_or_create_payment(db, order)
-    if payment.status == "paid":
-        return {"status": "already_paid", "order_id": order.id}
-    # 金额防篡改：回调金额必须与实际应付一致（允许 0.01 误差）
-    if abs(float(payment.amount) - float(amount)) > 0.01:
-        payment.status = "failed"
-        payment.raw_data = json.dumps(payload, ensure_ascii=False)
-        await db.commit()
-        raise ValueError("amount mismatch")
-
-    payment.status = "paid"
-    payment.transaction_id = transaction_id
-    payment.paid_at = _now()
-    payment.raw_data = json.dumps(payload, ensure_ascii=False)
-    await db.flush()
-
-    if order.status == OrderStatus.PENDING_PAYMENT:
-        order = await transition_status(
-            db, order=order, target=OrderStatus.PAID, actor_id="payment-gateway", role="buyer"
-        )
-        return {"status": "paid", "order_id": order.id, "order_status": order.status.value}
-    # 订单已不在待支付态（如已支付），仅确认支付流水
+    provider = get_provider(payment.gateway)
+    res = provider.build_refund(payment, float(payment.amount))
+    payment.status = "refunded"
+    payment.raw_data = json.dumps(res, ensure_ascii=False)
+    # 逆向托管资金
+    await reverse_escrow(db, order, payment)
     await db.commit()
-    return {"status": "confirmed", "order_id": order.id, "order_status": order.status.value}
-
-
-async def refund_payment(db: AsyncSession, order: Order) -> Payment | None:
-    """原路退款：标记该订单支付流水为 REFUNDED（资金沿原网关退回）。"""
-    payment = (
-        await db.scalars(select(Payment).where(Payment.order_id == order.id))
-    ).first()
-    if not payment:
-        return None
-    if payment.status == "paid":
-        payment.status = "refunded"
-        await db.flush()
+    await db.refresh(payment)
     return payment
 
 
-async def confirm_payment(db: AsyncSession, order: Order) -> dict:
-    """沙箱自测：模拟网关回调完成支付（生产环境仅由网关 webhook 触发此逻辑）。"""
-    payment = await get_or_create_payment(db, order)
-    ts = int(_now().timestamp())
-    canonical = f"{order.id}.{payment.id}.{float(payment.amount)}.{ts}"
-    sig = _sign(canonical)
-    payload = {
-        "order_id": order.id,
-        "transaction_id": payment.id,
-        "amount": float(payment.amount),
-        "timestamp": ts,
-        "signature": sig,
-    }
-    return await handle_webhook(db, settings.PAYMENT_GATEWAY, payload)
+async def refund_order_for_user(db: AsyncSession, order_id: str) -> Payment:
+    order = await db.get(Order, order_id)
+    if not order:
+        raise ValueError("订单不存在")
+    return await refund_payment(db, order)
+
+
+# ---------- 担保交易：资金释放 / 逆向 ----------
+async def release_escrow(db: AsyncSession, order: Order, payment: Payment | None = None) -> Settlement:
+    """买家确认收货后释放资金给商家（结算台账置为 settled）。"""
+    if payment is None:
+        payment = await get_or_create_payment(db, order)
+    now = _utcnow()
+    payment.escrow_status = "released"
+    payment.released_at = now
+
+    settlement = (
+        await db.scalars(select(Settlement).where(Settlement.order_id == order.id))
+    ).first()
+    if not settlement:
+        merchant_id = await _order_merchant_id(db, order)
+        settlement = Settlement(
+            order_id=order.id,
+            merchant_id=merchant_id,
+            amount=order.total_amount,
+            currency="CNY",
+            status="settled",
+            settled_at=now,
+        )
+        db.add(settlement)
+    else:
+        settlement.status = "settled"
+        settlement.settled_at = now
+    await db.flush()
+    return settlement
+
+
+async def reverse_escrow(db: AsyncSession, order: Order, payment: Payment | None = None) -> None:
+    """退款时逆向托管资金（结算台账置为 reversed）。"""
+    if payment is None:
+        payment = await get_or_create_payment(db, order)
+    payment.escrow_status = "reversed"
+    payment.released_at = None
+    settlement = (
+        await db.scalars(select(Settlement).where(Settlement.order_id == order.id))
+    ).first()
+    if settlement:
+        settlement.status = "reversed"
+        settlement.settled_at = None
+
+
+async def _order_merchant_id(db: AsyncSession, order: Order) -> str | None:
+    items = (
+        await db.scalars(select(OrderItem).where(OrderItem.order_id == order.id))
+    ).all()
+    if not items:
+        return None
+    product = await db.get(Product, items[0].product_id)
+    return product.merchant_id if product else None
