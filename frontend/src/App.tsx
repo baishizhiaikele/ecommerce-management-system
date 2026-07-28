@@ -10,6 +10,7 @@ import Market from "./pages/Market";
 import Notifications from "./pages/Notifications";
 import { LanguageProvider, getLang } from "./i18n";
 import { useAuth } from "./store/auth";
+import { trackAffiliate } from "./api";
 
 // S5：按路由懒加载，把买家二级页、商家后台、管理后台（含 recharts 等较重依赖）拆出首屏包体
 const ProductDetail = lazy(() => import("./pages/ProductDetail"));
@@ -47,6 +48,8 @@ const MerchantKnowledge = lazy(() => import("./pages/merchant/Knowledge"));
 const AIMall = lazy(() => import("./pages/AIMall"));
 const Discover = lazy(() => import("./pages/Discover"));
 const History = lazy(() => import("./pages/History"));
+const Affiliate = lazy(() => import("./pages/Affiliate"));
+const AdminWithdrawals = lazy(() => import("./pages/admin/Withdrawals"));
 
 function RouteFallback() {
   return (
@@ -81,6 +84,17 @@ export default function App() {
       }
     };
     return () => ws.close();
+  }, [user]);
+
+  // 分销归因：带 ?ref=推广码 访问时上报点击并绑定邀请关系（每码每会话只上报一次）
+  useEffect(() => {
+    if (!user) return;
+    const ref = new URLSearchParams(location.search).get("ref");
+    if (ref && sessionStorage.getItem("aff_ref") !== ref) {
+      trackAffiliate(ref)
+        .then(() => sessionStorage.setItem("aff_ref", ref))
+        .catch(() => {});
+    }
   }, [user]);
 
   if (!ready) {
@@ -126,6 +140,7 @@ export default function App() {
             <Route path="/ai-mall" element={<AIMall />} />
             <Route path="/discover" element={<Discover />} />
             <Route path="/history" element={<History />} />
+            <Route path="/affiliate" element={<Affiliate />} />
           </Route>
           <Route element={<ProtectedRoute roles={["merchant"]}><MerchantLayout /></ProtectedRoute>}>
             <Route path="/merchant" element={<MerchantDashboard />} />
@@ -147,6 +162,7 @@ export default function App() {
             <Route path="/admin/audit" element={<AdminAudit />} />
             <Route path="/admin/audit-dashboard" element={<AdminAuditDashboard />} />
             <Route path="/admin/coupons" element={<AdminCoupons />} />
+            <Route path="/admin/withdrawals" element={<AdminWithdrawals />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, Button, Tag, message } from "antd";
-import { Package, Gift, MapPin, Heart, Bell, Ticket, Sparkles, Store } from "lucide-react";
+import { Package, Gift, MapPin, Heart, Bell, Ticket, Sparkles, Share2 } from "lucide-react";
 import { useAuth } from "../store/auth";
 import { signIn, listAddresses } from "../api";
 import { useI18n } from "../i18n";

@@ -1012,6 +1012,62 @@ export const suggestKnowledge = (merchantId: string, q: string) =>
     })
     .then((r) => r.data);
 
+// ---------- 分销裂变 ----------
+export interface AffiliateLinkOut {
+  id: string;
+  product_id: string | null;
+  code: string;
+  clicks: number;
+  created_at: string | null;
+}
+export interface AffiliateCommissionOut {
+  id: string;
+  order_id: string;
+  order_amount: number;
+  commission: number;
+  status: string;
+  created_at: string | null;
+}
+export interface AffiliateSummaryOut {
+  total_commission: number;
+  reversed_commission: number;
+  withdrawn: number;
+  available: number;
+  invitees: number;
+  clicks: number;
+}
+export interface AffiliateWithdrawalOut {
+  id: string;
+  user_id: string;
+  amount: number;
+  status: string;
+  remark: string | null;
+  created_at: string | null;
+  processed_at: string | null;
+}
+export const createAffiliateLink = (productId?: string) =>
+  api
+    .post<AffiliateLinkOut>(`/affiliate/links`, { product_id: productId ?? null })
+    .then((r) => r.data);
+export const listAffiliateLinks = () =>
+  api.get<AffiliateLinkOut[]>(`/affiliate/links`).then((r) => r.data);
+export const trackAffiliate = (code: string) =>
+  api.post(`/affiliate/track`, { code }).then((r) => r.data);
+export const affiliateSummary = () =>
+  api.get<AffiliateSummaryOut>(`/affiliate/summary`).then((r) => r.data);
+export const listAffiliateCommissions = () =>
+  api.get<AffiliateCommissionOut[]>(`/affiliate/commissions`).then((r) => r.data);
+export const applyAffiliateWithdrawal = (amount: number) =>
+  api.post<AffiliateWithdrawalOut>(`/affiliate/withdrawals`, { amount }).then((r) => r.data);
+export const listAffiliateWithdrawals = () =>
+  api.get<AffiliateWithdrawalOut[]>(`/affiliate/withdrawals`).then((r) => r.data);
+export const adminListAffiliateWithdrawals = () =>
+  api.get<AffiliateWithdrawalOut[]>(`/affiliate/admin/withdrawals`).then((r) => r.data);
+export const adminProcessWithdrawal = (id: string, approve: boolean, remark?: string) =>
+  api
+    .post<AffiliateWithdrawalOut>(`/affiliate/admin/withdrawals/${id}`, { approve, remark })
+    .then((r) => r.data);
+
 // ---------- 报表导出 PDF ----------
 export const exportOrdersPdf = () =>
   api

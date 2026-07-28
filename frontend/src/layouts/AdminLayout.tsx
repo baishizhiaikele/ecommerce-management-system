@@ -9,6 +9,7 @@ import {
   ShieldCheck,
   Activity,
   Ticket,
+  Wallet,
   ArrowLeft,
   User,
   LogOut,
@@ -23,6 +24,7 @@ const MENU = [
   { key: "audit", labelKey: "page.admin.audit", path: "/admin/audit", icon: <ShieldCheck size={18} /> },
   { key: "auditDashboard", labelKey: "page.admin.auditDashboard", path: "/admin/audit-dashboard", icon: <Activity size={18} /> },
   { key: "coupons", labelKey: "page.admin.coupons", path: "/admin/coupons", icon: <Ticket size={18} /> },
+  { key: "withdrawals", labelKey: "page.admin.withdrawals", path: "/admin/withdrawals", icon: <Wallet size={18} /> },
 ];
 
 const MOBILE_NAV = [

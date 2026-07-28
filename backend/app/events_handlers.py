@@ -53,6 +53,10 @@ async def _on_order_completed(order_id: str, buyer_id: str) -> None:
         earned = int(float(order.total_amount) * POINTS_PER_YUAN)
         if earned > 0:
             await add_points(s, buyer_id, "order_complete", earned, f"订单 {order.order_no} 完成奖励")
+        # 分销：若买家由推广人邀请，结算佣金
+        from app.services.affiliate_service import grant_commission
+
+        await grant_commission(s, order)
         # 成长值：按实付金额累计，自动重算会员等级
         await award_growth(s, buyer_id, int(float(order.total_amount)))
         await notify(
@@ -73,6 +77,10 @@ async def _on_order_refunded(order_id: str, buyer_id: str) -> None:
             return
         # 原路退款：标记对应支付流水为 REFUNDED（资金沿原网关退回）
         await refund_payment(s, order)
+        # 分销：退款冲正佣金
+        from app.services.affiliate_service import reverse_commission
+
+        await reverse_commission(s, order_id)
         await s.commit()
         refund_amt = float(order.refund_amount or order.total_amount or 0)
         revert = int(refund_amt * POINTS_PER_YUAN)

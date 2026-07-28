@@ -27,6 +27,14 @@ from app.models.qna import ProductQuestion, ProductAnswer
 from app.models.view import ProductView
 from app.models.shop_event import ShopEvent
 from app.models.knowledge import KnowledgeEntry
+from app.models.affiliate import (
+    AffiliateBinding,
+    AffiliateCommission,
+    AffiliateLink,
+    AffiliateWithdrawal,
+    CommissionStatus,
+    WithdrawalStatus,
+)
 from app.models.marketing import (
     Bargain,
     BargainCut,
@@ -91,4 +99,10 @@ __all__ = [
     "ProductView",
     "ShopEvent",
     "KnowledgeEntry",
+    "AffiliateLink",
+    "AffiliateBinding",
+    "AffiliateCommission",
+    "AffiliateWithdrawal",
+    "CommissionStatus",
+    "WithdrawalStatus",
 ]
