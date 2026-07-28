@@ -11,7 +11,18 @@ from app.models.support import (
     TicketStatus,
 )
 from app.models.user import User
-from app.schemas.support import SupportTicketOut
+from app.schemas.support import SupportMessageOut, SupportTicketOut
+
+
+async def _reload(db: AsyncSession, ticket_id: str) -> SupportTicket:
+    """commit 后重载工单并预加载 messages，避免序列化时触发 async lazy-load。"""
+    result = await db.execute(
+        select(SupportTicket)
+        .options(selectinload(SupportTicket.messages))
+        .where(SupportTicket.id == ticket_id)
+        .execution_options(populate_existing=True)
+    )
+    return result.scalar_one()
 
 
 async def _to_out(db: AsyncSession, t: SupportTicket) -> SupportTicketOut:
@@ -65,7 +76,7 @@ async def create_ticket(
     )
     db.add(ticket)
     await db.commit()
-    await db.refresh(ticket)
+    ticket = await _reload(db, ticket.id)
     return await _to_out(db, ticket)
 
 
@@ -116,12 +127,16 @@ async def add_message(
         TicketStatus.ANSWERED if sender_role == SenderRole.MERCHANT else TicketStatus.OPEN
     )
     await db.commit()
-    await db.refresh(ticket)
+    ticket = await _reload(db, ticket.id)
     return await _to_out(db, ticket)
 
 
 async def close_ticket(db: AsyncSession, ticket: SupportTicket) -> SupportTicketOut:
     ticket.status = TicketStatus.CLOSED
+    # 知识库自学习：关闭时沉淀 买家首问 → 商家最新回答
+    from app.services import knowledge_service
+
+    await knowledge_service.learn_from_ticket(db, ticket, commit=False)
     await db.commit()
-    await db.refresh(ticket)
+    ticket = await _reload(db, ticket.id)
     return await _to_out(db, ticket)

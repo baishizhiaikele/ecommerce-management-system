@@ -304,7 +304,7 @@ export default function ProductDetail() {
           {
             key: "qa",
             label: t("qna.title"),
-            children: <ProductQA productId={p.id} />,
+            children: <ProductQA productId={p.id} merchantId={p.merchant_id} />,
           },
         ]}
       />

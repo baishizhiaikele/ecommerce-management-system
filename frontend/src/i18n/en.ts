@@ -1332,4 +1332,22 @@ export const en: Record<string, string> = {
   "ai.trend.empty": "No significant supply gap — demand is well met",
   "ai.trend.keywords": "Related: {kw}",
   "ai.trend.refresh": "Refresh Insight",
+
+  // Knowledge base
+  "nav.knowledge": "Knowledge Base",
+  "kb.title": "Support Knowledge Base",
+  "kb.desc": "Auto-learns Q&A when tickets close; manual entries supported",
+  "kb.addManual": "Add Entry",
+  "kb.question": "Question",
+  "kb.questionPh": "e.g. How soon do you ship?",
+  "kb.answer": "Answer",
+  "kb.answerPh": "Enter the standard answer…",
+  "kb.add": "Add",
+  "kb.added": "Added",
+  "kb.entries": "Entries",
+  "kb.confirmDelete": "Delete this entry?",
+  "kb.learned": "Auto-learned",
+  "kb.manual": "Manual",
+  "kb.hits": "{n} hits",
+  "kb.suggestTitle": "Suggested from Knowledge Base",
 };

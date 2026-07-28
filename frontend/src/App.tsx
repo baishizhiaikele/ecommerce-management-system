@@ -43,6 +43,7 @@ const MerchantReviews = lazy(() => import("./pages/merchant/Reviews"));
 const MerchantPromotions = lazy(() => import("./pages/merchant/Promotions"));
 const MerchantTrend = lazy(() => import("./pages/merchant/TrendInsight"));
 const MerchantDecoration = lazy(() => import("./pages/merchant/Decoration"));
+const MerchantKnowledge = lazy(() => import("./pages/merchant/Knowledge"));
 const AIMall = lazy(() => import("./pages/AIMall"));
 const Discover = lazy(() => import("./pages/Discover"));
 const History = lazy(() => import("./pages/History"));
@@ -136,6 +137,7 @@ export default function App() {
             <Route path="/merchant/coupons" element={<MerchantCoupons />} />
             <Route path="/merchant/trend" element={<MerchantTrend />} />
             <Route path="/merchant/decoration" element={<MerchantDecoration />} />
+            <Route path="/merchant/knowledge" element={<MerchantKnowledge />} />
           </Route>
           <Route element={<ProtectedRoute roles={["admin"]}><AdminLayout /></ProtectedRoute>}>
             <Route path="/admin" element={<AdminDashboard />} />

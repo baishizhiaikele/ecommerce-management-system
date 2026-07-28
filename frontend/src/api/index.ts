@@ -984,6 +984,34 @@ export interface ShopEventOut {
 export const followFeed = (limit = 50) =>
   api.get<ShopEventOut[]>(`/follow/feed`, { params: { limit } }).then((r) => r.data);
 
+// ---------- 智能客服知识库 ----------
+export interface KnowledgeOut {
+  id: string;
+  merchant_id: string;
+  question: string;
+  answer: string;
+  source: "manual" | "learned";
+  hit_count: number;
+  created_at: string;
+}
+export interface KnowledgeSuggestOut {
+  entry_id: string;
+  question: string;
+  answer: string;
+  score: number;
+}
+export const listKnowledge = () =>
+  api.get<KnowledgeOut[]>(`/knowledge`).then((r) => r.data);
+export const createKnowledge = (question: string, answer: string) =>
+  api.post<KnowledgeOut>(`/knowledge`, { question, answer }).then((r) => r.data);
+export const deleteKnowledge = (id: string) => api.delete(`/knowledge/${id}`);
+export const suggestKnowledge = (merchantId: string, q: string) =>
+  api
+    .get<KnowledgeSuggestOut[]>(`/knowledge/suggest`, {
+      params: { merchant_id: merchantId, q },
+    })
+    .then((r) => r.data);
+
 // ---------- 报表导出 PDF ----------
 export const exportOrdersPdf = () =>
   api

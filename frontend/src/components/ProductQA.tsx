@@ -7,13 +7,21 @@ import {
   answerQuestion,
   acceptAnswer,
   deleteQuestion,
+  suggestKnowledge,
   type QuestionOut,
   type AnswerOut,
+  type KnowledgeSuggestOut,
 } from "../api";
 import { useAuth } from "../store/auth";
 import { useI18n } from "../i18n";
 
-export default function ProductQA({ productId }: { productId: string }) {
+export default function ProductQA({
+  productId,
+  merchantId,
+}: {
+  productId: string;
+  merchantId?: string;
+}) {
   const { t } = useI18n();
   const user = useAuth((s) => s.user);
   const [list, setList] = useState<QuestionOut[]>([]);
@@ -21,6 +29,22 @@ export default function ProductQA({ productId }: { productId: string }) {
   const [q, setQ] = useState("");
   const [answering, setAnswering] = useState<string | null>(null);
   const [answerContent, setAnswerContent] = useState("");
+  const [suggests, setSuggests] = useState<KnowledgeSuggestOut[]>([]);
+
+  // 输入问题时防抖匹配商家知识库（自助解决）
+  useEffect(() => {
+    if (!merchantId || !user || q.trim().length < 4) {
+      setSuggests([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      suggestKnowledge(merchantId, q.trim())
+        .then(setSuggests)
+        .catch(() => setSuggests([]));
+    }, 500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, merchantId]);
 
   const load = async () => {
     setLoading(true);
@@ -101,6 +125,18 @@ export default function ProductQA({ productId }: { productId: string }) {
           {t("qna.ask")}
         </Button>
       </div>
+
+      {suggests.length > 0 && (
+        <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-3 space-y-2">
+          <div className="text-xs font-medium text-indigo-500">{t("kb.suggestTitle")}</div>
+          {suggests.map((s) => (
+            <div key={s.entry_id} className="text-sm">
+              <div className="text-slate-600">Q: {s.question}</div>
+              <div className="text-slate-800">A: {s.answer}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {list.length === 0 && !loading && <Empty description={t("qna.empty")} />}
 

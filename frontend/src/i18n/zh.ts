@@ -1332,4 +1332,22 @@ export const zh: Record<string, string> = {
   "ai.trend.empty": "暂无显著供给缺口，供给与需求较匹配",
   "ai.trend.keywords": "关联热词：{kw}",
   "ai.trend.refresh": "刷新洞察",
+
+  // 知识库
+  "nav.knowledge": "知识库",
+  "kb.title": "客服知识库",
+  "kb.desc": "工单关闭后自动学习问答；也可手动录入常见问题",
+  "kb.addManual": "手动录入",
+  "kb.question": "问题",
+  "kb.questionPh": "如：多久发货？",
+  "kb.answer": "答案",
+  "kb.answerPh": "输入标准答案…",
+  "kb.add": "添加",
+  "kb.added": "已添加",
+  "kb.entries": "知识条目",
+  "kb.confirmDelete": "确认删除该条目？",
+  "kb.learned": "自动学习",
+  "kb.manual": "手动录入",
+  "kb.hits": "命中 {n} 次",
+  "kb.suggestTitle": "知识库参考答案",
 };

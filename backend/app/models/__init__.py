@@ -26,6 +26,7 @@ from app.models.paid_membership import PaidMembership
 from app.models.qna import ProductQuestion, ProductAnswer
 from app.models.view import ProductView
 from app.models.shop_event import ShopEvent
+from app.models.knowledge import KnowledgeEntry
 from app.models.marketing import (
     Bargain,
     BargainCut,
@@ -89,4 +90,5 @@ __all__ = [
     "ProductAnswer",
     "ProductView",
     "ShopEvent",
+    "KnowledgeEntry",
 ]
