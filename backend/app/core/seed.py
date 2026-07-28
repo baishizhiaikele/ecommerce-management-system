@@ -35,9 +35,9 @@ TOP_CATS = [
 ]
 # 二级分类（挂在一级下）
 SUB_CATS = {
-    "digital": [("耳机音箱", "earphone"), ("充电储能", "charging"), ("智能穿戴", "wearable"), ("摄影配件", "photo")],
-    "home": [("灯饰照明", "light"), ("厨房餐厨", "kitchen"), ("床品布艺", "textile"), ("收纳整理", "storage")],
-    "culture": [("文具手账", "stationery"), ("手作文创", "handmade"), ("徽章贴纸", "badge"), ("读物周边", "book")],
+    "digital": [("耳机音箱", "earphone"), ("充电储能", "charging"), ("智能穿戴", "wearable"), ("摄影配件", "photo"), ("游戏外设", "gaming")],
+    "home": [("灯饰照明", "light"), ("厨房餐厨", "kitchen"), ("床品布艺", "textile"), ("收纳整理", "storage"), ("浴室用品", "bath"), ("家居装饰", "decor")],
+    "culture": [("文具手账", "stationery"), ("手作文创", "handmade"), ("徽章贴纸", "badge"), ("读物周边", "book"), ("潮玩手办", "toy"), ("音乐周边", "music")],
 }
 
 # (名称, 二级分类slug, 描述, 价格, 库存, 销量)
@@ -94,6 +94,16 @@ PRODUCTS = [
     ("1000 片治愈拼图", "book", "周末慢时光，拼完裱起来。", 79.0, 130, 610),
     ("铝合金平板支架", "photo", "多角度调节，颈椎更轻松。", 49.0, 260, 1500),
     ("Type-C 扩展坞", "charging", "七合一接口，一线连外设。", 59.0, 240, 1380),
+    # ---- 新增二级分类商品（补齐二级分类覆盖，解决「内容太少」）----
+    ("电竞无线鼠标", "gaming", "轻量化人体工学，超低延迟畅快开黑。", 199.0, 120, 980),
+    ("无线游戏手柄", "gaming", "多平台兼容，震动反馈沉浸手感。", 249.0, 90, 720),
+    ("速干亲肤浴巾", "bath", "吸水快干，浴后包裹柔软呵护。", 59.0, 200, 1340),
+    ("沐浴精油套装", "bath", "舒缓香氛，泡澡放松一整天。", 89.0, 150, 680),
+    ("抽象装饰画", "decor", "ins 风挂画，瞬间提升墙面格调。", 79.0, 180, 910),
+    ("香薰扩香石", "decor", "无火扩香，呼吸间都是好心情。", 39.0, 300, 1560),
+    ("盲盒手办摆件", "toy", "随机抽取惊喜，桌面治愈陪伴。", 69.0, 220, 1880),
+    ("木质拼装模型", "toy", "动手拼出机械感，解压又有成就感。", 119.0, 110, 540),
+    ("入门尤克里里", "music", "云杉面板，新手也能弹唱的小吉他。", 169.0, 80, 430),
 ]
 
 REVIEW_TEXTS = {
@@ -118,6 +128,11 @@ SPEC_EXTRA = {
     "handmade": {"类型": "手作", "难度": "新手友好"},
     "badge": {"类型": "装饰", "材质": "金属/环保"},
     "book": {"类型": "读物", "装帧": "精装"},
+    "gaming": {"类型": "游戏外设", "连接方式": "无线 2.4G"},
+    "bath": {"类型": "浴室用品", "材质": "亲肤棉/环保"},
+    "decor": {"类型": "家居装饰", "风格": "ins 风"},
+    "toy": {"类型": "潮玩", "难度": "新手友好"},
+    "music": {"类型": "乐器", "适用": "入门"},
 }
 
 
@@ -202,6 +217,15 @@ PRODUCT_IMGS = {
     "1000 片治愈拼图": ("puzzle", "jigsaw"),
     "铝合金平板支架": ("tablet,stand", "ipad,stand"),
     "Type-C 扩展坞": ("usb,hub", "adapter"),
+    "电竞无线鼠标": ("gaming,mouse", "mouse"),
+    "无线游戏手柄": ("gamepad", "controller"),
+    "速干亲肤浴巾": ("towel", "bath,towel"),
+    "沐浴精油套装": ("bath,set", "shower,gel"),
+    "抽象装饰画": ("wall,art", "poster"),
+    "香薰扩香石": ("diffuser", "aroma,stone"),
+    "盲盒手办摆件": ("figure", "blind,box"),
+    "木质拼装模型": ("model,kit", "wooden,toy"),
+    "入门尤克里里": ("ukulele", "guitar"),
 }
 
 
@@ -298,15 +322,19 @@ async def seed_demo() -> None:
 
         # ---- 批量评价（驱动评分/好评榜）----
         buyer = users["buyer"]
+        STAR_POOL = [5, 4, 4, 3, 2, 1]  # 评分分布池：覆盖好评到差评，评分分布更真实
         for slug, p in products.items():
-            count = (hash(slug) % 4) + 2  # 2~5 条
+            count = (hash(slug) % 4) + 3  # 3~6 条，保证任意商品 ≥3 条评价
+            kw = PRODUCT_IMGS[p.name][0] if p.name in PRODUCT_IMGS else p.name
             for k in range(count):
-                rating = 5 if k == 0 else (4 if k % 3 else 3)
+                rating = STAR_POOL[(hash(slug) + k) % len(STAR_POOL)]
                 text = REVIEW_TEXTS[rating][k % len(REVIEW_TEXTS[rating])]
                 sentiment = (
                     Sentiment.POSITIVE if rating >= 4
                     else Sentiment.NEUTRAL if rating == 3 else Sentiment.NEGATIVE
                 )
+                # 好评部分带图，差评(1~2星)不带图，满足「含带图/差评」
+                imgs = [_img(kw, 400)] if rating >= 4 and k % 2 == 0 else []
                 db.add(
                     Review(
                         order_id=order.id,
@@ -315,6 +343,7 @@ async def seed_demo() -> None:
                         rating=rating,
                         content=text,
                         sentiment=sentiment,
+                        _images=json.dumps(imgs, ensure_ascii=False),
                     )
                 )
         await db.flush()
