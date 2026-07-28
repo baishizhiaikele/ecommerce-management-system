@@ -49,6 +49,9 @@ const AIMall = lazy(() => import("./pages/AIMall"));
 const Discover = lazy(() => import("./pages/Discover"));
 const History = lazy(() => import("./pages/History"));
 const Affiliate = lazy(() => import("./pages/Affiliate"));
+const Live = lazy(() => import("./pages/Live"));
+const LiveRoomPage = lazy(() => import("./pages/LiveRoomPage"));
+const MerchantLive = lazy(() => import("./pages/merchant/Live"));
 const AdminWithdrawals = lazy(() => import("./pages/admin/Withdrawals"));
 
 function RouteFallback() {
@@ -141,6 +144,8 @@ export default function App() {
             <Route path="/discover" element={<Discover />} />
             <Route path="/history" element={<History />} />
             <Route path="/affiliate" element={<Affiliate />} />
+            <Route path="/live" element={<Live />} />
+            <Route path="/live/:id" element={<LiveRoomPage />} />
           </Route>
           <Route element={<ProtectedRoute roles={["merchant"]}><MerchantLayout /></ProtectedRoute>}>
             <Route path="/merchant" element={<MerchantDashboard />} />
@@ -153,6 +158,7 @@ export default function App() {
             <Route path="/merchant/trend" element={<MerchantTrend />} />
             <Route path="/merchant/decoration" element={<MerchantDecoration />} />
             <Route path="/merchant/knowledge" element={<MerchantKnowledge />} />
+            <Route path="/merchant/live" element={<MerchantLive />} />
           </Route>
           <Route element={<ProtectedRoute roles={["admin"]}><AdminLayout /></ProtectedRoute>}>
             <Route path="/admin" element={<AdminDashboard />} />

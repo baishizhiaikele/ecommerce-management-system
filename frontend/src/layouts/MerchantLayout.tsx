@@ -15,6 +15,7 @@ import {
   TrendingUp,
   BookOpenCheck,
   Paintbrush,
+  Radio,
 } from "lucide-react";
 
 const MENU = [
@@ -26,6 +27,7 @@ const MENU = [
   { key: "coupons", labelKey: "nav.merchantCoupons", path: "/merchant/coupons", icon: <Ticket size={18} /> },
   { key: "trend", labelKey: "nav.trend", path: "/merchant/trend", icon: <TrendingUp size={18} /> },
   { key: "knowledge", labelKey: "nav.knowledge", path: "/merchant/knowledge", icon: <BookOpenCheck size={18} /> },
+  { key: "live", labelKey: "nav.live", path: "/merchant/live", icon: <Radio size={18} /> },
   { key: "decoration", labelKey: "nav.decoration", path: "/merchant/decoration", icon: <Paintbrush size={18} /> },
 ];
 

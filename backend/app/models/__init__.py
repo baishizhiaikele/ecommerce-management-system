@@ -35,6 +35,7 @@ from app.models.affiliate import (
     CommissionStatus,
     WithdrawalStatus,
 )
+from app.models.live import LiveMessage, LiveRoom, LiveRoomProduct, LiveStatus
 from app.models.marketing import (
     Bargain,
     BargainCut,
@@ -105,4 +106,8 @@ __all__ = [
     "AffiliateWithdrawal",
     "CommissionStatus",
     "WithdrawalStatus",
+    "LiveRoom",
+    "LiveRoomProduct",
+    "LiveMessage",
+    "LiveStatus",
 ]

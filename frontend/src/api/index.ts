@@ -1077,6 +1077,58 @@ export const adminProcessWithdrawal = (id: string, approve: boolean, remark?: st
     .post<AffiliateWithdrawalOut>(`/affiliate/admin/withdrawals/${id}`, { approve, remark })
     .then((r) => r.data);
 
+// ---------- 直播带货 ----------
+export interface LiveProductOut {
+  id: string;
+  name: string;
+  price: number;
+  image_url?: string | null;
+  stock: number;
+  pinned: boolean;
+}
+export interface LiveRoomOut {
+  id: string;
+  merchant_id: string;
+  title: string;
+  cover_url?: string | null;
+  status: "scheduled" | "live" | "ended";
+  viewers: number;
+  started_at?: string | null;
+  created_at?: string | null;
+  merchant_name?: string | null;
+  product_count: number;
+}
+export interface LiveRoomDetail extends LiveRoomOut {
+  products: LiveProductOut[];
+}
+export interface LiveMessageOut {
+  id: string;
+  user_id: string;
+  username: string;
+  content: string;
+  created_at?: string | null;
+}
+export const listLiveRooms = () => api.get<LiveRoomOut[]>("/live").then((r) => r.data);
+export const myLiveRooms = () => api.get<LiveRoomOut[]>("/live/mine").then((r) => r.data);
+export const createLiveRoom = (p: { title: string; cover_url?: string; product_ids: string[] }) =>
+  api.post<LiveRoomOut>("/live", p).then((r) => r.data);
+export const getLiveRoom = (id: string) =>
+  api.get<LiveRoomDetail>(`/live/${id}`).then((r) => r.data);
+export const startLiveRoom = (id: string) =>
+  api.post<LiveRoomOut>(`/live/${id}/start`).then((r) => r.data);
+export const endLiveRoom = (id: string) =>
+  api.post<LiveRoomOut>(`/live/${id}/end`).then((r) => r.data);
+export const enterLiveRoom = (id: string) =>
+  api.post<{ viewers: number }>(`/live/${id}/enter`).then((r) => r.data);
+export const listLiveMessages = (id: string, afterId?: string) =>
+  api
+    .get<LiveMessageOut[]>(`/live/${id}/messages`, {
+      params: afterId ? { after_id: afterId } : undefined,
+    })
+    .then((r) => r.data);
+export const sendLiveMessage = (id: string, content: string) =>
+  api.post<LiveMessageOut>(`/live/${id}/messages`, { content }).then((r) => r.data);
+
 // ---------- 报表导出 PDF ----------
 export const exportOrdersPdf = () =>
   api
