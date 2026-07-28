@@ -170,6 +170,14 @@ async def request_refund(
     order = await order_service.transition_status(
         db, order=order, target=target, actor_id=user.id, role="buyer"
     )
+    # 小额低风险"仅退款"自动秒退（免商家人工审核）
+    if target == OrderStatus.REFUND_REQUESTED:
+        from app.services.auto_review_service import try_auto_refund
+
+        if await try_auto_refund(db, order):
+            order = await order_service.get_order(
+                db, order_id, user_id=user.id, role=user.role.value
+            )
     return await _load_order_view(db, order)
 
 

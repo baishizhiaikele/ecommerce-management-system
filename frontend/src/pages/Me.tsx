@@ -42,6 +42,7 @@ export default function Me() {
     { labelKey: "page.notifications.title", icon: <Bell size={20} />, go: () => navigate("/notifications") },
     { labelKey: "page.coupons.title", icon: <Ticket size={20} />, go: () => navigate("/coupons") },
     { labelKey: "page.mall.title", icon: <Sparkles size={20} />, go: () => navigate("/mall") },
+    { labelKey: "notif.title", icon: <Bell size={20} />, go: () => navigate("/settings/notifications") },
   ];
 
   return (

@@ -28,6 +28,8 @@ import {
   getLogistics,
   addLogistics,
   verifyPickup,
+  getOrderInvoice,
+  applyInvoice,
   OrderOut,
   OrderStatus,
   LogisticsEvent,
@@ -64,6 +66,17 @@ export default function OrderDetail() {
   const [disputeOpen, setDisputeOpen] = useState(false);
   const [disputeReason, setDisputeReason] = useState("");
   const [pickupInput, setPickupInput] = useState("");
+  const [invoice, setInvoice] = useState<{
+    invoice_no: string;
+    title_type: string;
+    title: string;
+    amount: number;
+    issued_at?: string | null;
+  } | null>(null);
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [invoiceType, setInvoiceType] = useState<"personal" | "company">("personal");
+  const [invoiceTitle, setInvoiceTitle] = useState("");
+  const [invoiceTax, setInvoiceTax] = useState("");
 
   const load = async () => {
     if (!id) return;
@@ -71,6 +84,11 @@ export default function OrderDetail() {
     try {
       setOrder(await getOrder(id));
       setEscrow(await getPaymentStatus(id));
+      try {
+        setInvoice(await getOrderInvoice(id));
+      } catch {
+        setInvoice(null);
+      }
     } catch {
       /* 忽略 */
     } finally {
@@ -244,6 +262,32 @@ export default function OrderDetail() {
     }
   };
 
+  const submitInvoice = async () => {
+    if (!order) return;
+    if (!invoiceTitle.trim()) {
+      message.warning(t("einv.reqTitle"));
+      return;
+    }
+    if (invoiceType === "company" && !invoiceTax.trim()) {
+      message.warning(t("einv.reqTax"));
+      return;
+    }
+    try {
+      const inv = await applyInvoice(order.id, {
+        title_type: invoiceType,
+        title: invoiceTitle.trim(),
+        tax_no: invoiceType === "company" ? invoiceTax.trim() : "",
+      });
+      setInvoice(inv);
+      setInvoiceOpen(false);
+      setInvoiceTitle("");
+      setInvoiceTax("");
+      message.success(t("einv.issued"));
+    } catch (e: any) {
+      message.error(e?.response?.data?.detail || t("common.operationFailed"));
+    }
+  };
+
   if (loading) return <div className="text-center py-20"><Spin /></div>;
   if (!order) return <div className="text-center py-20">{t("od.notFound")}</div>;
 
@@ -354,6 +398,17 @@ export default function OrderDetail() {
               {t("order.action.dispute")}
             </Button>
           )}
+          {user?.role === "buyer" && invoice && (
+            <Tag color="cyan">
+              {t("einv.already")}
+              {invoice.invoice_no}
+            </Tag>
+          )}
+          {user?.role === "buyer" &&
+            !invoice &&
+            ["paid", "shipped", "completed"].includes(order.status) && (
+              <Button onClick={() => setInvoiceOpen(true)}>{t("einv.apply")}</Button>
+            )}
           {user?.role === "merchant" && order.status === "refund_requested" && (
             <>
               <Button type="primary" onClick={() => doRefundReview(true)}>
@@ -500,6 +555,47 @@ export default function OrderDetail() {
           value={disputeReason}
           onChange={(e) => setDisputeReason(e.target.value)}
         />
+      </Modal>
+
+      <Modal
+        title={t("einv.apply")}
+        open={invoiceOpen}
+        onCancel={() => setInvoiceOpen(false)}
+        onOk={submitInvoice}
+        okText={t("common.submit")}
+      >
+        <div className="mb-2 text-sm text-slate-500">
+          {t("einv.amount").replace("{x}", order ? money(order.total_amount) : "0")}
+        </div>
+        <div className="flex gap-2 mb-3">
+          <Button
+            type={invoiceType === "personal" ? "primary" : "default"}
+            onClick={() => setInvoiceType("personal")}
+          >
+            {t("einv.personal")}
+          </Button>
+          <Button
+            type={invoiceType === "company" ? "primary" : "default"}
+            onClick={() => setInvoiceType("company")}
+          >
+            {t("einv.company")}
+          </Button>
+        </div>
+        <Input
+          className="mb-2"
+          placeholder={t("einv.titlePh")}
+          value={invoiceTitle}
+          onChange={(e) => setInvoiceTitle(e.target.value)}
+          maxLength={60}
+        />
+        {invoiceType === "company" && (
+          <Input
+            placeholder={t("einv.taxPh")}
+            value={invoiceTax}
+            onChange={(e) => setInvoiceTax(e.target.value)}
+            maxLength={30}
+          />
+        )}
       </Modal>
 
       <Modal title={t("od.logistics")} open={logOpen} onCancel={() => setLogOpen(false)} footer={null}>

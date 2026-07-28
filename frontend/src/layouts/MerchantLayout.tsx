@@ -16,6 +16,9 @@ import {
   BookOpenCheck,
   Paintbrush,
   Radio,
+  Receipt,
+  Users,
+  BarChart3,
 } from "lucide-react";
 
 const MENU = [
@@ -28,6 +31,9 @@ const MENU = [
   { key: "trend", labelKey: "nav.trend", path: "/merchant/trend", icon: <TrendingUp size={18} /> },
   { key: "knowledge", labelKey: "nav.knowledge", path: "/merchant/knowledge", icon: <BookOpenCheck size={18} /> },
   { key: "live", labelKey: "nav.live", path: "/merchant/live", icon: <Radio size={18} /> },
+  { key: "presales", labelKey: "nav.presales", path: "/merchant/presales", icon: <Receipt size={18} /> },
+  { key: "staff", labelKey: "nav.staff", path: "/merchant/staff", icon: <Users size={18} /> },
+  { key: "reports", labelKey: "nav.reports", path: "/merchant/reports", icon: <BarChart3 size={18} /> },
   { key: "decoration", labelKey: "nav.decoration", path: "/merchant/decoration", icon: <Paintbrush size={18} /> },
 ];
 

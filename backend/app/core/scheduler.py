@@ -14,6 +14,7 @@ from app.db.session import SessionLocal
 from app.models.order import Order, OrderStatus
 from app.models.user import Role
 from app.services.order_service import transition_status
+from app.services import report_task_service
 
 logger = logging.getLogger("scheduler")
 
@@ -56,3 +57,9 @@ async def scheduler_loop(interval_seconds: int = 60) -> None:
                 logger.info("已自动取消 %d 笔超时未支付订单并回补库存", n)
         except Exception as e:  # noqa: BLE001
             logger.warning("支付超时扫描异常: %s", e)
+        try:
+            m = await report_task_service.send_due_reports()
+            if m:
+                logger.info("已生成并发送 %d 封定时报表邮件", m)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("定时报表发送异常: %s", e)

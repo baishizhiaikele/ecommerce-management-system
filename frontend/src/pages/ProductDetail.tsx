@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   Row,
@@ -15,6 +15,7 @@ import {
   Popconfirm,
   Tooltip,
   Drawer,
+  Modal,
 } from "antd";
 import {
   ShoppingCartOutlined,
@@ -22,6 +23,7 @@ import {
   HeartFilled,
   RobotOutlined,
   MessageOutlined,
+  CameraOutlined,
 } from "@ant-design/icons";
 import { getProduct, listProductReviews, listVariants, addCartItem, logView, type ProductOut, type ReviewOut, type VariantOut } from "../api";
 import { money, productStatusMeta } from "../utils/format";
@@ -45,6 +47,26 @@ export default function ProductDetail() {
   const [qty, setQty] = useState(1);
   const [loading, setLoading] = useState(true);
   const [chatOpen, setChatOpen] = useState(false);
+  const [arOpen, setArOpen] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const arStreamRef = useRef<MediaStream | null>(null);
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+      arStreamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => {});
+      }
+    } catch {
+      message.warning(t("pd.arNoCamera"));
+    }
+  };
+  const stopCamera = () => {
+    arStreamRef.current?.getTracks().forEach((tr) => tr.stop());
+    arStreamRef.current = null;
+  };
 
   const load = async () => {
     setLoading(true);
@@ -276,6 +298,11 @@ export default function ProductDetail() {
                 {t("pd.chat")}
               </Button>
             </Tooltip>
+            <Tooltip title={t("pd.arHint")}>
+              <Button size="large" icon={<CameraOutlined />} onClick={() => { setArOpen(true); setTimeout(startCamera, 300); }}>
+                {t("pd.ar")}
+              </Button>
+            </Tooltip>
           </div>
 
           <div className="mt-4">
@@ -308,6 +335,29 @@ export default function ProductDetail() {
           },
         ]}
       />
+
+      <Modal
+        title={t("pd.ar")}
+        open={arOpen}
+        onCancel={() => { setArOpen(false); stopCamera(); }}
+        footer={[
+          <Button key="close" onClick={() => { setArOpen(false); stopCamera(); }}>
+            {t("common.close")}
+          </Button>,
+        ]}
+      >
+        <div className="relative bg-black rounded overflow-hidden" style={{ aspectRatio: "3 / 4" }}>
+          <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
+          {p && (
+            <img
+              src={p.image_url || ""}
+              alt=""
+              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-1/2 opacity-80 pointer-events-none mix-blend-screen"
+            />
+          )}
+        </div>
+        <p className="text-xs text-slate-400 mt-2">{t("pd.arOverlayHint")}</p>
+      </Modal>
 
       <Drawer
         title={t("pd.chat")}

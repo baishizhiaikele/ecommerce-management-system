@@ -19,11 +19,11 @@ def _sign(canonical: str) -> str:
     ).hexdigest()
 
 
-async def _create_paid_order(client, bh, mh):
+async def _create_paid_order(client, bh, mh, price=60):
     prod = await client.post(
         "/api/products",
         headers=mh,
-        json={"name": "担保测试商品", "price": 60, "stock": 5, "category_id": None},
+        json={"name": "担保测试商品", "price": price, "stock": 5, "category_id": None},
     )
     assert prod.status_code == 201, prod.text
     pid = prod.json()["id"]
@@ -97,7 +97,8 @@ async def test_escrow_hold_then_release_on_confirm(client, buyer_headers, mercha
 @pytest.mark.asyncio
 async def test_escrow_reversed_on_refund(client, buyer_headers, merchant_headers):
     bh, mh = buyer_headers, merchant_headers
-    oid, _ = await _create_paid_order(client, bh, mh)
+    # 大额订单（超过小额自动退款阈值 100 元），保留商家人工审核链路
+    oid, _ = await _create_paid_order(client, bh, mh, price=600)
 
     # 未发货仅退款：买家申请 -> 商家通过
     refund = await client.post(

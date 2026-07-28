@@ -14,7 +14,7 @@ from app.models.points import PointLog, PointAction
 from app.models.task import UserTask
 from app.models.coupon import Coupon, CouponType, UserCoupon
 from app.models.favorite import Favorite
-from app.models.notification import Notification, NotificationType
+from app.models.notification import Notification, NotificationSetting, NotificationType
 from app.models.inventory import StockChangeType, StockLog
 from app.models.follow import FollowShop
 from app.models.support import SupportTicket, SupportMessage, TicketStatus, SenderRole
@@ -36,6 +36,10 @@ from app.models.affiliate import (
     WithdrawalStatus,
 )
 from app.models.live import LiveMessage, LiveRoom, LiveRoomProduct, LiveStatus
+from app.models.invoice import Invoice, InvoiceTitleType
+from app.models.presale import Presale, PresaleReservation, ReservationStatus
+from app.models.staff import STAFF_PERMISSIONS, PERMISSION_LABELS, SubAccount
+from app.models.report import EmailLog, ReportFrequency, ReportTask
 from app.models.marketing import (
     Bargain,
     BargainCut,
@@ -76,6 +80,7 @@ __all__ = [
     "UserCoupon",
     "Favorite",
     "Notification",
+    "NotificationSetting",
     "NotificationType",
     "StockLog",
     "StockChangeType",
@@ -110,4 +115,15 @@ __all__ = [
     "LiveRoomProduct",
     "LiveMessage",
     "LiveStatus",
+    "Invoice",
+    "InvoiceTitleType",
+    "Presale",
+    "PresaleReservation",
+    "ReservationStatus",
+    "SubAccount",
+    "STAFF_PERMISSIONS",
+    "PERMISSION_LABELS",
+    "ReportTask",
+    "ReportFrequency",
+    "EmailLog",
 ]

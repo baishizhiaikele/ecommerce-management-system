@@ -12,7 +12,7 @@ import {
   Popconfirm,
   Card,
 } from "antd";
-import { PlusOutlined, RobotOutlined, FileTextOutlined, DollarOutlined, AppstoreOutlined } from "@ant-design/icons";
+import { PlusOutlined, RobotOutlined, FileTextOutlined, DollarOutlined, AppstoreOutlined, LineChartOutlined } from "@ant-design/icons";
 import {
   myProducts,
   createProduct,
@@ -21,6 +21,7 @@ import {
   aiGenerateProduct,
   aiMarketing,
   aiPriceAdvice,
+  getPriceCompare,
   listCategories,
   ProductOut,
   CategoryOut,
@@ -177,6 +178,37 @@ export default function MerchantProducts() {
     message.success(t("mprod.applied"));
   };
 
+  // AI 比价
+  const [cmpOpen, setCmpOpen] = useState(false);
+  const [cmpLoading, setCmpLoading] = useState(false);
+  const [cmpRes, setCmpRes] = useState<{
+    our_price: number;
+    competitor_count: number;
+    min_price: number;
+    max_price: number;
+    avg_price: number;
+    percentile: number;
+    suggestion: string;
+  } | null>(null);
+  const openCmp = (r: ProductOut) => {
+    setEdit(r);
+    setCmpRes(null);
+    setCmpOpen(true);
+  };
+  const runCmp = async () => {
+    if (!edit) return;
+    setCmpLoading(true);
+    try {
+      const r = await getPriceCompare(edit.id);
+      setCmpRes(r);
+      message.success(t("mprod.compareOk"));
+    } catch {
+      message.error(t("mprod.genFail"));
+    } finally {
+      setCmpLoading(false);
+    }
+  };
+
   return (
     <Guard>
       <Card
@@ -235,6 +267,9 @@ export default function MerchantProducts() {
                     </Button>
                     <Button size="small" icon={<DollarOutlined />} onClick={() => openPr(r)}>
                       {t("mprod.smartPrice")}
+                    </Button>
+                    <Button size="small" icon={<LineChartOutlined />} onClick={() => openCmp(r)}>
+                      {t("mprod.compare")}
                     </Button>
                     <Button
                       size="small"
@@ -392,6 +427,35 @@ export default function MerchantProducts() {
         open={vmOpen}
         onClose={() => setVmOpen(false)}
       />
+
+      {/* AI 比价 */}
+      <Modal
+        title={t("mprod.compare")}
+        open={cmpOpen}
+        onCancel={() => setCmpOpen(false)}
+        footer={[
+          <Button key="close" onClick={() => setCmpOpen(false)}>
+            {t("common.close")}
+          </Button>,
+        ]}
+      >
+        <Button block loading={cmpLoading} onClick={runCmp} style={{ marginBottom: 12 }}>
+          {t("mprod.compareRun")}
+        </Button>
+        {cmpRes && (
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div>{t("mprod.cmpOur")}<b>¥{cmpRes.our_price.toFixed(2)}</b></div>
+              <div>{t("mprod.cmpCount")}<b>{cmpRes.competitor_count}</b></div>
+              <div>{t("mprod.cmpMin")}<b>¥{cmpRes.min_price.toFixed(2)}</b></div>
+              <div>{t("mprod.cmpMax")}<b>¥{cmpRes.max_price.toFixed(2)}</b></div>
+              <div>{t("mprod.cmpAvg")}<b>¥{cmpRes.avg_price.toFixed(2)}</b></div>
+              <div>{t("mprod.cmpPercentile")}<b>{cmpRes.percentile}%</b></div>
+            </div>
+            <div className="p-3 bg-indigo-50 rounded text-sm">{cmpRes.suggestion}</div>
+          </div>
+        )}
+      </Modal>
     </Guard>
   );
 }

@@ -4,7 +4,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import hashlib
 import json
 
-from app.core.deps import get_merchant_product, require_role
+from app.core.deps import (
+    MerchantCtx,
+    get_merchant_product,
+    require_merchant,
+    require_role,
+)
 from app.db.session import get_db
 from app.models.product import Product
 from app.models.user import Role, User
@@ -22,6 +27,7 @@ from app.schemas.product import (
 )
 from app.services import product_service
 from app.services.image_service import generate_images
+from app.services import price_compare_service
 from app.core.cache import cache_get, cache_set, cache_delete_prefix
 
 router = APIRouter(prefix="/products", tags=["products"])
@@ -95,9 +101,9 @@ async def get_product(product_id: str, db: AsyncSession = Depends(get_db)) -> Pr
 async def create_product(
     data: ProductCreate,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_role(Role.MERCHANT)),
+    ctx: MerchantCtx = Depends(require_merchant("products")),
 ) -> Product:
-    product = await product_service.create_product(db, merchant_id=user.id, data=data)
+    product = await product_service.create_product(db, merchant_id=ctx.owner_id, data=data)
     await cache_delete_prefix("products:")
     return product
 
@@ -107,11 +113,11 @@ async def update_product(
     product_id: str,
     data: ProductUpdate,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_role(Role.MERCHANT)),
+    ctx: MerchantCtx = Depends(require_merchant("products")),
 ) -> Product:
     product = await product_service.get_product(db, product_id)
     product = await product_service.update_product(
-        db, product=product, merchant_id=user.id, data=data
+        db, product=product, merchant_id=ctx.owner_id, data=data
     )
     await cache_delete_prefix("products:")
     return product
@@ -121,10 +127,10 @@ async def update_product(
 async def delete_product(
     product_id: str,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_role(Role.MERCHANT)),
+    ctx: MerchantCtx = Depends(require_merchant("products")),
 ) -> None:
     product = await product_service.get_product(db, product_id)
-    await product_service.delete_product(db, product=product, merchant_id=user.id)
+    await product_service.delete_product(db, product=product, merchant_id=ctx.owner_id)
     await cache_delete_prefix("products:")
 
 
@@ -172,6 +178,15 @@ async def ai_price_advice(
     return await product_service.ai_price_advice(
         db, product=product, merchant_id=product.merchant_id, market_price=data.market_price, note=data.note
     )
+
+
+@router.get("/{product_id}/price-compare")
+async def price_compare(
+    product: Product = Depends(get_merchant_product),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """AI 比价：横向对比同类竞品价格并给出调价建议。"""
+    return await price_compare_service.compare_price(db, product)
 
 
 @router.post("/{product_id}/ai-image")

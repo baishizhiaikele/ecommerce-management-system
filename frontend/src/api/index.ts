@@ -1129,6 +1129,173 @@ export const listLiveMessages = (id: string, afterId?: string) =>
 export const sendLiveMessage = (id: string, content: string) =>
   api.post<LiveMessageOut>(`/live/${id}/messages`, { content }).then((r) => r.data);
 
+// ---------- 电子发票 ----------
+export interface InvoiceOut {
+  id: string;
+  invoice_no: string;
+  order_id: string;
+  title_type: "personal" | "company";
+  title: string;
+  tax_no?: string | null;
+  amount: number;
+  issued_at?: string | null;
+  order_no?: string | null;
+}
+export const applyInvoice = (
+  orderId: string,
+  p: { title_type: string; title: string; tax_no?: string }
+) => api.post<InvoiceOut>(`/invoices/orders/${orderId}`, p).then((r) => r.data);
+export const getOrderInvoice = (orderId: string) =>
+  api.get<InvoiceOut | null>(`/invoices/orders/${orderId}`).then((r) => r.data);
+export const myInvoices = () => api.get<InvoiceOut[]>(`/invoices/mine`).then((r) => r.data);
+
+// ---------- 预售定金 ----------
+export interface PresaleOut {
+  id: string;
+  merchant_id: string;
+  product_id: string;
+  title: string;
+  presale_price: string;
+  deposit: string;
+  inflate_rate: number;
+  end_at?: string | null;
+  is_active: number;
+  created_at?: string | null;
+  product_name?: string | null;
+  product_image?: string | null;
+  original_price?: string | null;
+  deposit_deduction?: number | null;
+  balance_due?: number | null;
+}
+export interface PresaleReservationOut {
+  id: string;
+  presale_id: string;
+  deposit_paid: string;
+  status: "deposit_paid" | "completed" | "cancelled";
+  order_id?: string | null;
+  created_at?: string | null;
+  completed_at?: string | null;
+  presale_title?: string | null;
+  product_name?: string | null;
+  product_image?: string | null;
+  balance_due?: number | null;
+}
+export const listPresales = () => api.get<PresaleOut[]>(`/presales`).then((r) => r.data);
+export const myPresales = () => api.get<PresaleOut[]>(`/presales/mine`).then((r) => r.data);
+export const createPresale = (p: {
+  product_id: string;
+  title: string;
+  presale_price: number;
+  deposit: number;
+  inflate_rate: number;
+  end_at?: string;
+}) => api.post<PresaleOut>(`/presales`, p).then((r) => r.data);
+export const payPresaleDeposit = (presaleId: string) =>
+  api.post<PresaleReservationOut>(`/presales/${presaleId}/deposit`).then((r) => r.data);
+export const myPresaleReservations = () =>
+  api.get<PresaleReservationOut[]>(`/presales/reservations`).then((r) => r.data);
+export const payPresaleBalance = (reservationId: string, address: string) =>
+  api
+    .post<PresaleReservationOut>(`/presales/reservations/${reservationId}/balance`, { address })
+    .then((r) => r.data);
+
+// ---------- 子账号权限 ----------
+export interface StaffPerm {
+  key: string;
+  label: string;
+}
+export interface StaffOut {
+  id: string;
+  owner_id: string;
+  staff_user_id: string;
+  username: string;
+  permissions: string[];
+  is_active: boolean;
+  created_at?: string | null;
+}
+export const listStaffPermissions = () =>
+  api.get<{ permissions: StaffPerm[] }>(`/subaccounts/permissions`).then((r) => r.data);
+export const listSubaccounts = () =>
+  api.get<StaffOut[]>(`/subaccounts/mine`).then((r) => r.data);
+export const createSubaccount = (p: {
+  username: string;
+  password: string;
+  permissions: string[];
+}) => api.post<StaffOut>(`/subaccounts`, p).then((r) => r.data);
+export const updateSubaccount = (
+  id: string,
+  p: { permissions?: string[]; is_active?: boolean }
+) => api.put<StaffOut>(`/subaccounts/${id}`, p).then((r) => r.data);
+export const deleteSubaccount = (id: string) =>
+  api.delete(`/subaccounts/${id}`).then((r) => r.data);
+
+// ---------- AI 比价 ----------
+export interface PriceCompareOut {
+  product_id: string;
+  product_name?: string;
+  our_price: number;
+  competitor_count: number;
+  min_price: number;
+  max_price: number;
+  avg_price: number;
+  percentile: number;
+  suggestion: string;
+}
+export const getPriceCompare = (productId: string) =>
+  api.get<PriceCompareOut>(`/products/${productId}/price-compare`).then((r) => r.data);
+
+// ---------- 报表定时邮件 ----------
+export type ReportFrequency = "daily" | "weekly";
+export interface ReportTaskOut {
+  id: string;
+  merchant_id: string;
+  frequency: ReportFrequency;
+  email: string;
+  is_active: boolean;
+  last_sent_at?: string | null;
+  created_at?: string | null;
+}
+export const listReportTasks = () =>
+  api.get<ReportTaskOut[]>(`/merchant/report-tasks`).then((r) => r.data);
+export const createReportTask = (p: {
+  frequency: ReportFrequency;
+  email: string;
+  is_active?: boolean;
+}) => api.post<ReportTaskOut>(`/merchant/report-tasks`, p).then((r) => r.data);
+export const updateReportTask = (
+  id: string,
+  p: { is_active?: boolean; email?: string; frequency?: ReportFrequency }
+) => api.put<ReportTaskOut>(`/merchant/report-tasks/${id}`, p).then((r) => r.data);
+export const deleteReportTask = (id: string) =>
+  api.delete(`/merchant/report-tasks/${id}`).then((r) => r.data);
+export const getReportPreview = () =>
+  api.get<any>(`/merchant/report-tasks/preview`).then((r) => r.data);
+
+// ---------- 审计回放 / 告警 ----------
+export interface AuditLogItem {
+  id: string;
+  user_id?: string | null;
+  action: string;
+  entity: string;
+  entity_id?: string | null;
+  detail?: string | null;
+  created_at?: string | null;
+}
+export const getAuditReplay = (entity: string, entityId?: string) =>
+  api
+    .get<AuditLogItem[]>(`/admin/audit/replay`, { params: { entity, entity_id: entityId } })
+    .then((r) => r.data);
+export const getAuditAlerts = () =>
+  api.get<{ alerts: any[]; generated_at: string }>(`/admin/audit/alerts`).then((r) => r.data);
+
+// ---------- 通知分类免打扰 ----------
+export const listNotificationCategories = () =>
+  api.get<{ categories: string[] }>(`/notifications/categories`).then((r) => r.data);
+export const getNotificationSettings = () =>
+  api.get<{ muted: string[] }>(`/notifications/settings`).then((r) => r.data);
+export const updateNotificationSettings = (muted: string[]) =>
+  api.put<{ muted: string[] }>(`/notifications/settings`, { muted }).then((r) => r.data);
+
 // ---------- 报表导出 PDF ----------
 export const exportOrdersPdf = () =>
   api

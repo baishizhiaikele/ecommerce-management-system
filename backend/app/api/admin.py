@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -137,3 +139,92 @@ async def audit_stats(
     )
     by_day = [{"day": d, "count": c} for d, c in by_day_rows]
     return {"by_action": by_action, "by_day": by_day}
+
+
+@router.get("/audit/replay", response_model=list[AuditLogOut])
+async def audit_replay(
+    entity: str,
+    entity_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_role(Role.ADMIN)),
+) -> list[AuditLogOut]:
+    """按实体回放审计时间线（升序），用于追溯某订单/商品的完整操作链。"""
+    stmt = select(AuditLog).where(AuditLog.entity == entity)
+    if entity_id:
+        stmt = stmt.where(AuditLog.entity_id == entity_id)
+    stmt = stmt.order_by(AuditLog.created_at.asc())
+    rows = await db.scalars(stmt)
+    return list(rows)
+
+
+@router.get("/audit/alerts")
+async def audit_alerts(
+    db: AsyncSession = Depends(get_db), _: User = Depends(require_role(Role.ADMIN))
+) -> dict:
+    """基于规则的审计告警：自动退款秒退、高频操作、频繁改价等异常模式。"""
+    from datetime import timedelta
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    alerts: list[dict] = []
+
+    # 1) 自动退款秒退（金额小、无需人工）
+    auto = await db.scalars(
+        select(AuditLog).where(
+            AuditLog.action == "auto_refund", AuditLog.created_at >= cutoff
+        )
+    )
+    auto = list(auto)
+    if auto:
+        alerts.append(
+            {
+                "level": "info",
+                "type": "auto_refund",
+                "message": f"近 24 小时触发 {len(auto)} 笔自动退款（小额免审）",
+                "count": len(auto),
+                "samples": [a.entity_id for a in auto[:5]],
+            }
+        )
+
+    # 2) 同一用户高频操作（潜在脚本/刷量）
+    rows = await db.execute(
+        select(AuditLog.user_id, func.count(AuditLog.id))
+        .where(AuditLog.created_at >= cutoff)
+        .group_by(AuditLog.user_id)
+        .having(func.count(AuditLog.id) > 10)
+    )
+    hot = [{"user_id": u, "count": c} for u, c in rows]
+    if hot:
+        alerts.append(
+            {
+                "level": "warning",
+                "type": "high_frequency_action",
+                "message": f"近 24 小时有 {len(hot)} 个账号操作异常频繁（>10 次）",
+                "count": len(hot),
+                "samples": [h["user_id"] for h in hot[:5]],
+            }
+        )
+
+    # 3) 同一商品频繁改价（潜在价格操纵）
+    price_rows = await db.execute(
+        select(AuditLog.entity_id, func.count(AuditLog.id))
+        .where(
+            AuditLog.action == "product.update",
+            AuditLog.entity == "product",
+            AuditLog.created_at >= cutoff,
+        )
+        .group_by(AuditLog.entity_id)
+        .having(func.count(AuditLog.id) > 3)
+    )
+    freq = [{"product_id": p, "count": c} for p, c in price_rows]
+    if freq:
+        alerts.append(
+            {
+                "level": "warning",
+                "type": "frequent_price_change",
+                "message": f"近 24 小时有 {len(freq)} 个商品改价次数过多（>3 次）",
+                "count": len(freq),
+                "samples": [f["product_id"] for f in freq[:5]],
+            }
+        )
+
+    return {"alerts": alerts, "generated_at": datetime.now(timezone.utc).isoformat()}

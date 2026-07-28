@@ -52,6 +52,10 @@ from app.api.views import router as views_router
 from app.api.knowledge import router as knowledge_router
 from app.api.affiliate import router as affiliate_router
 from app.api.live import router as live_router
+from app.api.invoices import router as invoices_router
+from app.api.presale import router as presale_router
+from app.api.staff import router as staff_router
+from app.api.report import router as report_router
 from app.core.config import settings
 from app.core.seed import seed_demo
 from app.events_handlers import register_handlers
@@ -224,6 +228,10 @@ app.include_router(views_router, prefix=settings.API_V1_PREFIX)
 app.include_router(knowledge_router, prefix=settings.API_V1_PREFIX)
 app.include_router(affiliate_router, prefix=settings.API_V1_PREFIX)
 app.include_router(live_router, prefix=settings.API_V1_PREFIX)
+app.include_router(invoices_router, prefix=settings.API_V1_PREFIX)
+app.include_router(presale_router, prefix=settings.API_V1_PREFIX)
+app.include_router(staff_router, prefix=settings.API_V1_PREFIX)
+app.include_router(report_router, prefix=settings.API_V1_PREFIX)
 
 
 # ---- 可观测性：Prometheus 风格指标端点（无需鉴权，供监控抓取）----

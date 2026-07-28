@@ -21,6 +21,7 @@ import {
   BookOpen,
   History,
   Radio,
+  Receipt,
 } from "lucide-react";
 
 const NAV = [
@@ -38,6 +39,7 @@ const NAV = [
   { key: "follow", labelKey: "nav.follow", path: "/follow", icon: <UserPlus size={16} /> },
   { key: "promotions", labelKey: "nav.promotions", path: "/promotions", icon: <Tag size={16} /> },
   { key: "live", labelKey: "nav.live", path: "/live", icon: <Radio size={16} /> },
+  { key: "presales", labelKey: "nav.presales", path: "/presales", icon: <Receipt size={16} /> },
   { key: "ai-mall", labelKey: "nav.aiHome", path: "/ai-mall", icon: <Sparkles size={16} /> },
   { key: "support", labelKey: "nav.support", path: "/support", icon: <MessageCircle size={16} /> },
 ];
