@@ -25,6 +25,15 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 启动后自动建表并写入演示账号，访问 http://localhost:8000/health 验证。
 
+#### Windows 一键启动（可选）
+
+仓库根目录提供两个启动辅助脚本，**二者任选其一**，逻辑相同：
+
+- `run.vbs`：双击运行，会弹出持久化命令行窗口并调用 `start.bat`，避免窗口一闪而过（推荐日常双击使用）。
+- `start.bat`：在已打开的命令行中直接运行，同时拉起后端（uvicorn）与前端（vite dev）。
+
+> 这两个脚本仅用于本地开发的便捷启动；生产环境请走 Docker / Render 部署（见下文）。
+
 ### 前端
 
 ```bash
@@ -184,9 +193,11 @@ npm run e2e              # 或 npx playwright test
 ## 目录结构
 
 ```
-try/
+ai-shop/
 ├── backend/   FastAPI 应用
 ├── frontend/  React 应用
-├── PLAN.md    开发计划
-└── README.md  本说明
+├── plans/     历史执行日志与详细规划
+├── PLAN.md    计划与状态总览
+├── README.md  项目说明与部署
+└── GETTING_STARTED.md  新手入门教程
 ```
