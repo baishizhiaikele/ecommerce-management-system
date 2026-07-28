@@ -894,6 +894,42 @@ export const reportReview = (reviewId: string, reason?: string) =>
     .post<ReviewOut>(`/products/reviews/${reviewId}/report`, { reason })
     .then((r) => r.data);
 
+// ---------- 商品问答 Q&A ----------
+export interface AnswerOut {
+  id: string;
+  question_id: string;
+  user_id: string;
+  username?: string | null;
+  content: string;
+  is_accepted: boolean;
+  created_at: string;
+}
+export interface QuestionOut {
+  id: string;
+  product_id: string;
+  user_id: string;
+  username?: string | null;
+  content: string;
+  created_at: string;
+  answers: AnswerOut[];
+}
+export const listQuestions = (productId: string) =>
+  api.get<QuestionOut[]>(`/products/${productId}/questions`).then((r) => r.data);
+export const askQuestion = (productId: string, content: string) =>
+  api
+    .post<QuestionOut>(`/products/${productId}/questions`, { content })
+    .then((r) => r.data);
+export const answerQuestion = (questionId: string, content: string) =>
+  api
+    .post<QuestionOut>(`/products/questions/${questionId}/answers`, { content })
+    .then((r) => r.data);
+export const acceptAnswer = (questionId: string, answerId: string) =>
+  api
+    .post<QuestionOut>(`/products/questions/${questionId}/accept/${answerId}`)
+    .then((r) => r.data);
+export const deleteQuestion = (questionId: string) =>
+  api.delete(`/products/questions/${questionId}`);
+
 // ---------- 报表导出 PDF ----------
 export const exportOrdersPdf = () =>
   api

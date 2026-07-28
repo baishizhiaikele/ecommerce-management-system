@@ -31,6 +31,7 @@ import { useI18n } from "../i18n";
 import EmptyState from "../components/EmptyState";
 import ProductReviews from "../components/ProductReviews";
 import ProductChat from "../components/ProductChat";
+import ProductQA from "../components/ProductQA";
 
 export default function ProductDetail() {
   const { id = "" } = useParams();
@@ -290,6 +291,11 @@ export default function ProductDetail() {
             key: "reviews",
             label: `${t("pd.reviews")} (${reviews.length})`,
             children: <ProductReviews productId={p.id} />,
+          },
+          {
+            key: "qa",
+            label: t("qna.title"),
+            children: <ProductQA productId={p.id} />,
           },
         ]}
       />

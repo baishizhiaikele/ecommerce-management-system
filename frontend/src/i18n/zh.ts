@@ -1189,6 +1189,23 @@ export const zh: Record<string, string> = {
   "review.placeholder": "说说这件商品的使用体验…",
   "review.submit": "提交评价",
 
+  // 商品问答
+  "qna.title": "问答",
+  "qna.ask": "提问",
+  "qna.askPlaceholder": "想了解这件商品的哪方面？提问试试",
+  "qna.empty": "暂无问答",
+  "qna.answer": "回答",
+  "qna.answerPlaceholder": "写下你的回答…",
+  "qna.submit": "提交",
+  "qna.accepted": "已采纳",
+  "qna.accept": "采纳",
+  "qna.anonymous": "匿名用户",
+  "qna.confirmDelete": "确认删除这个问题？",
+  "qna.askFail": "提问失败",
+  "qna.answerFail": "回答失败",
+  "qna.acceptFail": "采纳失败",
+  "qna.deleteFail": "删除失败",
+
   // 智能客服
   "chat.greeting": "你好，我是「{name}」的智能导购，有什么可以帮你的？",
   "chat.title": "智能客服 · {name}",

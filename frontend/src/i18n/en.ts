@@ -1189,6 +1189,23 @@ export const en: Record<string, string> = {
   "review.placeholder": "Share your experience with this product…",
   "review.submit": "Submit Review",
 
+  // Product Q&A
+  "qna.title": "Q&A",
+  "qna.ask": "Ask",
+  "qna.askPlaceholder": "What would you like to know about this product?",
+  "qna.empty": "No questions yet",
+  "qna.answer": "Answer",
+  "qna.answerPlaceholder": "Write your answer…",
+  "qna.submit": "Submit",
+  "qna.accepted": "Accepted",
+  "qna.accept": "Accept",
+  "qna.anonymous": "Anonymous",
+  "qna.confirmDelete": "Delete this question?",
+  "qna.askFail": "Failed to ask",
+  "qna.answerFail": "Failed to answer",
+  "qna.acceptFail": "Failed to accept",
+  "qna.deleteFail": "Failed to delete",
+
   // AI chat
   "chat.greeting": "Hi, I'm the AI shopping assistant for \"{name}\". How can I help?",
   "chat.title": "AI Assistant · {name}",
