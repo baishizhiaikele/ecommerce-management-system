@@ -34,6 +34,20 @@ CACHE_HEADERS = {
     "Cache-Control": "public, max-age=86400, immutable",
 }
 
+# 上游图床不可达（如 Wikimedia 拒绝/限流）时返回的占位图，
+# 避免前端出现破图与满屏 502，保证界面优雅降级。
+PLACEHOLDER_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240">'
+    '<rect width="100%" height="100%" fill="#e9edf2"/>'
+    '<text x="50%" y="50%" font-size="18" fill="#9aa5b1" '
+    'text-anchor="middle" dominant-baseline="middle">图片暂不可用</text></svg>'
+)
+
+
+def _placeholder_response() -> Response:
+    return Response(content=PLACEHOLDER_SVG, media_type="image/svg+xml", headers=CACHE_HEADERS)
+
+
 
 @router.get("/proxy")
 async def proxy_image(
@@ -57,19 +71,25 @@ async def proxy_image(
         )
 
     try:
-        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+        # 部分图床（如 Wikimedia）会拒绝缺少 User-Agent 的默认请求（返回 403），
+        # 导致代理误报 502。显式带上浏览器 UA 以正常拉取图片。
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True, headers=headers) as client:
             async with client.stream("GET", u) as resp:
                 if resp.status_code != 200:
-                    raise HTTPException(status_code=502, detail="上游图片获取失败")
+                    return _placeholder_response()
                 data = b""
                 async for chunk in resp.aiter_bytes():
                     data += chunk
                     if len(data) > MAX_BYTES:
-                        raise HTTPException(status_code=502, detail="图片过大")
+                        return _placeholder_response()
     except HTTPException:
         raise
     except Exception:  # noqa: BLE001
-        raise HTTPException(status_code=502, detail="图片代理异常")
+        return _placeholder_response()
 
     ctype = resp.headers.get("content-type") or mimetypes.guess_type(u)[0] or "image/jpeg"
     cached.write_bytes(data)
