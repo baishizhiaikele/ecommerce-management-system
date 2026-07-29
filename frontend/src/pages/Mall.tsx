@@ -23,7 +23,7 @@ function RewardCard({
   return (
     <Card
       hoverable
-      className="soft-card overflow-hidden"
+      className="soft-card card-lift overflow-hidden"
       cover={
         <div className="h-36 bg-slate-100 relative">
           {item.image_url ? (
@@ -121,7 +121,7 @@ export default function Mall() {
       ) : items.length === 0 ? (
         <Empty description={t("mall.empty")} />
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
           {items.map((it) => (
             <RewardCard
               key={it.id}
@@ -171,7 +171,7 @@ export default function Mall() {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Gift className="text-[#F97316]" size={24} />

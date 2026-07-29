@@ -56,7 +56,9 @@ export default function AdminLayout() {
             <Link
               key={m.key}
               to={m.path}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-slate-300 hover:bg-white/10"
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm ${
+                isActive(m.path) ? "bg-white/10 text-white font-medium" : "text-slate-300 hover:bg-white/10"
+              }`}
             >
               {m.icon}
               {t(m.labelKey)}
@@ -98,7 +100,7 @@ export default function AdminLayout() {
           </div>
         </header>
 
-        <main className="flex-1 p-4 lg:p-6 pb-24 lg:pb-6"><Outlet /></main>
+        <main className="flex-1 p-6 lg:p-8 pb-24 lg:pb-8"><Outlet /></main>
       </div>
 
       {/* 移动端底部导航 */}

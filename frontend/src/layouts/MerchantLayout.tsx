@@ -67,7 +67,9 @@ export default function MerchantLayout() {
             <Link
               key={m.key}
               to={m.path}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-slate-600 hover:bg-slate-100"
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm ${
+                isActive(m.path) ? "bg-indigo-50 text-indigo-600 font-medium" : "text-slate-600 hover:bg-slate-100"
+              }`}
             >
               {m.icon}
               {t(m.labelKey)}
@@ -109,7 +111,7 @@ export default function MerchantLayout() {
           </div>
         </header>
 
-        <main className="flex-1 p-4 md:p-6 pb-24 md:pb-6"><Outlet /></main>
+        <main className="flex-1 p-6 md:p-8 pb-24 md:pb-8"><Outlet /></main>
       </div>
 
       {/* 移动端底部导航 */}
