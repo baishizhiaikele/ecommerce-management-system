@@ -100,7 +100,7 @@ export default function MerchantDecoration() {
   if (loading) return <div className="py-24 flex justify-center"><Spin /></div>;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex items-center gap-2">
         <Paintbrush size={22} className="text-indigo-600" />
         <h1 className="text-2xl font-bold">{t("deco.title")}</h1>
@@ -115,9 +115,9 @@ export default function MerchantDecoration() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* 左侧：配置表单 */}
-        <div className="space-y-4">
+        <div className="space-y-5">
           <Card title={t("deco.theme")} className="soft-card">
             <div className="flex items-center gap-3">
               <ColorPicker

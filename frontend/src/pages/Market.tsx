@@ -269,22 +269,22 @@ export default function Market() {
       )}
 
       {/* 快捷入口 */}
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <section className="grid grid-cols-2 md:grid-cols-4 gap-5">
         {[
-          { labelKey: "market.quick.coupon", icon: <Gift size={20} />, go: () => navigate("/coupons") },
-          { labelKey: "market.quick.shop", icon: <Store size={20} />, go: () => navigate("/shops") },
-          { labelKey: "market.quick.points", icon: <Sparkles size={20} />, go: () => navigate("/points") },
-          { labelKey: "market.quick.fav", icon: <ShoppingBag size={20} />, go: () => navigate("/favorites") },
+          { labelKey: "market.quick.coupon", icon: <Gift size={22} />, go: () => navigate("/coupons") },
+          { labelKey: "market.quick.shop", icon: <Store size={22} />, go: () => navigate("/shops") },
+          { labelKey: "market.quick.points", icon: <Sparkles size={22} />, go: () => navigate("/points") },
+          { labelKey: "market.quick.fav", icon: <ShoppingBag size={22} />, go: () => navigate("/favorites") },
         ].map((q) => (
           <button
             key={q.labelKey}
             onClick={q.go}
-            className="card-soft card-lift flex items-center gap-3 p-4 hover:border-[#4F46E5]"
+            className="card-soft card-lift flex items-center gap-4 p-5 min-h-[92px] hover:border-[#4F46E5]"
           >
-            <span className="glow-icon" style={{ width: 42, height: 42, fontSize: 20 }}>
+            <span className="glow-icon shrink-0" style={{ width: 50, height: 50, fontSize: 24 }}>
               {q.icon}
             </span>
-            <span className="font-medium text-slate-700">{t(q.labelKey)}</span>
+            <span className="font-semibold text-slate-800 text-[15px] leading-tight">{t(q.labelKey)}</span>
           </button>
         ))}
       </section>

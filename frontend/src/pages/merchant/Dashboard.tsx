@@ -79,12 +79,9 @@ export default function MerchantDashboard() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <span className="w-1 h-6 rounded bg-slate-300" />
-          <h2 className="text-xl font-bold m-0">{t("md.title")}</h2>
-        </div>
-        <Button type="primary" icon={<DownloadOutlined />} onClick={onExport}>
+      <div className="section-title">
+        <h2>{t("md.title")}</h2>
+        <Button className="ml-auto" type="primary" icon={<DownloadOutlined />} onClick={onExport}>
           {t("md.exportReport")}
         </Button>
       </div>

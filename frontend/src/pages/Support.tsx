@@ -103,11 +103,11 @@ export default function Support() {
   const isMerchant = role === "merchant";
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold m-0">{isMerchant ? t("support.titleMerchant") : t("support.titleMine")}</h2>
+    <div className="space-y-6">
+      <div className="section-title">
+        <h2>{isMerchant ? t("support.titleMerchant") : t("support.titleMine")}</h2>
         {!isMerchant && (
-          <Button type="primary" onClick={() => setNewOpen(true)}>
+          <Button className="ml-auto" type="primary" onClick={() => setNewOpen(true)}>
             {t("support.newTicket")}
           </Button>
         )}
@@ -120,7 +120,7 @@ export default function Support() {
         <Empty description={isMerchant ? t("support.emptyMerchant") : t("support.emptyMine")} className="py-20" />
       ) : (
         <List
-          className="border border-slate-100 rounded-2xl overflow-hidden"
+          className="card-soft overflow-hidden"
           dataSource={tickets}
           renderItem={(tk) => (
             <List.Item

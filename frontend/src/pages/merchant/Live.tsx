@@ -69,6 +69,7 @@ export default function MerchantLive() {
 
   return (
     <Card
+      className="soft-card"
       title={t("live.m.title")}
       extra={
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>

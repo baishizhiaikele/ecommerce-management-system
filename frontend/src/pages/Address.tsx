@@ -57,10 +57,10 @@ export default function AddressBook() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold m-0">{t("page.address.title")}</h2>
-        <Button type="primary" icon={<Plus size={16} />} onClick={openAdd}>
+    <div className="space-y-6">
+      <div className="section-title">
+        <h2>{t("page.address.title")}</h2>
+        <Button className="ml-auto" type="primary" icon={<Plus size={16} />} onClick={openAdd}>
           {t("address.new")}
         </Button>
       </div>
@@ -68,7 +68,7 @@ export default function AddressBook() {
       {list.length === 0 ? (
         <Empty className="py-16" description={t("empty.address")} />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {list.map((a) => (
             <Card key={a.id} className="soft-card">
               <div className="flex items-start gap-2">

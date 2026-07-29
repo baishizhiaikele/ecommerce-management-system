@@ -110,7 +110,7 @@ export default function Discover() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex items-center gap-2 flex-wrap">
         <BookOpen size={22} className="text-[#4F46E5]" />
         <h1 className="text-2xl font-bold">{t("note.title")}</h1>
@@ -133,7 +133,7 @@ export default function Discover() {
       ) : notes.length === 0 ? (
         <Empty description={t("note.empty")} className="py-20" />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {notes.map((n) => (
             <Card key={n.id} className="soft-card" styles={{ body: { padding: 18 } }}>
               <div className="flex items-center gap-2 mb-2">

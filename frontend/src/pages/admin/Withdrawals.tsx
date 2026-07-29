@@ -38,7 +38,7 @@ export default function AdminWithdrawals() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div>
         <h1 className="text-xl font-bold">{t("aff.adm.title")}</h1>
         <p className="text-slate-400 text-sm mt-0.5">{t("aff.adm.desc")}</p>

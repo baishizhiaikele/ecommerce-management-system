@@ -92,9 +92,9 @@ export default function Membership() {
   const color = TIER_COLOR[member.level] || "#6366f1";
 
   return (
-    <div>
+    <div className="space-y-6">
       <Card
-        className="rounded-2xl mb-4 fade-up"
+        className="rounded-2xl fade-up"
         style={{ background: `linear-gradient(135deg, ${color}, #4F46E5)`, border: "none", color: "#fff" }}
       >
         <div className="flex items-center justify-between">
@@ -130,7 +130,7 @@ export default function Membership() {
       {/* P3-H PLUS 付费会员 */}
       {plus && (
         <Card
-          className="rounded-2xl mb-4 soft-card fade-up"
+          className="rounded-2xl soft-card fade-up"
           title={
             <span className="flex items-center gap-2">
               <ThunderboltOutlined style={{ color: "#f59e0b" }} />
@@ -179,7 +179,7 @@ export default function Membership() {
         </Card>
       )}
 
-      <Card className="rounded-2xl mb-4 soft-card fade-up" title={tr("membership.perks")}>
+      <Card className="rounded-2xl soft-card fade-up" title={tr("membership.perks")}>
         {member.benefits?.length ? (
           <ul className="m-0 pl-5 text-slate-600">
             {member.benefits.map((b) => (

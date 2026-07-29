@@ -129,7 +129,7 @@ export default function Reports() {
   const tops = (preview?.top_products || []) as any[];
 
   return (
-    <div className="max-w-6xl mx-auto p-4">
+    <div className="max-w-6xl mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-xl font-semibold">{t("report.title")}</h2>
@@ -147,13 +147,13 @@ export default function Reports() {
       ) : (
         <>
           {preview?.summary && (
-            <div className="mb-4 text-sm text-slate-600 bg-slate-50 rounded p-3">
+            <div className="card-soft p-4 mb-6 text-sm text-slate-600">
               {preview.summary}
             </div>
           )}
           <Row gutter={16}>
             <Col xs={24} lg={12} className="mb-4">
-              <Card title={t("report.salesTrend")}>
+              <Card className="soft-card" title={t("report.salesTrend")}>
                 {trend.length ? (
                   <ResponsiveContainer width="100%" height={260}>
                     <LineChart data={trend}>
@@ -170,7 +170,7 @@ export default function Reports() {
               </Card>
             </Col>
             <Col xs={24} lg={12} className="mb-4">
-              <Card title={t("report.byCategory")}>
+              <Card className="soft-card" title={t("report.byCategory")}>
                 {cats.length ? (
                   <ResponsiveContainer width="100%" height={260}>
                     <PieChart>
@@ -194,7 +194,7 @@ export default function Reports() {
               </Card>
             </Col>
             <Col xs={24} className="mb-4">
-              <Card title={t("report.topProducts")}>
+              <Card className="soft-card" title={t("report.topProducts")}>
                 {tops.length ? (
                   <ResponsiveContainer width="100%" height={260}>
                     <BarChart data={tops}>
@@ -214,7 +214,7 @@ export default function Reports() {
         </>
       )}
 
-      <Card title={t("report.tasks")}>
+      <Card className="soft-card" title={t("report.tasks")}>
         <Table rowKey="id" columns={columns} dataSource={tasks} />
       </Card>
 

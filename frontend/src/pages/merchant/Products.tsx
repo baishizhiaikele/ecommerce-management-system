@@ -212,6 +212,7 @@ export default function MerchantProducts() {
   return (
     <Guard>
       <Card
+        className="soft-card"
         title={t("mprod.myTitle")}
         extra={
           <Button type="primary" icon={<PlusOutlined />} onClick={() => openEdit()}>

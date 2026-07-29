@@ -90,6 +90,7 @@ export default function MerchantReviews() {
 
   return (
     <Card
+      className="soft-card"
       title={t("mr.title")}
       extra={
         <Select

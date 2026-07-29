@@ -58,6 +58,7 @@ export default function MerchantPresales() {
 
   return (
     <Card
+      className="soft-card"
       title={t("ps.m.title")}
       extra={
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>

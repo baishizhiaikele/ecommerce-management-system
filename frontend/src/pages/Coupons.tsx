@@ -26,7 +26,7 @@ function CouponCard({
   footer: React.ReactNode;
 }) {
   return (
-    <div className="flex rounded-2xl overflow-hidden border border-slate-100 shadow-sm fade-up">
+    <div className="flex rounded-2xl overflow-hidden card-soft fade-up">
       <div
         className="w-28 flex flex-col items-center justify-center text-white"
         style={{ background: "#4F46E5" }}
@@ -82,9 +82,8 @@ export default function Coupons() {
 
   return (
     <div>
-      <div className="flex items-center gap-2 mb-4">
-        <GiftOutlined className="text-[#4F46E5]" />
-        <h2 className="text-xl font-bold m-0">{t("coupon.myTitle")}</h2>
+      <div className="section-title">
+        <h2>{t("coupon.myTitle")}</h2>
       </div>
       {loading ? (
         <div className="flex justify-center py-20">

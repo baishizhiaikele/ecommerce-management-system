@@ -71,7 +71,7 @@ export default function Login() {
 
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="w-full max-w-sm">
-          <div className="bg-white border border-[#EEF0F3] shadow-sm rounded-2xl p-8">
+          <div className="card-soft p-8">
             <h1 className="text-2xl font-semibold text-slate-800 mb-1">
               {mode === "login" ? t("page.login.title") : t("register.title")}
             </h1>

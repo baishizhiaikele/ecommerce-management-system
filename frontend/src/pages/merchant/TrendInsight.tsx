@@ -84,7 +84,7 @@ export default function TrendInsight() {
   }, [load]);
 
   return (
-    <div style={{ maxWidth: 1080, margin: "0 auto", padding: 16 }}>
+    <div style={{ maxWidth: 1080, margin: "0 auto", padding: 24 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <TrendingUp color="#f5222d" />

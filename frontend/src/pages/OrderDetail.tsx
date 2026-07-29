@@ -298,7 +298,7 @@ export default function OrderDetail() {
       <Button type="link" onClick={() => navigate(-1)}>
         {t("common.back")}
       </Button>
-      <Card title={`${t("od.orderNo")} ${order.order_no}`} className="mt-2">
+      <Card title={`${t("od.orderNo")} ${order.order_no}`} className="soft-card mt-2">
         <Descriptions column={2}>
           <Descriptions.Item label={t("od.status")}>
             <Tag color={orderStatusMeta[order.status].color}>

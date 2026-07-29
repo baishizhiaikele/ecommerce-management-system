@@ -53,7 +53,7 @@ export default function Following() {
   ) : list.length === 0 ? (
     <Empty description={t("follow.empty")} className="py-20" />
   ) : (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {list.map((f) => (
         <Card
           key={f.merchant_id}
@@ -90,7 +90,7 @@ export default function Following() {
   ) : feed.length === 0 ? (
     <Empty description={t("feed.empty")} className="py-20" />
   ) : (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {feed.map((e) => (
         <Card
           key={e.id}
@@ -142,7 +142,7 @@ export default function Following() {
   );
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-5">
       <h1 className="text-2xl font-bold">{t("page.following.title")}</h1>
       <Tabs
         defaultActiveKey="feed"

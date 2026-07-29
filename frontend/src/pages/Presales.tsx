@@ -121,7 +121,7 @@ export default function Presales() {
     reservations.length === 0 ? (
       <Empty className="py-16" description={t("ps.noReservations")} />
     ) : (
-      <div className="space-y-3">
+      <div className="space-y-4">
         {reservations.map((r) => (
           <Card key={r.id} className="soft-card">
             <div className="flex items-center gap-3">
@@ -158,7 +158,7 @@ export default function Presales() {
     );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-extrabold text-slate-800">{t("ps.title")}</h1>
         <p className="text-slate-400 text-sm mt-1">{t("ps.desc")}</p>

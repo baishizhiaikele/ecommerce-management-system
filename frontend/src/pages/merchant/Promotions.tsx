@@ -172,6 +172,7 @@ export default function MerchantPromotions() {
 
   return (
     <Card
+      className="soft-card"
       title={t("page.merchant.promotions")}
       extra={
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>

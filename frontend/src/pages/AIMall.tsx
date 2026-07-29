@@ -334,7 +334,7 @@ export default function AIMall() {
   }, [chatInput]);
 
   return (
-    <div style={{ maxWidth: 1080, margin: "0 auto", padding: 16 }}>
+    <div style={{ maxWidth: 1080, margin: "0 auto", padding: 24 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
         <Sparkles color="#f5222d" />
         <Title level={4} style={{ margin: 0 }}>

@@ -104,7 +104,7 @@ export default function Shop() {
     if (loading) return <div className="py-24 flex justify-center"><Spin /></div>;
     if (!detail) return <Empty description={t("shop.notFound")} className="py-24" />;
     return (
-      <div className="space-y-5">
+      <div className="space-y-6">
         {/* 店铺头图 / 资料卡（P3-E 支持商家自定义装修） */}
         <div className="relative rounded-3xl overflow-hidden">
           {deco && (deco.banner_image || deco.banner_title) ? (
@@ -249,7 +249,7 @@ export default function Shop() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex items-center gap-2">
         <Star className="text-amber-500" size={22} />
         <h1 className="text-2xl font-bold">{t("shop.browse")}</h1>

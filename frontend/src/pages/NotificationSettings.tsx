@@ -56,10 +56,10 @@ export default function NotificationSettings() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-semibold">{t("notif.title")}</h2>
-        <Button onClick={() => nav(-1)}>{t("common.back")}</Button>
+    <div className="max-w-2xl mx-auto p-6">
+      <div className="section-title">
+        <h2>{t("notif.title")}</h2>
+        <Button className="ml-auto" onClick={() => nav(-1)}>{t("common.back")}</Button>
       </div>
       <p className="text-sm text-slate-500 mb-4">{t("notif.desc")}</p>
       {loading ? (
@@ -67,8 +67,8 @@ export default function NotificationSettings() {
           <Spin />
         </div>
       ) : (
-        <Card>
-          <div className="space-y-3">
+        <Card className="soft-card">
+          <div className="space-y-4">
             {cats.map((c) => (
               <div key={c} className="flex items-center justify-between">
                 <span>{CAT_LABELS[c]?.[lang] || c}</span>

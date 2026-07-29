@@ -146,7 +146,7 @@ export default function Notifications() {
       ) : visible.length === 0 ? (
         <EmptyState title={t("notif.empty")} description={t("notif.emptyDesc")} />
       ) : (
-        <div className="shadow-sm rounded-2xl overflow-hidden border border-slate-100">
+        <div className="card-soft overflow-hidden">
           <List
             dataSource={visible}
             renderItem={(n) => {

@@ -60,10 +60,10 @@ export default function Favorites() {
 
   return (
     <div>
-      <div className="flex items-center gap-2 mb-4">
+      <div className="section-title">
         <HeartFilled style={{ color: "#EF4444" }} />
-        <h2 className="text-xl font-bold m-0">{t("page.favorites.title")}</h2>
-        <span className="text-slate-400">{t("fav.total").replace("{n}", String(items.length))}</span>
+        <h2>{t("page.favorites.title")}</h2>
+        <span className="sh-action">{t("fav.total").replace("{n}", String(items.length))}</span>
       </div>
       {loading ? (
         <div className="flex justify-center py-20">
@@ -76,7 +76,7 @@ export default function Favorites() {
           action={<Button type="primary" onClick={() => navigate("/")}>{t("favorites.browse")}</Button>}
         />
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
           {items.map((p) => (
             <Card
               key={p.id}

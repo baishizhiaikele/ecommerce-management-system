@@ -161,7 +161,7 @@ export default function Cart() {
       </Card>
 
       <div className="lg:col-span-1 lg:sticky lg:top-6 space-y-4">
-        <Card title={t("cart.checkoutTitle")} className="rounded-2xl shadow-sm border-0">
+        <Card title={t("cart.checkoutTitle")} className="card-soft">
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-3">
               <span className="text-slate-600 whitespace-nowrap">{t("cart.coupon")}</span>
@@ -191,7 +191,7 @@ export default function Cart() {
           </div>
         </Card>
 
-        <Card className="rounded-2xl shadow-sm border-0">
+        <Card className="card-soft">
           <div className="flex items-center justify-between">
             <span className="text-slate-500">{t("common.total")}</span>
             <div className="flex items-center gap-2">

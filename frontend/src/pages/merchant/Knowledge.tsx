@@ -42,7 +42,7 @@ export default function Knowledge() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <h1 className="text-2xl font-bold">{t("kb.title")}</h1>
       <p className="text-slate-500 text-sm">{t("kb.desc")}</p>
 

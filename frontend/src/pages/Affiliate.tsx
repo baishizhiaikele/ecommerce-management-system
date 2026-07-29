@@ -93,7 +93,7 @@ export default function Affiliate() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {stats.map((s) => (
           <Card key={s.label} className="soft-card">
             <div className="flex items-center gap-2 text-slate-400 text-sm">

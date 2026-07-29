@@ -125,8 +125,8 @@ export default function LiveRoomPage() {
   if (!room) return null;
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* 直播画面区 */}
         <div className="lg:col-span-2">
           <div className="relative aspect-video rounded-2xl overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-rose-950">
@@ -200,7 +200,7 @@ export default function LiveRoomPage() {
         {room.products.length === 0 ? (
           <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("live.noProducts")} />
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
             {room.products.map((p, i) => (
               <div
                 key={p.id}

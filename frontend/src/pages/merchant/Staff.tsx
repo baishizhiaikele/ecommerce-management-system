@@ -9,7 +9,7 @@ import {
   StaffPerm,
   updateSubaccount,
 } from "../../api";
-import { Button, Checkbox, Form, Input, Modal, Popconfirm, Table, Tag, message } from "antd";
+import { Button, Card, Checkbox, Form, Input, Modal, Popconfirm, Table, Tag, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 
 export default function Staff() {
@@ -104,18 +104,20 @@ export default function Staff() {
   ];
 
   return (
-    <div className="max-w-4xl mx-auto p-4">
-      <div className="flex items-center justify-between mb-4">
+    <div className="max-w-4xl mx-auto p-6 space-y-6">
+      <div className="section-title">
         <div>
-          <h2 className="text-xl font-semibold">{t("staff.title")}</h2>
-          <p className="text-sm text-slate-500">{t("staff.desc")}</p>
+          <h2 className="m-0">{t("staff.title")}</h2>
+          <p className="text-sm text-slate-500 mt-0.5">{t("staff.desc")}</p>
         </div>
-        <Button type="primary" onClick={() => setOpen(true)}>
+        <Button className="ml-auto" type="primary" onClick={() => setOpen(true)}>
           {t("staff.create")}
         </Button>
       </div>
 
-      <Table rowKey="id" loading={loading} columns={columns} dataSource={rows} />
+      <Card className="soft-card">
+        <Table rowKey="id" loading={loading} columns={columns} dataSource={rows} />
+      </Card>
 
       <Modal
         title={t("staff.create")}

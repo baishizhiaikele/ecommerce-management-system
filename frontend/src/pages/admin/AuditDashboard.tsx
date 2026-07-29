@@ -38,11 +38,10 @@ export default function AuditDashboard() {
 
   return (
     <div>
-      <div className="flex items-center gap-2 mb-4">
-        <span className="w-1 h-6 rounded bg-slate-300" />
-        <h2 className="text-xl font-bold m-0">{t("admin.auditDash")}</h2>
+      <div className="section-title">
+        <h2>{t("admin.auditDash")}</h2>
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card title={t("admin.actionDist")} className="soft-card">
           <ResponsiveContainer width="100%" height={320}>
             <BarChart data={data.by_action} layout="vertical">

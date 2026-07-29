@@ -64,7 +64,7 @@ export default function Me() {
         </div>
       </Card>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         {tiles.map((tile) => (
           <Card key={tile.labelKey} hoverable className="soft-card text-center" onClick={tile.go}>
             <div className="flex justify-center mb-2 text-[#4F46E5]">{tile.icon}</div>

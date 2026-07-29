@@ -79,23 +79,24 @@ export default function MerchantInventory() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
+        <Card className="soft-card">
           <Statistic title={t("inv.statSku")} value={summary?.total_skus ?? 0} />
         </Card>
-        <Card>
+        <Card className="soft-card">
           <Statistic title={t("inv.statLow")} value={summary?.low_stock_count ?? 0} valueStyle={{ color: "#F97316" }} />
         </Card>
-        <Card>
+        <Card className="soft-card">
           <Statistic title={t("inv.statOut")} value={summary?.out_of_stock_count ?? 0} valueStyle={{ color: "#EF4444" }} />
         </Card>
-        <Card>
+        <Card className="soft-card">
           <Statistic title={t("inv.statRecent")} value={summary?.recent_changes ?? 0} />
         </Card>
       </div>
 
       <Card
+        className="soft-card"
         title={
           <span>
             <WarningOutlined className="text-[#F97316] mr-2" />
@@ -133,6 +134,7 @@ export default function MerchantInventory() {
       </Card>
 
       <Card
+        className="soft-card"
         title={t("inv.flow")}
         extra={
           <Button

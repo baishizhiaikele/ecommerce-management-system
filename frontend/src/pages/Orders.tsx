@@ -22,9 +22,8 @@ export default function Orders() {
     return <EmptyState title={t("empty.orders")} description={t("empty.ordersDesc")} />;
   return (
     <div>
-      <div className="flex items-center gap-2 mb-4">
-        <span className="w-1 h-6 rounded bg-slate-300" />
-        <h2 className="text-xl font-bold m-0">{t("page.orders.title")}</h2>
+      <div className="section-title">
+        <h2>{t("page.orders.title")}</h2>
       </div>
       <Card className="soft-card">
         <Table

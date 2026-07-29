@@ -210,7 +210,7 @@ export default function ProductDetail() {
       : 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <Row gutter={[32, 24]}>
         <Col xs={24} md={10}>
           <div className="aspect-square rounded-2xl overflow-hidden bg-slate-100 flex items-center justify-center">
