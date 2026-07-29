@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, Fragment } from "react";
 import type { AxiosError } from "axios";
 import { useNavigate } from "react-router-dom";
 import { Carousel, Card, Button, Input, Row, Col, Empty, Spin, Tag, message, Select, Switch, InputNumber, Rate, Space, AutoComplete } from "antd";
@@ -222,14 +222,14 @@ export default function Market() {
     <Card
       hoverable
       className="product-card group"
-      cover={<ProductImage name={p.name} image_url={p.image_url} height={190} rounded={0} />}
+      cover={<ProductImage name={p.name} image_url={p.image_url} height={200} rounded={0} />}
       onClick={() => navigate(`/products/${p.id}`)}
     >
       <div className="truncate text-sm text-slate-700 font-medium" title={p.name}>
         {p.name}
       </div>
       <div className="flex items-center justify-between mt-2">
-        <span className="text-[#4F46E5] font-bold text-lg">
+        <span className="pc-price text-[#4F46E5]">
           <span className="text-sm align-top mr-0.5">¥</span>
           {money(p.price)}
         </span>
@@ -251,16 +251,16 @@ export default function Market() {
   );
 
   return (
-    <div className="space-y-10">
-      {/* 轮播 Banner */}
+    <div className="page-shell stack-lg py-8">
+      {/* 轮播 Banner（放大 + 柔和叠层） */}
       {banners.length > 0 && (
-        <Carousel autoplay className="rounded-3xl overflow-hidden shadow-sm" dots>
+        <Carousel autoplay className="hero-shell" dots>
           {banners.map((b) => (
             <div key={b.id} onClick={() => goBanner(b)} className="cursor-pointer">
-              <div className="h-[200px] md:h-[280px] w-full relative">
+              <div className="h-[240px] md:h-[340px] w-full relative">
                 <img src={b.image_url} alt={b.title} className="w-full h-full object-cover" />
-                <div className="absolute left-6 bottom-6 bg-white/85 backdrop-blur px-4 py-2 rounded-xl text-[#111827] font-bold shadow">
-                  {b.title}
+                <div className="absolute left-6 bottom-6">
+                  <div className="hero-caption max-w-md">{b.title}</div>
                 </div>
               </div>
             </div>
@@ -269,7 +269,7 @@ export default function Market() {
       )}
 
       {/* 快捷入口 */}
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { labelKey: "market.quick.coupon", icon: <Gift size={20} />, go: () => navigate("/coupons") },
           { labelKey: "market.quick.shop", icon: <Store size={20} />, go: () => navigate("/shops") },
@@ -279,7 +279,7 @@ export default function Market() {
           <button
             key={q.labelKey}
             onClick={q.go}
-            className="flex items-center gap-3 rounded-2xl bg-white border border-[#EEF0F3] p-4 hover:border-[#4F46E5] hover:shadow-sm transition"
+            className="card-soft card-lift flex items-center gap-3 p-4 hover:border-[#4F46E5]"
           >
             <span className="glow-icon" style={{ width: 42, height: 42, fontSize: 20 }}>
               {q.icon}
@@ -299,7 +299,7 @@ export default function Market() {
               {t("market.moreOffers")}
             </Button>
           </div>
-          <div className="flex gap-3 overflow-x-auto pb-2">
+          <div className="rail-scroll">
             {coupons.map((c) => (
               <div
                 key={c.id}
@@ -347,7 +347,7 @@ export default function Market() {
               {t("market.moreOffers")}
             </Button>
           </div>
-          <div className="flex gap-3 overflow-x-auto pb-1">
+          <div className="rail-scroll">
             {promos.map((pr) => (
               <div
                 key={pr.id}
@@ -368,36 +368,31 @@ export default function Market() {
         </section>
       )}
 
-      {/* 多级分类导航 */}
+      {/* 分类快捷筛选（精简为横向 capsule，释放首屏） */}
       <section>
         <div className="section-title">
           <span className="st-text">{t("market.allCats")}</span>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="flex flex-wrap gap-2">
+          <button className={`chip ${!cat ? "chip-active" : ""}`} onClick={() => pickCat(undefined)}>
+            全部
+          </button>
           {topCats.map((tc) => (
-            <div key={tc.id} className="bg-white border border-[#EEF0F3] rounded-2xl p-4">
-              <button
-                onClick={() => pickCat(tc.id)}
-                className={`font-bold text-base mb-2 hover:text-[#4F46E5] ${!cat ? "" : ""}`}
-              >
+            <Fragment key={tc.id}>
+              <button className={`chip ${cat === tc.id ? "chip-active" : ""}`} onClick={() => pickCat(tc.id)}>
                 {tc.name}
               </button>
-              <div className="flex flex-wrap gap-2">
-                {subOf(tc.id).map((sc) => (
+              {cat === tc.id &&
+                subOf(tc.id).map((sc) => (
                   <button
                     key={sc.id}
+                    className={`chip ${cat === sc.id ? "chip-active" : ""}`}
                     onClick={() => pickCat(sc.id)}
-                    className={`px-2.5 py-1 rounded-full text-xs border transition ${
-                      cat === sc.id
-                        ? "bg-[#4F46E5] text-white border-[#4F46E5]"
-                        : "bg-slate-50 text-slate-600 border-slate-200 hover:border-[#4F46E5]"
-                    }`}
                   >
                     {sc.name}
                   </button>
                 ))}
-              </div>
-            </div>
+            </Fragment>
           ))}
         </div>
       </section>
@@ -408,7 +403,7 @@ export default function Market() {
           { titleKey: "market.topSales", icon: <Flame size={16} className="text-rose-500" />, data: topSales, key: "sales" },
           { titleKey: "market.topRating", icon: <TrendingUp size={16} className="text-[#4F46E5]" />, data: topRating, key: "rating" },
         ].map((board) => (
-          <div key={board.key} className="bg-white border border-[#EEF0F3] rounded-2xl p-4">
+          <div key={board.key} className="card-soft p-4">
             <div className="flex items-center gap-2 mb-3">
               {board.icon}
               <span className="font-bold">{t(board.titleKey)}</span>
@@ -485,7 +480,7 @@ export default function Market() {
             <span className="st-text">{t("market.guessYouLike")}</span>
             <Tag color="purple">{t("market.aiRec")}</Tag>
           </div>
-          <div className="flex gap-3 overflow-x-auto pb-2">
+          <div className="rail-scroll">
             {recs.map((p, i) => (
               <div key={p.id} className="!w-44 shrink-0">
                 <Reveal delay={i * 50}>
@@ -529,7 +524,7 @@ export default function Market() {
           <div className="section-title">
             <span className="st-text">{t("market.recentView")}</span>
           </div>
-          <div className="flex gap-3 overflow-x-auto pb-2">
+          <div className="rail-scroll">
             {recent.map((p, i) => (
               <div key={p.id} className="!w-44 shrink-0">
                 <Reveal delay={i * 40}>
@@ -546,7 +541,7 @@ export default function Market() {
         <div className="section-title">
           <span className="st-text">{cat ? cats.find((c) => c.id === cat)?.name : t("market.featured")}</span>
         </div>
-        <div className="bg-white border border-[#EEF0F3] rounded-2xl p-4 mb-3 flex gap-3 flex-wrap items-center">
+        <div className="card-soft p-4 mb-4 flex gap-3 flex-wrap items-center">
           <AutoComplete
             placeholder={t("market.searchPlaceholder")}
             allowClear
@@ -685,11 +680,11 @@ export default function Market() {
           </div>
         )}
         {loading ? (
-          <Row gutter={[16, 16]}>
+          <Row gutter={[20, 20]}>
             {Array.from({ length: 8 }).map((_, i) => (
               <Col key={i} xs={24} sm={12} md={8} lg={6}>
                 <div className="product-card overflow-hidden" style={{ padding: 0 }}>
-                  <div className="skeleton-shimmer" style={{ height: 190 }} />
+                  <div className="skeleton-shimmer" style={{ height: 200 }} />
                   <div style={{ padding: 16, display: "grid", gap: 10 }}>
                     <div className="skeleton-shimmer" style={{ height: 14, width: "70%" }} />
                     <div className="skeleton-shimmer" style={{ height: 14, width: "40%" }} />
@@ -702,7 +697,7 @@ export default function Market() {
         ) : items.length === 0 ? (
           <Empty className="py-20" description={t("market.noProducts")} />
         ) : (
-          <Row gutter={[16, 16]}>
+          <Row gutter={[20, 20]}>
             {items.map((p, i) => (
               <Col key={p.id} xs={24} sm={12} md={8} lg={6}>
                 <Reveal delay={(i % 8) * 60}>

@@ -183,21 +183,21 @@ button,
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 16px;
+  margin-bottom: 22px;
 }
 .section-title::before {
   content: "";
-  width: 3px;
-  height: 18px;
-  border-radius: 3px;
-  background: #d1d5db;
+  width: 4px;
+  height: 20px;
+  border-radius: 4px;
+  background: #4f46e5;
 }
 .section-title h2,
 .section-title .st-text {
-  font-size: 19px;
-  font-weight: 600;
+  font-size: 20px;
+  font-weight: 700;
   margin: 0;
-  letter-spacing: -0.2px;
+  letter-spacing: -0.02em;
   color: #111827;
 }
 
@@ -280,4 +280,212 @@ button,
   background: linear-gradient(90deg, #f1f2f4 25%, #e9ebef 37%, #f1f2f4 63%);
   background-size: 400% 100%;
   animation: shimmer 1.4s ease-in-out infinite;
+}
+
+/* ============ 简约精选风 · 设计系统（2026-07 改版） ============ */
+:root {
+  --brand-primary: #4f46e5;
+  --brand-primary-strong: #4338ca;
+  --brand-soft: #eef0ff;
+  --brand-ink: #111827;
+  --brand-ink-soft: #374151;
+  --brand-muted: #6b7280;
+  --brand-faint: #9ca3af;
+  --brand-line: #eef0f3;
+  --brand-surface: #ffffff;
+  --brand-bg: #f7f8fa;
+
+  /* 间距节奏：区块之间更克制的“呼吸感” */
+  --space-section: 56px;
+  --space-section-lg: 72px;
+
+  /* 圆角阶梯 */
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+
+  /* 阴影：更柔更轻，避免廉价感 */
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 6px 20px rgba(16, 24, 40, 0.04);
+  --shadow-lift: 0 10px 34px rgba(16, 24, 40, 0.09);
+  --shadow-pop: 0 12px 40px rgba(16, 24, 40, 0.12);
+
+  /* 动效曲线 */
+  --ease-soft: cubic-bezier(0.22, 0.7, 0.3, 1);
+}
+
+/* 页面外壳：受限宽度 + 充足内边距（大屏更宽松） */
+.page-shell {
+  width: 100%;
+  max-width: 1200px;
+  margin-inline: auto;
+  padding-inline: 24px;
+}
+@media (min-width: 1280px) {
+  .page-shell {
+    max-width: 1280px;
+    padding-inline: 32px;
+  }
+}
+
+/* 区块垂直节奏：相邻区块之间大留白 */
+.stack > * + * {
+  margin-top: var(--space-section);
+}
+.stack-lg > * + * {
+  margin-top: var(--space-section-lg);
+}
+
+/* 分区标题（精选风）：大字号 + 可挂右侧操作，覆盖旧竖条避免重复 */
+.section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.section-head::before {
+  content: none;
+}
+.section-head h2,
+.section-head .sh-title {
+  font-size: 23px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--brand-ink);
+  margin: 0;
+}
+.section-head .sh-sub {
+  font-size: 13px;
+  color: var(--brand-muted);
+  font-weight: 400;
+}
+.section-head .sh-action {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--brand-muted);
+}
+.eyebrow {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--brand-primary);
+}
+
+/* Hero：大图、圆角、柔和暗化叠层，文字浮于其上 */
+.hero-shell {
+  border-radius: var(--radius-2xl);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+.hero-caption {
+  background: rgba(17, 24, 39, 0.55);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  border-radius: 14px;
+  padding: 14px 18px;
+}
+
+/* 横向 rail：统一标题 + 可滚动内容（scroll-snap） */
+.rail-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.rail-head h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--brand-ink);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+.rail-scroll {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+}
+.rail-scroll > * {
+  scroll-snap-align: start;
+  flex: 0 0 auto;
+}
+
+/* 商品卡（精选风增强）：更大图、更多内边距、价格强对比、柔和抬升 */
+.product-card {
+  border-radius: 16px !important;
+  border: 1px solid var(--brand-line) !important;
+  background: var(--brand-surface);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+  transition: transform 0.25s var(--ease-soft), box-shadow 0.25s var(--ease-soft),
+    border-color 0.25s var(--ease-soft);
+}
+.product-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lift);
+  border-color: #e2e5eb !important;
+}
+.product-card .pc-body {
+  padding: 16px 16px 18px;
+}
+.product-card .pc-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--brand-ink);
+}
+.product-card .pc-price {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+/* 通用卡片表面（更强质感） */
+.card-soft {
+  background: var(--brand-surface);
+  border: 1px solid var(--brand-line);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+}
+.card-lift {
+  transition: transform 0.25s var(--ease-soft), box-shadow 0.25s var(--ease-soft);
+}
+.card-lift:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lift);
+}
+
+/* 分类胶囊 */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  background: #fff;
+  border: 1px solid var(--brand-line);
+  color: var(--brand-ink-soft);
+  transition: all 0.18s var(--ease-soft);
+  cursor: pointer;
+}
+.chip:hover {
+  border-color: var(--brand-primary);
+  color: var(--brand-primary);
+}
+.chip-active {
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
+  color: #fff;
+}
+
+/* 两行截断助手 */
+.clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }

@@ -152,7 +152,7 @@ export default function MainLayout() {
         </div>
       </header>
 
-      <main id="main-content" tabIndex={-1} className="max-w-7xl mx-auto px-4 py-6 pb-24 lg:pb-6 outline-none"><Outlet /></main>
+      <main id="main-content" tabIndex={-1} className="max-w-7xl mx-auto px-4 py-8 pb-24 lg:pb-8 outline-none"><Outlet /></main>
 
       {/* 移动端底部导航 */}
       <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur border-t border-slate-100 grid grid-cols-6">
