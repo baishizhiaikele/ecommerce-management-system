@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Table, Card, Spin, Tag, Tabs, Drawer, Button, List, Input, message } from "antd";
 import EmptyState from "../../components/EmptyState";
-import { adminAuditLogs, AuditLogOut, getAuditAlerts, getAuditReplay } from "../../api";
+import { adminAuditLogs, AuditLogOut, getAuditAlerts, getAuditReplay, AuditAlert, AuditLogItem } from "../../api";
 import { useI18n } from "../../i18n";
 
 export default function AdminAudit() {
@@ -9,12 +9,12 @@ export default function AdminAudit() {
   const [items, setItems] = useState<AuditLogOut[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [replay, setReplay] = useState<any[]>([]);
+  const [replay, setReplay] = useState<AuditLogItem[]>([]);
   const [replayOpen, setReplayOpen] = useState(false);
   const [replayLoading, setReplayLoading] = useState(false);
   const [replayTitle, setReplayTitle] = useState("");
 
-  const [alerts, setAlerts] = useState<any[]>([]);
+  const [alerts, setAlerts] = useState<AuditAlert[]>([]);
   const [alertsLoading, setAlertsLoading] = useState(false);
 
   const load = () => {
@@ -113,7 +113,7 @@ export default function AdminAudit() {
                     <List.Item>
                       <div>
                         <Tag color="blue">{it.action}</Tag>
-                        <span className="text-xs text-slate-500">{new Date(it.created_at).toLocaleString()}</span>
+                        <span className="text-xs text-slate-500">{it.created_at ? new Date(it.created_at).toLocaleString() : "-"}</span>
                         <div className="text-sm">{it.detail || "-"}</div>
                       </div>
                     </List.Item>
@@ -139,12 +139,12 @@ export default function AdminAudit() {
                 ) : (
                   <List
                     dataSource={alerts}
-                    renderItem={(a: any) => (
+                    renderItem={(a: AuditAlert) => (
                       <List.Item>
                         <div>
                           <Tag color={a.level === "warning" ? "orange" : "cyan"}>{a.type}</Tag>
                           <div className="text-sm">{a.message}</div>
-                          {a.samples?.length > 0 && (
+                          {a.samples && a.samples.length > 0 && (
                             <div className="text-xs text-slate-400 break-all">{a.samples.join(", ")}</div>
                           )}
                         </div>
@@ -169,17 +169,17 @@ export default function AdminAudit() {
   );
 }
 
-function TimelineList({ data }: { data: any[] }) {
+function TimelineList({ data }: { data: AuditLogItem[] }) {
   const { t } = useI18n();
   if (!data.length) return <div className="text-slate-400">{t("admin.emptyReplay")}</div>;
   return (
     <List
       dataSource={data}
-      renderItem={(it: any) => (
+      renderItem={(it: AuditLogItem) => (
         <List.Item>
           <div>
             <Tag color="blue">{it.action}</Tag>
-            <span className="text-xs text-slate-500">{new Date(it.created_at).toLocaleString()}</span>
+            <span className="text-xs text-slate-500">{it.created_at ? new Date(it.created_at).toLocaleString() : "-"}</span>
             <div className="text-sm">{it.detail || "-"}</div>
           </div>
         </List.Item>

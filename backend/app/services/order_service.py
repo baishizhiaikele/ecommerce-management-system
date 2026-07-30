@@ -1,8 +1,10 @@
+import logging
 from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.exc import DeadlockDetectedError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -18,6 +20,22 @@ from app.state_machine import can_transition
 from app.services.audit_service import record
 from app.services.promo_engine import apply_item_promotions
 from app.services.coupon_service import compute_discount, find_usable_user_coupon, use_coupon
+
+logger = logging.getLogger(__name__)
+
+
+async def _db_now(db: AsyncSession) -> datetime:
+    """L7：以数据库时间为权威时钟，避免多实例部署时各应用服务器时钟偏差
+    导致订单超时判定与状态时间戳（paid_at/shipped_at/completed_at/
+    picked_up_at）相互矛盾。PostgreSQL 返回带时区 UTC；SQLite 返回
+    CURRENT_TIMESTAMP（naive），此处统一补全为 UTC 以兼容带时区字段。
+    """
+    dt = await db.scalar(select(func.current_timestamp()))
+    if dt is None:  # 兜底：DB 函数异常时不应阻断下单/状态流转
+        return datetime.now(timezone.utc)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
 from app.services.inventory_service import record_cancel_return, record_sale
 from app.services.points_service import POINTS_REDEEM_RATE, add_points
 from app.services.shipping_service import compute_freight
@@ -27,7 +45,7 @@ from app.events import bus
 
 
 async def _next_order_no(db: AsyncSession) -> str:
-    day = datetime.now(timezone.utc).strftime("%Y%m%d")
+    day = (await _db_now(db)).strftime("%Y%m%d")
     seq = await db.scalar(select(OrderSequence).where(OrderSequence.day == day).with_for_update())
     if seq is None:
         seq = OrderSequence(day=day, value=0)
@@ -37,46 +55,16 @@ async def _next_order_no(db: AsyncSession) -> str:
     return f"ORD-{day}-{seq.value:04d}"
 
 
-async def checkout(
+async def _build_order_items(
     db: AsyncSession,
     *,
-    buyer: User,
-    address: str,
-    coupon_id: str | None = None,
-    use_points: bool = False,
-    delivery_type: str = "express",
-    pickup_store: str | None = None,
-) -> Order:
-    cart_rows = list(
-        await db.scalars(select(CartItem).where(CartItem.user_id == buyer.id))
-    )
-    if not cart_rows:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="购物车为空")
-
-    order_no = await _next_order_no(db)
-    if delivery_type == "pickup" and not pickup_store:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="到店自提需选择门店")
-    order = Order(
-        order_no=order_no,
-        buyer_id=buyer.id,
-        status=OrderStatus.PENDING_PAYMENT,
-        address=address,
-        delivery_type=delivery_type,
-        pickup_store=pickup_store,
-    )
-    db.add(order)
-    await db.flush()
-
-    # S3：一次性加行锁（FOR UPDATE）取出本次下单涉及的全部商品，既消除 N+1（P1），
-    # 又避免并发下单同时读到同一库存值导致的超卖
-    product_ids = [it.product_id for it in cart_rows]
-    locked = list(
-        await db.scalars(
-            select(Product).where(Product.id.in_(product_ids)).with_for_update()
-        )
-    )
-    pmap = {p.id: p for p in locked}
-
+    order: Order,
+    cart_rows: list[CartItem],
+    pmap: dict[str, Product],
+) -> tuple[float, dict[str, float], list[tuple[str, int, float]], list[str]]:
+    """遍历购物车逐件校验库存/规格、扣减库存并记录销量，生成 OrderItem；
+    同时累加金额小计、各商家小计与促销输入。返回 (total, merchant_subtotals, promo_input, out_of_stock)。
+    调用方需已对涉及商品加行锁（with_for_update），此处直接扣减以保证不超卖。"""
     total = 0.0
     merchant_subtotals: dict[str, float] = {}
     out_of_stock: list[str] = []
@@ -130,11 +118,27 @@ async def checkout(
                 variant_info=variant_info,
             )
         )
+    return total, merchant_subtotals, promo_input, out_of_stock
 
-    subtotal = round(total, 2)
+
+async def _apply_promotions_and_discounts(
+    db: AsyncSession,
+    *,
+    buyer: User,
+    order: Order,
+    pmap: dict[str, Product],
+    subtotal: float,
+    promo_input: list[tuple[str, int, float]],
+    tier: dict[str, float | bool],
+    plus_active: bool,
+    coupon_id: str | None = None,
+    use_points: bool = False,
+) -> float:
+    """汇总所有优惠（商品促销 / 会员等级 / PLUS / 优惠券 / 积分），返回总抵扣金额。
+    赠品 OrderItem、优惠券核销、积分扣减等副作用均在此完成，与下单主事务同提交。"""
     discount = 0.0
     # 商品级促销：第二件半价 / N 元任选 M 件 / 满赠（与会员折扣、优惠券叠加）
-    promo_discount, gift_ids, _promo_hits = await apply_item_promotions(db, promo_input)
+    promo_discount, gift_ids, _ = await apply_item_promotions(db, promo_input)
     discount += promo_discount
     for gid in gift_ids:
         gift_product = pmap.get(gid) or await db.get(Product, gid)
@@ -144,14 +148,10 @@ async def checkout(
             and gift_product.stock >= 1
         ):
             await record_sale(db, gift_product, 1)
-            db.add(
-                OrderItem(order_id=order.id, product_id=gid, quantity=1, price=0)
-            )
-    # 会员等级专属折扣（青铜 discount=1.0 不打折，不影响既有订单）
-    tier = get_tier(buyer.growth_value or 0)
+            db.add(OrderItem(order_id=order.id, product_id=gid, quantity=1, price=0))
+    # 会员等级专属折扣（青铜 discount=1.0 不打折）
     discount += round(subtotal * (1 - tier["discount"]), 2)
-    # P3-H PLUS 付费会员：全场额外 95 折（与等级折扣叠加）+ 全场包邮
-    plus_active = await is_plus_active(db, buyer.id)
+    # P3-H PLUS 付费会员：全场额外 95 折（与等级折扣叠加）
     if plus_active:
         discount += round(subtotal * tier["discount"] * (1 - PLUS_EXTRA_DISCOUNT), 2)
     # 优惠券抵扣
@@ -170,18 +170,105 @@ async def checkout(
         if points_used:
             discount += points_used / POINTS_REDEEM_RATE
             await add_points(db, buyer.id, PointAction.REDEEM, -points_used, "下单积分抵扣")
+    return discount
 
-    # 运费：按各商家默认模板分别计运费后累加（无模板则包邮）
+
+async def _compute_freight(
+    db: AsyncSession,
+    *,
+    merchant_subtotals: dict[str, float],
+    tier: dict[str, float | bool],
+    plus_active: bool,
+    delivery_type: str,
+) -> float:
+    """按各商家默认模板分别计运费后累加；会员包邮权益、PLUS、到店自提均免运费。"""
     freight = 0.0
     for mid, msub in merchant_subtotals.items():
         freight += await compute_freight(db, mid, msub)
     freight = round(freight, 2)
-    # 会员包邮权益（黄金 / 钻石等级免运费）；PLUS 付费会员全场包邮
     if tier["free_shipping"] or plus_active:
         freight = 0.0
-    # P3-D 到店自提：无需快递，免运费
     if delivery_type == "pickup":
         freight = 0.0
+    return freight
+
+
+async def checkout(
+    db: AsyncSession,
+    *,
+    buyer: User,
+    address: str,
+    coupon_id: str | None = None,
+    use_points: bool = False,
+    delivery_type: str = "express",
+    pickup_store: str | None = None,
+) -> Order:
+    cart_rows = list(
+        await db.scalars(select(CartItem).where(CartItem.user_id == buyer.id))
+    )
+    if not cart_rows:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="购物车为空")
+
+    # P1-M13：锁定买家行，避免并发下单超扣积分
+    buyer = await db.scalar(select(User).where(User.id == buyer.id).with_for_update())
+    if not buyer:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
+
+    order_no = await _next_order_no(db)
+    if delivery_type == "pickup" and not pickup_store:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="到店自提需选择门店")
+    order = Order(
+        order_no=order_no,
+        buyer_id=buyer.id,
+        status=OrderStatus.PENDING_PAYMENT,
+        address=address,
+        delivery_type=delivery_type,
+        pickup_store=pickup_store,
+    )
+    db.add(order)
+    await db.flush()
+
+    # S3/P1-M4：排序 + 去重加行锁取出全部涉及商品，消除 N+1 并避免并发超卖/死锁
+    product_ids = sorted(set(it.product_id for it in cart_rows))
+    locked = list(
+        await db.scalars(
+            select(Product).where(Product.id.in_(product_ids)).with_for_update()
+        )
+    )
+    pmap = {p.id: p for p in locked}
+
+    # 库存锁定 + 构建订单明细
+    total, merchant_subtotals, promo_input, out_of_stock = await _build_order_items(
+        db, order=order, cart_rows=cart_rows, pmap=pmap
+    )
+    subtotal = round(total, 2)
+
+    # 会员等级 / PLUS 状态（优惠与运费均依赖，仅计算一次复用）
+    tier = get_tier(buyer.growth_value or 0)
+    plus_active = await is_plus_active(db, buyer.id)
+
+    # 优惠计算（含赠品、优惠券、积分等副作用）
+    discount = await _apply_promotions_and_discounts(
+        db,
+        buyer=buyer,
+        order=order,
+        pmap=pmap,
+        subtotal=subtotal,
+        promo_input=promo_input,
+        tier=tier,
+        plus_active=plus_active,
+        coupon_id=coupon_id,
+        use_points=use_points,
+    )
+
+    # 运费计算
+    freight = await _compute_freight(
+        db,
+        merchant_subtotals=merchant_subtotals,
+        tier=tier,
+        plus_active=plus_active,
+        delivery_type=delivery_type,
+    )
 
     order.freight = freight
     order.total_amount = round(max(subtotal - discount, 0.0) + freight, 2)
@@ -207,7 +294,8 @@ async def _load_order(db: AsyncSession, order_id: str) -> Order:
 
 
 async def list_orders(
-    db: AsyncSession, *, user_id: str, role: str
+    db: AsyncSession, *, user_id: str, role: str, status: str | None = None,
+    page: int = 1, page_size: int = 200,
 ) -> list[Order]:
     stmt = select(Order)
     if role == "merchant":
@@ -219,6 +307,11 @@ async def list_orders(
         )
     else:
         stmt = stmt.where(Order.buyer_id == user_id)
+    if status:
+        stmt = stmt.where(Order.status == status)
+    # P2-M6：服务端分页，避免一次性加载整张订单表
+    page_size = min(max(page_size, 1), 500)
+    stmt = stmt.limit(page_size).offset(max(page - 1, 0) * page_size)
     rows = await db.scalars(stmt.order_by(Order.created_at.desc()))
     return list(rows)
 
@@ -229,11 +322,17 @@ async def get_order(db: AsyncSession, order_id: str, *, user_id: str, role: str)
         return order
     if order.buyer_id != user_id:
         if role == "merchant":
-            merchant_items = []
-            for it in order.items:
-                product = await db.get(Product, it.product_id)
-                if product and product.merchant_id == user_id:
-                    merchant_items.append(it)
+            # P2-M5：批量预取订单内商品，避免逐 item 查库的 N+1
+            item_pids = [it.product_id for it in order.items]
+            pmap = {
+                p.id: p
+                for p in await db.scalars(select(Product).where(Product.id.in_(item_pids)))
+            }
+            merchant_items = [
+                it
+                for it in order.items
+                if pmap.get(it.product_id) and pmap[it.product_id].merchant_id == user_id
+            ]
             if not merchant_items:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权查看该订单")
             return order
@@ -248,9 +347,15 @@ async def transition_status(
     if not can_transition(prev, target, role):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"不允许从 {order.status.value} 流转到 {target.value}",
-        )
-    now = datetime.now(timezone.utc)
+        detail=f"不允许从 {order.status.value} 流转到 {target.value}",
+    )
+    now = await _db_now(db)
+    # P2-M5：批量预取订单内商品，避免各状态分支逐 item 查库的 N+1
+    _pids = [it.product_id for it in order.items]
+    _pmap = {
+        p.id: p
+        for p in await db.scalars(select(Product).where(Product.id.in_(_pids)))
+    }
     order.status = target
     if target == OrderStatus.PAID:
         order.paid_at = now
@@ -273,7 +378,7 @@ async def transition_status(
         # 换货完成后不重复累加销量（首次完成时已计）
         order.completed_at = now
         for it in order.items:
-            product = await db.get(Product, it.product_id)
+            product = _pmap.get(it.product_id)
             if product:
                 product.sales_count = (product.sales_count or 0) + it.quantity
         # 担保交易：买家确认收货，释放托管资金给商家
@@ -282,7 +387,7 @@ async def transition_status(
         await release_escrow(db, order)
     elif target == OrderStatus.CANCELLED:
         for it in order.items:
-            product = await db.get(Product, it.product_id)
+            product = _pmap.get(it.product_id)
             if product:
                 await record_cancel_return(db, product, it.quantity)
     elif target == OrderStatus.REFUND_REQUESTED:
@@ -293,7 +398,7 @@ async def transition_status(
         # 实物已退回：回补库存并扣减销量（打款在 REFUNDED 时不重复回补）
         order.return_received_at = now
         for it in order.items:
-            product = await db.get(Product, it.product_id)
+            product = _pmap.get(it.product_id)
             if product:
                 await record_cancel_return(db, product, it.quantity)
                 product.sales_count = max((product.sales_count or 0) - it.quantity, 0)
@@ -313,9 +418,18 @@ async def transition_status(
         await reverse_escrow(db, order)
     # DISPUTE: dispute_reason 由 API 设置，无需在此处理
 
-    await record(db, actor_id, f"order.{target.value}", "order", order.id, order.order_no)
-    await db.commit()
-    await db.refresh(order)
+    # M4：状态变更与其审计记录在同一事务内一次性提交，保证二者原子一致；
+    # 任何异常（含死锁）均回滚，避免"状态已落库而审计缺失"或会话残留脏状态。
+    try:
+        await record(db, actor_id, f"order.{target.value}", "order", order.id, order.order_no)
+        await db.commit()
+    except DeadlockDetectedError:
+        await db.rollback()
+        logger.warning("订单 %s 状态流转(%s)遇死锁，已回滚", order.id, target.value)
+        raise
+    except Exception:
+        await db.rollback()
+        raise
 
     # 解耦：完成后发积分 / 通知；退款后回收积分
     if target == OrderStatus.COMPLETED:
@@ -339,7 +453,7 @@ async def verify_pickup(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="当前订单状态不可核销")
     if not order.pickup_code or pickup_code.strip().upper() != order.pickup_code:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="自提码不正确")
-    now = datetime.now(timezone.utc)
+    now = await _db_now(db)
     # 已支付但未备货的订单先流转到 shipped（备货完成）再核销
     if order.status == OrderStatus.PAID:
         order = await transition_status(

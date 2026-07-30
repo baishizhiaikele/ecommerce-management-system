@@ -31,7 +31,7 @@ export default function AdminProducts() {
       message.success(t("admin.online"));
       load();
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("common.operationFailed"));
     }
   };
@@ -41,7 +41,7 @@ export default function AdminProducts() {
       message.success(t("admin.rejected"));
       load();
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("common.operationFailed"));
     }
   };

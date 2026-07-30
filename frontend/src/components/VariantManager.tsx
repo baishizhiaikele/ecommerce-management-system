@@ -101,7 +101,7 @@ export default function VariantManager({ productId, productName, open, onClose }
       setModalOpen(false);
       load();
     } catch (e: any) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("variant.saveFail"));
     }
   };
@@ -112,7 +112,7 @@ export default function VariantManager({ productId, productName, open, onClose }
       message.success(t("common.deleted"));
       load();
     } catch (e: any) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("variant.deleteFail"));
     }
   };

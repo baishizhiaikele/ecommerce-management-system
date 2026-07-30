@@ -75,7 +75,7 @@ export default function Coupons() {
       message.success(t("coupon.claimSuccess"));
       load();
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("coupon.claimFail"));
     }
   };

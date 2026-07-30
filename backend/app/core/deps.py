@@ -5,10 +5,11 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import decode_token, is_token_type
-from app.db.session import SessionLocal, get_db
+from app.db.session import get_db
 from app.models.product import Product
+from app.models.staff import SubAccount
 from app.models.user import Role, User
-from app.services.subaccount_service import resolve_owner
+from sqlalchemy import select
 
 bearer = HTTPBearer(auto_error=False)
 
@@ -60,21 +61,33 @@ class MerchantCtx:
 
 
 def require_merchant(perm: str | None = None):
-    """校验当前用户为商家（主账号或有效子账号）；指定 perm 时检查子账号是否拥有该权限。"""
+    """校验当前用户为商家（主账号或有效子账号）；指定 perm 时检查子账号是否拥有该权限。
 
-    async def checker(user: User = Depends(get_current_user)) -> MerchantCtx:
+    安全修复（P0-H2）：
+    - 复用请求会话(db)解析归属，避免原实现另开 SessionLocal() 导致与主会话快照不一致/TOCTOU；
+    - 原实现在子账号记录缺失/禁用时把 owner 退化为子账号本人并**跳过 perm 校验**，现改为：
+      主账号(无子账号关联)→owner 即本人，无需 perm；子账号(缺失/禁用)→直接 403，杜绝权限绕过。
+    """
+
+    async def checker(
+        user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+    ) -> MerchantCtx:
         if user.role != Role.MERCHANT:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅商家可访问")
-        async with SessionLocal() as db:
-            resolved = await resolve_owner(db, user.id)
-        if resolved:
-            owner_id, perms = resolved
-            if perm and perm not in perms:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN, detail=f"子账号缺少权限：{perm}"
-                )
-            return MerchantCtx(owner_id=owner_id, user=user)
-        return MerchantCtx(owner_id=user.id, user=user)
+        # 复用请求会话，避免双会话不一致与 TOCTOU
+        sub = await db.scalar(select(SubAccount).where(SubAccount.staff_user_id == user.id))
+        if sub is None:
+            # 主账号：无任何子账号关联，owner 即本人，无需 perm 校验
+            return MerchantCtx(owner_id=user.id, user=user)
+        if not sub.is_active:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="子账号已被禁用或失效")
+        perms = [p for p in (sub.permissions or "").split(",") if p]
+        if perm and perm not in perms:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail=f"子账号缺少权限：{perm}"
+            )
+        return MerchantCtx(owner_id=sub.owner_id, user=user)
 
     return checker
 

@@ -158,14 +158,24 @@ async def pin_review(db: AsyncSession, *, review_id: str, merchant_id: str, pinn
     return review
 
 
-async def delete_review(db: AsyncSession, *, review_id: str, merchant_id: str | None = None) -> None:
+async def delete_review(
+    db: AsyncSession,
+    *,
+    review_id: str,
+    merchant_id: str | None = None,
+    user_id: str | None = None,
+) -> None:
     review = await db.get(Review, review_id)
     if not review:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="评价不存在")
     if merchant_id:
+        # 商家只能删除自己商品的评价
         product = await db.get(Product, review.product_id)
         if not product or product.merchant_id != merchant_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权操作")
+    if user_id is not None and review.user_id != user_id:
+        # 买家只能删除自己的评价（P0-M8：原实现误用 merchant_id 导致买家无法删除）
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权操作")
     await db.delete(review)
     await db.commit()
 

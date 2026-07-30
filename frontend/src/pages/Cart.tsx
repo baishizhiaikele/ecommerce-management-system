@@ -65,7 +65,7 @@ export default function Cart() {
       await updateCartItem(id, q);
       load();
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("cart.updateFail"));
     }
   };
@@ -74,7 +74,7 @@ export default function Cart() {
       await removeCartItem(id);
       load();
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("common.operationFailed"));
     }
   };
@@ -99,7 +99,7 @@ export default function Cart() {
       message.success(t("cart.orderSuccess"));
       navigate(`/orders/${order.id}`);
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("cart.orderFail"));
     } finally {
       setSubmitting(false);

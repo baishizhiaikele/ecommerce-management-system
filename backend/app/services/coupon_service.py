@@ -102,6 +102,7 @@ async def find_usable_user_coupon(
     uc = await db.scalar(
         select(UserCoupon)
         .options(selectinload(UserCoupon.coupon))
+        .with_for_update()
         .where(
             UserCoupon.user_id == user_id,
             UserCoupon.coupon_id == coupon_id,

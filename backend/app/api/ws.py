@@ -1,8 +1,11 @@
 """实时通知 WebSocket 端点：/api/ws/notifications?token=<access_token>。"""
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from sqlalchemy import select
 
 from app.core.security import decode_token
 from app.core.ws import manager
+from app.db.session import SessionLocal
+from app.models.user import User
 
 router = APIRouter(tags=["ws"])
 
@@ -22,6 +25,17 @@ async def ws_notifications(websocket: WebSocket, token: str = "") -> None:
             return
     except Exception:  # noqa: BLE001
         await websocket.close(code=4401)
+        return
+
+    # P0-M7：校验用户存在且未禁用，禁用账号立即关闭连接
+    try:
+        async with SessionLocal() as db:
+            user = await db.scalar(select(User).where(User.id == user_id))
+        if not user or not user.is_active:
+            await websocket.close(code=4403)
+            return
+    except Exception:  # noqa: BLE001
+        await websocket.close(code=4403)
         return
 
     await manager.connect(user_id, websocket)

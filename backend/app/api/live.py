@@ -105,6 +105,9 @@ async def live_ws(websocket: WebSocket, room_id: str):
             if uid:
                 async with SessionLocal() as db:
                     user = await db.scalar(select(User).where(User.id == uid))
+                    # P0-M7：禁用账号不授予弹幕发送权限
+                    if user and not user.is_active:
+                        user = None
         except Exception:  # noqa: BLE001
             user = None
     await manager.connect_room(room_id, websocket)

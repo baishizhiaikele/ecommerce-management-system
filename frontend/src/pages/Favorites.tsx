@@ -36,7 +36,7 @@ export default function Favorites() {
       setItems((s) => s.filter((p) => p.id !== id));
       message.success(t("favorites.removed"));
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("common.operationFailed"));
     }
   };
@@ -53,7 +53,7 @@ export default function Favorites() {
       });
       message.success(t("pd.addedCart"));
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("common.operationFailed"));
     }
   };

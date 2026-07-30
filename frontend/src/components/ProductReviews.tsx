@@ -55,7 +55,7 @@ export default function ProductReviews({ productId }: { productId: string }) {
       setRating(5);
       load();
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("common.submitFail"));
     } finally {
       setSubmitting(false);
@@ -79,7 +79,7 @@ export default function ProductReviews({ productId }: { productId: string }) {
       setAppendImages("");
       load();
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("common.submitFail"));
     } finally {
       setAppendSubmitting(false);

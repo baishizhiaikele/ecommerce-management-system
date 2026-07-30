@@ -23,6 +23,7 @@ import {
   StockSummaryOut,
   StockLogOut,
   ProductOut,
+  LowStockOut,
 } from "../../api";
 import { useI18n, translate } from "../../i18n";
 
@@ -37,7 +38,7 @@ const changeMeta: Record<string, { labelKey: string; color: string }> = {
 export default function MerchantInventory() {
   const { t } = useI18n();
   const [summary, setSummary] = useState<StockSummaryOut | null>(null);
-  const [low, setLow] = useState<any[]>([]);
+  const [low, setLow] = useState<LowStockOut[]>([]);
   const [logs, setLogs] = useState<StockLogOut[]>([]);
   const [products, setProducts] = useState<ProductOut[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,7 +74,7 @@ export default function MerchantInventory() {
       setModal(false);
       load();
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("inv.adjustFail"));
     }
   };

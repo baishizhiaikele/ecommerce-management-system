@@ -63,7 +63,7 @@ export default function MerchantReviews() {
       setReplyTo(null);
       load(page);
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("common.replyFail"));
     }
   };
@@ -83,7 +83,7 @@ export default function MerchantReviews() {
       message.success(t("common.deleted"));
       load(page);
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("common.deleteFail"));
     }
   };

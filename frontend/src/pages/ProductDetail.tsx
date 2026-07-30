@@ -35,6 +35,15 @@ import ProductReviews from "../components/ProductReviews";
 import ProductChat from "../components/ProductChat";
 import ProductQA from "../components/ProductQA";
 
+// L3：本地浏览历史的条目结构（与写入时一致），消除 any[]。
+interface BrowseHistoryItem {
+  id: string;
+  name: string;
+  price: number;
+  image_url?: string;
+  stock?: number;
+}
+
 export default function ProductDetail() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
@@ -95,7 +104,7 @@ export default function ProductDetail() {
     if (!p?.id) return;
     try {
       const raw = localStorage.getItem("browse_history") || "[]";
-      const arr: any[] = JSON.parse(raw);
+      const arr = JSON.parse(raw) as BrowseHistoryItem[];
       const next = [
         { id: p.id, name: p.name, price: p.price, image_url: p.image_url, stock: p.stock },
         ...arr.filter((x) => x.id !== p.id),

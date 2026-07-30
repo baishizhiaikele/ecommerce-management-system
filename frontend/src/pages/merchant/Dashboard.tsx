@@ -72,7 +72,7 @@ export default function MerchantDashboard() {
       await exportOrdersReport();
       message.success(t("md.exported"));
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("md.exportFail"));
     }
   };

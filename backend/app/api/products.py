@@ -110,14 +110,12 @@ async def create_product(
 
 @router.put("/{product_id}", response_model=ProductOut)
 async def update_product(
-    product_id: str,
-    data: ProductUpdate,
+    product: Product = Depends(get_merchant_product),
+    data: ProductUpdate = ...,
     db: AsyncSession = Depends(get_db),
-    ctx: MerchantCtx = Depends(require_merchant("products")),
 ) -> Product:
-    product = await product_service.get_product(db, product_id)
     product = await product_service.update_product(
-        db, product=product, merchant_id=ctx.owner_id, data=data
+        db, product=product, merchant_id=product.merchant_id, data=data
     )
     await cache_delete_prefix("products:")
     return product
@@ -125,12 +123,10 @@ async def update_product(
 
 @router.delete("/{product_id}", status_code=204)
 async def delete_product(
-    product_id: str,
+    product: Product = Depends(get_merchant_product),
     db: AsyncSession = Depends(get_db),
-    ctx: MerchantCtx = Depends(require_merchant("products")),
 ) -> None:
-    product = await product_service.get_product(db, product_id)
-    await product_service.delete_product(db, product=product, merchant_id=ctx.owner_id)
+    await product_service.delete_product(db, product=product, merchant_id=product.merchant_id)
     await cache_delete_prefix("products:")
 
 

@@ -42,14 +42,20 @@ async def list_logs(
     logs = await inventory_service.list_logs(
         db, merchant_id=user.id, product_id=product_id, limit=limit
     )
+    # P2-M5：批量预取商品名，消除逐条日志查库的 N+1
+    pids = {log.product_id for log in logs if log.product_id}
+    pmap = (
+        {p.id: p.name for p in await db.scalars(select(Product).where(Product.id.in_(pids)))}
+        if pids
+        else {}
+    )
     out = []
     for log in logs:
-        product = await db.get(Product, log.product_id)
         out.append(
             StockLogOut(
                 id=log.id,
                 product_id=log.product_id,
-                product_name=product.name if product else None,
+                product_name=pmap.get(log.product_id),
                 change_type=log.change_type,
                 quantity=log.quantity,
                 balance_after=log.balance_after,

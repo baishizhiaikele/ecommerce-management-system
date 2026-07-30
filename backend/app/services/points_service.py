@@ -19,7 +19,8 @@ async def add_points(
     user = await db.get(User, user_id)
     if not user:
         return
-    user.points = (user.points or 0) + delta
+    # P1-M13：积分下限为 0，避免并发或异常扣减产生负积分
+    user.points = max(0, (user.points or 0) + delta)
     db.add(
         PointLog(
             user_id=user_id,

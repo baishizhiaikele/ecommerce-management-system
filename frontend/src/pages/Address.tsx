@@ -42,7 +42,7 @@ export default function AddressBook() {
       setOpen(false);
       load();
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       if (err.response?.status !== 422) message.error(err.response?.data?.detail || t("common.operationFailed"));
     }
   };

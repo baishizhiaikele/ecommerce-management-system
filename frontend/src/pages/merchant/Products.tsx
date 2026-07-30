@@ -92,7 +92,7 @@ export default function MerchantProducts() {
       setModal(false);
       load();
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("mprod.saveFail"));
     }
   };
@@ -102,7 +102,7 @@ export default function MerchantProducts() {
       message.success(t("common.deleted"));
       load();
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("mprod.deleteFail"));
     }
   };

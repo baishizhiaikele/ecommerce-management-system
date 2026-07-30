@@ -5,6 +5,7 @@ from app.core.deps import get_current_user
 from app.db.session import get_db
 from app.models.order import Order
 from app.models.user import Role, User
+from app.core.config import settings
 from app.services import payment_service
 from app.services.order_service import get_order
 
@@ -44,6 +45,11 @@ async def confirm_pay(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """沙箱自测：买家确认支付（生产应仅由网关 webhook 触发）。"""
+    # P0-M1：仅沙箱环境允许自助确认，生产由支付网关 webhook 触发，避免支付绕过
+    if settings.PAYMENT_GATEWAY != "sandbox":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="当前环境不支持自助确认支付"
+        )
     order = await get_order(db, order_id, user_id=user.id, role="buyer")
     if order.status.value != "pending_payment":
         raise HTTPException(

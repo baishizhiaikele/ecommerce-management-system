@@ -49,7 +49,7 @@ export default function Login() {
         form.resetFields();
       }
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(getErrorMessage(err));
     } finally {
       setLoading(false);

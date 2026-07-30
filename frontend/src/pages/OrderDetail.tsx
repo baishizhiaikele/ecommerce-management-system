@@ -107,7 +107,7 @@ export default function OrderDetail() {
       message.success(t("common.opSuccess"));
       load();
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("common.operationFailed"));
     } finally {
       setActing(false);
@@ -131,7 +131,7 @@ export default function OrderDetail() {
       setRating(5);
       load();
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("common.operationFailed"));
     }
   };
@@ -145,7 +145,7 @@ export default function OrderDetail() {
       setRefundReason("");
       load();
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("od.applyFail"));
     }
   };
@@ -157,7 +157,7 @@ export default function OrderDetail() {
       message.success(approve ? t("od.approveRefund") : t("od.rejectRefund"));
       load();
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("common.operationFailed"));
     }
   };
@@ -177,7 +177,7 @@ export default function OrderDetail() {
       setReturnShipNote("");
       load();
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("od.applyFail"));
     }
   };
@@ -189,7 +189,7 @@ export default function OrderDetail() {
       message.success(t("od.confirmReturnReceive"));
       load();
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("common.operationFailed"));
     }
   };
@@ -201,7 +201,7 @@ export default function OrderDetail() {
       message.success(t("od.exchangeSuccess"));
       load();
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("common.operationFailed"));
     }
   };
@@ -215,7 +215,7 @@ export default function OrderDetail() {
       setDisputeReason("");
       load();
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("od.applyFail"));
     }
   };
@@ -227,7 +227,7 @@ export default function OrderDetail() {
       message.success(approve ? t("od.refundApproved") : t("od.disputeMaintain"));
       load();
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("common.operationFailed"));
     }
   };
@@ -239,7 +239,7 @@ export default function OrderDetail() {
       setLogData(d);
       setLogOpen(true);
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("od.getLogFail"));
     }
   };
@@ -257,7 +257,7 @@ export default function OrderDetail() {
       message.success(t("od.logUpdated"));
       load();
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("od.addLogFail"));
     }
   };
@@ -468,7 +468,7 @@ export default function OrderDetail() {
                       setPickupInput("");
                       load();
                     } catch (e) {
-                      const err = e as AxiosError<any, any>;
+                      const err = e as AxiosError<ApiError>;
                       message.error(err.response?.data?.detail || t("od.pickupVerifyFail"));
                     }
                   }}

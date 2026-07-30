@@ -1,3 +1,4 @@
+import type { AxiosError } from "axios";
 import { api, API_BASE } from "./client";
 export { API_BASE };
 
@@ -21,6 +22,44 @@ export type OrderStatus =
 export type Sentiment = "positive" | "neutral" | "negative";
 export type CouponType = "full_reduce" | "discount";
 export type NotificationType = "order" | "coupon" | "points" | "review_alert" | "system";
+
+// L3：统一的后端错误结构，配合 getErrorMessage 消除 AxiosError<ApiError> 的 any。
+export interface ApiError {
+  detail?: string;
+  message?: string;
+  code?: string;
+  errors?: Record<string, string[]>;
+}
+
+/** 统一从抛出的异常中提取可读错误信息（兼容 axios 错误与本地 Error）。 */
+export function getErrorMessage(e: unknown): string {
+  const err = e as AxiosError<ApiError>;
+  return (
+    err?.response?.data?.detail ||
+    err?.response?.data?.message ||
+    err?.message ||
+    "请求失败，请稍后重试"
+  );
+}
+
+// 以下为原 api/index.ts 中 any 返回类型收敛后的具体结构（L3）。
+export interface LowStockOut {
+  id: string;
+  name: string;
+  stock: number;
+}
+export interface AuditAlert {
+  level?: string;
+  type?: string;
+  message?: string;
+  samples?: string[];
+}
+export interface ReportPreviewOut {
+  summary?: string;
+  sales_trend?: { day: string; gmv: number }[];
+  category_breakdown?: { gmv: number; category: string }[];
+  top_products?: { name: string; gmv: number }[];
+}
 
 export interface Token {
   access_token: string;
@@ -844,7 +883,7 @@ export interface StockSummaryOut {
 export const inventorySummary = () =>
   api.get<StockSummaryOut>("/inventory/summary").then((r) => r.data);
 export const inventoryLowStock = () =>
-  api.get<any[]>("/inventory/low-stock").then((r) => r.data);
+  api.get<LowStockOut[]>("/inventory/low-stock").then((r) => r.data);
 export const inventoryLogs = (productId?: string) =>
   api
     .get<StockLogOut[]>("/inventory/logs", {
@@ -1289,7 +1328,7 @@ export const updateReportTask = (
 export const deleteReportTask = (id: string) =>
   api.delete(`/merchant/report-tasks/${id}`).then((r) => r.data);
 export const getReportPreview = () =>
-  api.get<any>(`/merchant/report-tasks/preview`).then((r) => r.data);
+  api.get<ReportPreviewOut>(`/merchant/report-tasks/preview`).then((r) => r.data);
 
 // ---------- 审计回放 / 告警 ----------
 export interface AuditLogItem {
@@ -1306,7 +1345,7 @@ export const getAuditReplay = (entity: string, entityId?: string) =>
     .get<AuditLogItem[]>(`/admin/audit/replay`, { params: { entity, entity_id: entityId } })
     .then((r) => r.data);
 export const getAuditAlerts = () =>
-  api.get<{ alerts: any[]; generated_at: string }>(`/admin/audit/alerts`).then((r) => r.data);
+  api.get<{ alerts: AuditAlert[]; generated_at: string }>(`/admin/audit/alerts`).then((r) => r.data);
 
 // ---------- 通知分类免打扰 ----------
 export const listNotificationCategories = () =>
@@ -1473,7 +1512,7 @@ export interface AgentTool {
 export interface AgentReply {
   reply: string;
   intent?: string;
-  tool_calls: { tool: string; result: any }[];
+  tool_calls: { tool: string; result: unknown }[];
 }
 export const agentChat = (body: {
   message: string;

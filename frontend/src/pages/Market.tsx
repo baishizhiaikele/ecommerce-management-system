@@ -3,12 +3,10 @@ import type { AxiosError } from "axios";
 import { useNavigate } from "react-router-dom";
 import { Carousel, Card, Button, Input, Row, Col, Empty, Spin, Tag, message, Select, Switch, InputNumber, Rate, Space, AutoComplete } from "antd";
 import { Search, Sparkles, Flame, Zap, ShoppingBag, Clock, Store, Gift, TrendingUp } from "lucide-react";
-import { useCart } from "../store/cart";
 import {
   listProducts,
   listCategories,
   recommendations,
-  addCartItem,
   getBanners,
   getPromotions,
   listShops,
@@ -28,6 +26,8 @@ import {
 import { useI18n, translate } from "../i18n";
 import { money } from "../utils/format";
 import ProductImage from "../components/ProductImage";
+import ProductCard from "../components/ProductCard";
+import ProductGrid from "../components/ProductGrid";
 import Reveal from "../components/Reveal";
 
 function FlashCountdown({ endAt }: { endAt?: string | null }) {
@@ -60,7 +60,6 @@ function FlashCountdown({ endAt }: { endAt?: string | null }) {
 export default function Market() {
   const navigate = useNavigate();
   const { t } = useI18n();
-  const add = useCart((s) => s.add);
   const [items, setItems] = useState<ProductOut[]>([]);
   const [cats, setCats] = useState<CategoryOut[]>([]);
   const [banners, setBanners] = useState<BannerOut[]>([]);
@@ -167,15 +166,26 @@ export default function Market() {
 
   useEffect(() => {
     load();
-    listCategories().then(setCats).catch(() => {});
-    recommendations().then(setRecs).catch(() => {});
-    getBanners().then(setBanners).catch(() => {});
-    getPromotions("flash").then(setPromos).catch(() => {});
-    listShops().then(setShops).catch(() => {});
-    listProducts({ sort: "sales", page_size: 6 }).then(setTopSales).catch(() => {});
-    listProducts({ sort: "top_rating", page_size: 6 }).then(setTopRating).catch(() => {});
-    listCoupons().then(setCoupons).catch(() => {});
-    searchFacets().then(setFacets).catch(() => {});
+    // L5：关键首屏数据加载失败不再静默吞掉，至少打印错误日志以便排查。
+    // 多个请求并行，仅以单条 toast 提示用户，避免连发多条打扰。
+    let loadError = false;
+    const onLoadFail = (label: string) => (e: unknown) => {
+      console.error(`[Market] ${label} 加载失败`, e);
+      loadError = true;
+    };
+    Promise.allSettled([
+      listCategories().then(setCats).catch(onLoadFail("categories")),
+      recommendations().then(setRecs).catch(onLoadFail("recommendations")),
+      getBanners().then(setBanners).catch(onLoadFail("banners")),
+      getPromotions("flash").then(setPromos).catch(onLoadFail("promotions")),
+      listShops().then(setShops).catch(onLoadFail("shops")),
+      listProducts({ sort: "sales", page_size: 6 }).then(setTopSales).catch(onLoadFail("topSales")),
+      listProducts({ sort: "top_rating", page_size: 6 }).then(setTopRating).catch(onLoadFail("topRating")),
+      listCoupons().then(setCoupons).catch(onLoadFail("coupons")),
+      searchFacets().then(setFacets).catch(onLoadFail("facets")),
+    ]).then(() => {
+      if (loadError) message.error(t("home.loadFailed") || "部分内容加载失败，请稍后刷新");
+    });
     try {
       const r = JSON.parse(localStorage.getItem("browse_history") || "[]");
       if (Array.isArray(r)) setRecent(r.slice(0, 12));
@@ -184,24 +194,13 @@ export default function Market() {
     }
   }, []);
 
-  const onAdd = async (p: ProductOut) => {
-    try {
-      await addCartItem({ product_id: p.id, quantity: 1 });
-      add({ product_id: p.id, name: p.name, price: Number(p.price), quantity: 1, image_url: undefined });
-      message.success(t("pd.addedCart"));
-    } catch (e) {
-      const err = e as AxiosError<any, any>;
-      message.error(err.response?.data?.detail || t("pd.addCartFail"));
-    }
-  };
-
   const onClaim = async (c: CouponOut) => {
     try {
       await claimCoupon(c.id);
       message.success(t("coupon.claimSuccess"));
       setCoupons((s) => s.filter((x) => x.id !== c.id));
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("coupon.claimFail"));
     }
   };
@@ -215,40 +214,16 @@ export default function Market() {
     if (b.link_type === "product" && b.link_id) navigate(`/products/${b.link_id}`);
     else if (b.link_type === "shop" && b.link_id) navigate(`/shops/${b.link_id}`);
     else if (b.link_type === "category" && b.link_id) pickCat(b.link_id);
-    else if (b.link_url) window.open(b.link_url, "_blank");
+    else if (b.link_url) {
+      const url = b.link_url.trim();
+      // 仅允许 http(s) 外链，阻止 javascript: 等危险协议与开放重定向（P0-M10）
+      if (/^https?:\/\//i.test(url)) {
+        window.open(url, "_blank", "noopener,noreferrer");
+      } else {
+        message.warning(t("banner.unsafeLink") ?? "不支持的链接");
+      }
+    }
   };
-
-  const CardItem = ({ p }: { p: ProductOut }) => (
-    <Card
-      hoverable
-      className="product-card group"
-      cover={<ProductImage name={p.name} image_url={p.image_url} height={200} rounded={0} />}
-      onClick={() => navigate(`/products/${p.id}`)}
-    >
-      <div className="truncate text-sm text-slate-700 font-medium" title={p.name}>
-        {p.name}
-      </div>
-      <div className="flex items-center justify-between mt-2">
-        <span className="pc-price text-[#4F46E5]">
-          <span className="text-sm align-top mr-0.5">¥</span>
-          {money(p.price)}
-        </span>
-        <Tag color={p.stock > 0 ? "green" : "red"}>{p.stock > 0 ? t("market.inStock") : t("market.outStock")}</Tag>
-      </div>
-      <Button
-        block
-        className="mt-3"
-        type="primary"
-        disabled={p.stock <= 0}
-        onClick={(e) => {
-          e.stopPropagation();
-          onAdd(p);
-        }}
-      >
-        {t("pd.addCart")}
-      </Button>
-    </Card>
-  );
 
   return (
     <div className="page-shell stack-lg py-8">
@@ -484,7 +459,7 @@ export default function Market() {
             {recs.map((p, i) => (
               <div key={p.id} className="!w-44 shrink-0">
                 <Reveal delay={i * 50}>
-                  <CardItem p={p} />
+                  <ProductCard p={p} />
                 </Reveal>
               </div>
             ))}
@@ -528,7 +503,7 @@ export default function Market() {
             {recent.map((p, i) => (
               <div key={p.id} className="!w-44 shrink-0">
                 <Reveal delay={i * 40}>
-                  <CardItem p={p as ProductOut} />
+                  <ProductCard p={p as ProductOut} />
                 </Reveal>
               </div>
             ))}
@@ -697,15 +672,7 @@ export default function Market() {
         ) : items.length === 0 ? (
           <Empty className="py-20" description={t("market.noProducts")} />
         ) : (
-          <Row gutter={[20, 20]}>
-            {items.map((p, i) => (
-              <Col key={p.id} xs={24} sm={12} md={8} lg={6}>
-                <Reveal delay={(i % 8) * 60}>
-                  <CardItem p={p} />
-                </Reveal>
-              </Col>
-            ))}
-          </Row>
+          <ProductGrid items={items} gutter={[20, 20]} xs={24} sm={12} md={8} lg={6} />
         )}
       </section>
     </div>

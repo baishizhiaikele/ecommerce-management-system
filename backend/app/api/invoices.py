@@ -1,10 +1,11 @@
 """电子发票接口。"""
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
 from app.db.session import get_db
-from app.models.user import User
+from app.models.invoice import Invoice
+from app.models.user import Role, User
 from app.schemas.invoice import InvoiceApply, InvoiceOut
 from app.services import invoice_service
 
@@ -52,6 +53,10 @@ async def download_invoice_pdf(
 ):
     from fastapi.responses import Response
 
+    # P0-H3：校验发票归属，禁止越权下载他人电子发票（含税号等敏感信息）
+    inv = await db.get(Invoice, invoice_id)
+    if not inv or (inv.buyer_id != user.id and user.role != Role.ADMIN):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="发票不存在")
     data = await invoice_service.build_pdf(db, invoice_id)
     return Response(
         content=data,

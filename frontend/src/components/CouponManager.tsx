@@ -119,7 +119,7 @@ export default function CouponManager({ mode }: { mode: "admin" | "merchant" }) 
       setOpen(false);
       load();
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("common.operationFailed"));
     } finally {
       setSaving(false);
@@ -131,7 +131,7 @@ export default function CouponManager({ mode }: { mode: "admin" | "merchant" }) 
       message.success(t("coupon.delisted"));
       load();
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("coupon.delFail"));
     }
   };
@@ -140,7 +140,7 @@ export default function CouponManager({ mode }: { mode: "admin" | "merchant" }) 
       await updateCoupon(r.id, { is_active: checked });
       load();
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("common.operationFailed"));
     }
   };

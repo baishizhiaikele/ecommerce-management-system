@@ -51,7 +51,7 @@ export default function Support() {
     try {
       setActive(await getTicket(id));
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("support.openFail"));
     }
   };
@@ -64,7 +64,7 @@ export default function Support() {
       setReply("");
       load();
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("support.replyFail"));
     }
   };
@@ -77,7 +77,7 @@ export default function Support() {
       setActive(null);
       load();
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("common.operationFailed"));
     }
   };
@@ -91,7 +91,7 @@ export default function Support() {
       setNewMsg("");
       load();
     } catch (e) {
-      const err = e as AxiosError<any, any>;
+      const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("support.submitFail"));
     }
   };

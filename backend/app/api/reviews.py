@@ -92,10 +92,13 @@ async def delete_review(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict:
-    if user.role != Role.ADMIN:
+    if user.role == Role.ADMIN:
+        await review_service.delete_review(db, review_id=review_id)
+    elif user.role == Role.MERCHANT:
         await review_service.delete_review(db, review_id=review_id, merchant_id=user.id)
     else:
-        await review_service.delete_review(db, review_id=review_id)
+        # 买家删除自己的评价（P0-M8）
+        await review_service.delete_review(db, review_id=review_id, user_id=user.id)
     return {"ok": True}
 
 

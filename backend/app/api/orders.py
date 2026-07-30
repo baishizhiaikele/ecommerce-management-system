@@ -94,9 +94,14 @@ async def checkout(
 
 @router.get("", response_model=list[OrderOut])
 async def list_orders(
+    status: str | None = None,
+    page: int = 1,
+    page_size: int = 200,
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ) -> list[OrderOut]:
-    orders = await order_service.list_orders(db, user_id=user.id, role=user.role.value)
+    orders = await order_service.list_orders(
+        db, user_id=user.id, role=user.role.value, status=status, page=page, page_size=page_size
+    )
     items_by_order: dict = defaultdict(list)
     product_ids: list = []
     if orders:
@@ -164,9 +169,9 @@ async def request_refund(
     else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="当前订单状态不可申请退款")
     order.refund_reason = data.reason
-    order.refund_amount = (
-        data.refund_amount if data.refund_amount is not None else float(order.total_amount)
-    )
+    # P1-M2：退款金额必须夹紧在 [0, 实付] 区间，避免被篡改导致积分冲正与自动退款门槛异常
+    requested = data.refund_amount if data.refund_amount is not None else float(order.total_amount)
+    order.refund_amount = max(0.0, min(requested, float(order.total_amount)))
     order = await order_service.transition_status(
         db, order=order, target=target, actor_id=user.id, role="buyer"
     )

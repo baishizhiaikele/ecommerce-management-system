@@ -7,7 +7,9 @@ import {
   listReportTasks,
   ReportTaskOut,
   ReportFrequency,
+  ReportPreviewOut,
   updateReportTask,
+  getErrorMessage,
 } from "../../api";
 import {
   Button,
@@ -46,7 +48,7 @@ const PIE_COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#06b6d4", "#a85
 
 export default function Reports() {
   const { t } = useI18n();
-  const [preview, setPreview] = useState<any>(null);
+  const [preview, setPreview] = useState<ReportPreviewOut | null>(null);
   const [loading, setLoading] = useState(false);
   const [tasks, setTasks] = useState<ReportTaskOut[]>([]);
   const [open, setOpen] = useState(false);
@@ -77,8 +79,8 @@ export default function Reports() {
       setOpen(false);
       form.resetFields();
       load();
-    } catch (e: any) {
-      message.error(e?.response?.data?.detail || t("common.operationFailed"));
+    } catch (e: unknown) {
+      message.error(getErrorMessage(e));
     } finally {
       setSaving(false);
     }
@@ -124,9 +126,9 @@ export default function Reports() {
     },
   ];
 
-  const trend = (preview?.sales_trend || []) as any[];
-  const cats = (preview?.category_breakdown || []) as any[];
-  const tops = (preview?.top_products || []) as any[];
+  const trend = preview?.sales_trend || [];
+  const cats = preview?.category_breakdown || [];
+  const tops = preview?.top_products || [];
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
