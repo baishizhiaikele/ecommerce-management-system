@@ -9,8 +9,9 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
-from sqlalchemy.exc import DeadlockDetectedError
+from sqlalchemy.exc import OperationalError
 
+from app.core.db_errors import is_deadlock
 from app.db.session import SessionLocal
 from app.models.order import Order, OrderStatus
 from app.models.user import Role
@@ -44,10 +45,13 @@ async def _cancel_expired_orders() -> int:
                     role=Role.ADMIN,
                 )
                 cancelled += 1
-            except DeadlockDetectedError:
+            except OperationalError as e:
                 # 并发取消竞态：回滚后下一轮扫描会重试
                 await db.rollback()
-                logger.warning("自动取消超时订单 %s 遇死锁，已回滚", order.id)
+                if is_deadlock(e):
+                    logger.warning("自动取消超时订单 %s 遇死锁，已回滚", order.id)
+                else:
+                    logger.warning("自动取消超时订单 %s 数据库错误: %s", order.id, e)
             except Exception as e:  # noqa: BLE001
                 await db.rollback()
                 logger.warning("自动取消超时订单 %s 失败: %s", order.id, e)

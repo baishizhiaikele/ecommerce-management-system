@@ -4,10 +4,11 @@ from uuid import uuid4
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
-from sqlalchemy.exc import DeadlockDetectedError
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.db_errors import is_deadlock
 from app.models.cart import CartItem
 from app.models.order import Order, OrderItem, OrderStatus
 from app.models.product import Product, ProductStatus
@@ -423,9 +424,10 @@ async def transition_status(
     try:
         await record(db, actor_id, f"order.{target.value}", "order", order.id, order.order_no)
         await db.commit()
-    except DeadlockDetectedError:
+    except OperationalError as e:
         await db.rollback()
-        logger.warning("订单 %s 状态流转(%s)遇死锁，已回滚", order.id, target.value)
+        if is_deadlock(e):
+            logger.warning("订单 %s 状态流转(%s)遇死锁，已回滚", order.id, target.value)
         raise
     except Exception:
         await db.rollback()
