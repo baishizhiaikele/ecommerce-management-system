@@ -68,11 +68,25 @@ npm run dev
 
 > 任何「演示级」路径都做了**优雅降级**：缺密钥/服务时不影响主流程，仅功能降级，便于本地零配置跑通。
 
+## 安全基线（已落地）
+
+本项目经过一轮静态代码审查，3 项高危越权/敏感信息泄露与 13 项中危问题已全部修复，上线安全基线扎实：
+
+- **认证与会话**：密码 bcrypt 哈希、`SECRET_KEY` 必填无默认值、JWT 存 HttpOnly Cookie（非 localStorage）、认证限流；安全响应头中间件（CSP / X-Frame-Options / nosniff / Referrer-Policy / HSTS）+ 请求体 10MB 上限。
+- **越权修复**：商品写操作归属校验（杜绝 IDOR 越权改/删他人商品）、子账号权限绕过（缺失/禁用直接 403）、发票 PDF 越权读（归属校验 + 404 兜底）、评价删除归属校验、库存归属校验。
+- **资金与一致性**：支付确认端点仅 sandbox 可用（生产返回 404，杜绝支付绕过）、退款金额夹紧 `[0, 实付]`、优惠券并发行锁防 double-spend、积分下限 + 买方行锁防超扣、订单状态流转锁顺序排序防死锁、状态变更与审计同事务原子提交。
+- **性能/硬化**：列表 N+1 批量预取、订单列表服务端分页（上限 500）、WebSocket 校验用户 `is_active`、前端外链协议校验（`javascript:` 拦截 + `noopener`）、CI 密钥扫描（gitleaks）。
+- 完整的高危/中危/低危清单与逐条修复记录见根目录 `CODE_REVIEW_REPORT.md`。
+
+## UI 设计风格
+
+全站采用**简约精选风**设计系统（参考 Apple / Shopify / Nordstrom）：大留白、统一栅格与圆角（radius 12/16）、柔和阴影与 `cubic-bezier(.22,.7,.3,1)` 动效曲线。设计令牌集中在 `frontend/src/theme.ts` 与 `frontend/src/index.css`（`.page-shell` / `.section-head` / `.hero-shell` / `.rail-scroll` / `.product-card` 等工具类），买家 / 商家 / 管理端共用同一套视觉语言，首屏减负不再像后台仪表盘。
+
 ## 角色与权限
 
-- **buyer**：浏览（热搜/搜索历史）、SKU 规格选择加购、加购、下单（优惠券+积分抵扣）、收藏、关注店铺、评价/回复、积分成长、通知中心（WebSocket 实时推送）、申请退款、转人工工单、逛店铺、促销活动专区、个性化推荐
-- **merchant**：商品管理（含多规格 SKU 管理）、库存管理（流水/低库存预警/盘点）、AI 店长、AI 营销文案（小红书/朋友圈/抖音）、AI 智能定价、营销活动创建、评价管理（回复/置顶/删除/分布）、发货、录入物流、客服工单、商家数据看板（时间范围 + 客单价趋势）、订单报表 CSV 导出
-- **admin**：商品审核、用户管理、平台仪表板、审计日志、审计可视化看板
+- **buyer**：浏览（热搜/搜索历史/分面检索/联想）、SKU 规格选择加购、下单（优惠券+积分抵扣+PLUS 权益）、收藏、关注店铺与动态流、评价（带图/视频/追评/情感分析）、积分成长与签到、通知中心（WebSocket 实时推送 + 分类免打扰）、退货退款/换货/平台仲裁、转人工工单、逛店铺、促销活动（秒杀/拼团/砍价）、个性化推荐、浏览历史、种草社区、AR 试穿、PWA 离线
+- **merchant**：商品管理（多规格 SKU）、库存流水/低库存预警/盘点、AI 店长/营销文案/智能定价、营销活动创建、评价运营（回复/置顶/删除/分布）、发货/录入物流/到店自提核销、客服工单、店铺装修、数据看板（客单价趋势/品类占比）、订单报表 CSV/订单清单 PDF/定时邮件、子账号权限矩阵、AI 比价、直播带货（弹幕边看边买）
+- **admin**：商品审核、用户管理、平台仪表板、审计日志与可视化看板（操作回放 + 规则告警）、优惠券管理、担保交易结算台账
 
 ## 接口一览（前缀 `/api`）
 
@@ -116,6 +130,21 @@ npm run dev
 | 通知外发 | （系统自动）重要通知经 SMTP/SMS 渠道投递 | 站内信 + 邮件/短信（未配置渠道时降级日志） |
 | AI 搜索 | POST /search/qa | 一句话自然语言搜商品（配置 LLM 真实解析，否则降级） |
 | AI 商品图 | POST /products/{id}/ai-image | 文生图（配置图床密钥真实生成，否则占位图降级） |
+
+### 进阶接口（v4+ / P3，节选）
+
+| 模块 | 方法 & 路径 | 说明 |
+|---|---|---|
+| 退货退款 | POST /orders/{id}/return-ship, /return-receive, /exchange, POST /orders/{id}/dispute, PATCH /orders/{id}/dispute-review | 逆向物流 + 平台仲裁（退款以实物退回为前提） |
+| 担保交易 | GET /payments/settlements | 支付托管 `held→released/reversed`，确认收货释放、退款逆向 |
+| AI 代理层 | POST /agent/chat, GET /agent/tools | 对话式购物：查库存/比价/凑单/加购/下单工具调用 |
+| 种草社区 | GET/POST /notes, POST /notes/{id}/like | 图文笔记、挂载商品卡、点赞、搜索 |
+| 店铺装修 | GET/PUT /decoration/mine, GET /decoration/{merchant_id} | 商家主题色/招牌/模块化 layout，买家公开渲染 |
+| 会员 PLUS | GET /plus/status, POST /plus/subscribe | 付费月/年卡，全场 95 折 + 包邮 |
+| 搜索增强 | GET /search/facets, GET /search/suggest | 分面检索（类目/价格/评分/排序）+ 输入联想 |
+| 浏览历史 | GET /me/history, GET /me/recently-bought | 浏览记录与最近常买 |
+| 商品问答 | GET /products/{id}/questions, POST /products/{id}/questions, POST /questions/{id}/answers, /accept | 买家问、商家/他人答、采纳 |
+| 到店自提 | POST /orders/{id}/pickup-verify | 商家凭自提码核销，自动生成 8 位码免运费 |
 
 > 完整接口与模块规划见 `PLAN.md`，运行后访问 `/docs` 查看 Swagger。
 
@@ -173,7 +202,7 @@ pip install -r requirements.txt
 python -m pytest tests -v
 ```
 
-覆盖认证（双令牌 / 刷新轮换 / 登出吊销）、商城主流程、RBAC 越权、优惠券、积分、推荐、店铺、退款工单、物流追踪等，共 27 项（`tests/test_new_features.py` 为新增模块测试）。
+覆盖认证（双令牌 / 刷新轮换 / 登出吊销）、商城主流程、RBAC 越权、优惠券、积分、推荐、店铺、退款工单、物流追踪、退货退款 / 仲裁、担保交易、秒杀 / 拼团 / 砍价、到店自提、店铺装修、种草社区、会员 PLUS、AI 代理层等，共 90+ 项（`backend/tests/` 下按模块分文件）。
 
 ### 端到端冒烟测试（Playwright）
 
@@ -194,10 +223,11 @@ npm run e2e              # 或 npx playwright test
 
 ```
 ai-shop/
-├── backend/   FastAPI 应用
-├── frontend/  React 应用
-├── plans/     历史执行日志与详细规划
-├── PLAN.md    计划与状态总览
-├── README.md  项目说明与部署
+├── backend/            FastAPI 应用
+├── frontend/           React 应用
+├── plans/DEVLOG.md     各阶段功能落地、优化与修复的详细执行日志
+├── PLAN.md             计划与状态总览（权威）
+├── README.md           项目说明与部署
+├── CODE_REVIEW_REPORT.md  安全代码审查报告与修复记录
 └── GETTING_STARTED.md  新手入门教程
 ```
