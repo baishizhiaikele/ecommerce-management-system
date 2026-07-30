@@ -12,10 +12,29 @@ from app.schemas.coupon import CouponCreate, CouponUpdate
 from app.events import bus
 
 
-def compute_discount(coupon: Coupon, subtotal: float) -> float:
-    """根据优惠券类型计算可抵扣金额（元）。结果恒在 [0, subtotal] 内，防止负抵扣。"""
+def compute_discount(
+    coupon: Coupon,
+    subtotal: float,
+    category_slugs: set[str] | None = None,
+    merchant_ids: set[str] | None = None,
+) -> float:
+    """根据优惠券类型计算可抵扣金额（元）。结果恒在 [0, subtotal] 内，防止负抵扣。
+
+    额外校验适用范围：
+    - applicable_category：仅当订单含该顶级品类商品时可用（空=不限品类）。
+    - merchant_id：仅当订单含该商家商品时可用（空=全平台券）。
+    任一范围不匹配则返回 0（视为不可用），调用方据此提示「优惠券不适用于当前商品」。
+    """
     if subtotal <= 0:
         return 0.0
+    # 适用品类校验：文创券（applicable_category='culture'）不能用于耳机等其它品类
+    if coupon.applicable_category and category_slugs is not None:
+        if coupon.applicable_category not in category_slugs:
+            return 0.0
+    # 适用商家校验：商家券仅限该商家商品
+    if coupon.merchant_id and merchant_ids is not None:
+        if coupon.merchant_id not in merchant_ids:
+            return 0.0
     if coupon.type == CouponType.FULL_REDUCE:
         if subtotal < float(coupon.threshold or 0):
             return 0.0
@@ -134,7 +153,7 @@ async def create_coupon(db: AsyncSession, user: User, data: CouponCreate) -> Cou
         total=data.total,
         start_at=data.start_at,
         end_at=data.end_at,
-        expire_at=data.end_at,  # expire_at 与 end_at 保持同步（对外展示过期时间）
+        expire_at=data.expire_at or data.end_at,  # 到期时间，留空则同步为活动结束时间
         merchant_id=merchant_id,
     )
     db.add(coupon)
@@ -155,11 +174,11 @@ async def update_coupon(
         or (user.role == Role.MERCHANT and coupon.merchant_id == user.id)
     ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权操作该优惠券")
-    for field in ("name", "type", "threshold", "value", "total", "start_at", "end_at", "is_active"):
+    for field in ("name", "type", "threshold", "value", "total", "start_at", "end_at", "expire_at", "is_active"):
         val = getattr(data, field, None)
         if val is not None:
             setattr(coupon, field, val)
-    if data.end_at is not None:
+    if data.end_at is not None and data.expire_at is None:
         coupon.expire_at = data.end_at
     await db.commit()
     await db.refresh(coupon)

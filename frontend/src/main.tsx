@@ -2,23 +2,35 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { ConfigProvider } from "antd";
+import zhCN from "antd/locale/zh_CN";
+import enUS from "antd/locale/en_US";
 import App from "./App";
 import { theme } from "./theme";
 import ErrorBoundary from "./components/ErrorBoundary";
-import { LanguageProvider } from "./i18n";
+import { LanguageProvider, useI18n } from "./i18n";
 import "./index.css";
+
+/** 根据当前语言切换 antd 内置文案（取消/确定/分页等），避免中文界面显示英文 "cancel"。 */
+function AntdLocaleBridge({ children }: { children: React.ReactNode }) {
+  const { lang } = useI18n();
+  return (
+    <ConfigProvider theme={theme} locale={lang === "en" ? enUS : zhCN}>
+      {children}
+    </ConfigProvider>
+  );
+}
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <ConfigProvider theme={theme}>
-      <BrowserRouter>
-        <LanguageProvider>
+    <BrowserRouter>
+      <LanguageProvider>
+        <AntdLocaleBridge>
           <ErrorBoundary>
             <App />
           </ErrorBoundary>
-        </LanguageProvider>
-      </BrowserRouter>
-    </ConfigProvider>
+        </AntdLocaleBridge>
+      </LanguageProvider>
+    </BrowserRouter>
   </React.StrictMode>
 );
 

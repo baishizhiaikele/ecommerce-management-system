@@ -37,6 +37,7 @@ def _serialize(order: Order, items: list, snapshot: dict) -> OrderOut:
             id=it.id,
             product_id=it.product_id,
             name=snapshot_name(snapshot, it.product_id),
+            image_url=snapshot.get(it.product_id).image_url if snapshot.get(it.product_id) else None,
             price=it.price,
             quantity=it.quantity,
         )
@@ -55,6 +56,8 @@ def _serialize(order: Order, items: list, snapshot: dict) -> OrderOut:
         return_carrier=order.return_carrier,
         dispute_reason=order.dispute_reason,
         address=order.address,
+        receiver=order.receiver,
+        contact=order.contact,
         delivery_type=order.delivery_type or "express",
         pickup_store=order.pickup_store,
         pickup_code=order.pickup_code,
@@ -84,10 +87,13 @@ async def checkout(
         db,
         buyer=user,
         address=data.address,
+        receiver=data.receiver,
+        contact=data.contact,
         coupon_id=data.coupon_id,
         use_points=data.use_points,
         delivery_type=data.delivery_type,
         pickup_store=data.pickup_store,
+        cart_item_ids=data.cart_item_ids,
     )
     return await _load_order_view(db, order)
 

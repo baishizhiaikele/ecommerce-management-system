@@ -19,6 +19,8 @@ import {
 } from "antd";
 import { RefreshCw, Sparkles } from "lucide-react";
 import { useI18n } from "../i18n";
+import ProductImage from "../components/ProductImage";
+import ProductPrice from "../components/ProductPrice";
 import {
   CategoryOut,
   FloorOut,
@@ -57,16 +59,10 @@ function ProductCard({ p }: { p: ProductOut }) {
     <Card
       hoverable
       size="small"
-      onClick={() => nav(`/product/${p.id}`)}
+      onClick={() => nav(`/products/${p.id}`)}
       cover={
         <div style={{ height: 120, background: "#f5f5f5", overflow: "hidden" }}>
-          {imgOf(p.image_url) && (
-            <img
-              src={imgOf(p.image_url)}
-              alt={p.name}
-              style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            />
-          )}
+          <ProductImage name={p.name} image_url={imgOf(p.image_url)} height={120} rounded={0} />
         </div>
       }
     >
@@ -79,7 +75,7 @@ function ProductCard({ p }: { p: ProductOut }) {
         description={
           <Space size={4}>
             <Text strong style={{ color: "#f5222d" }}>
-              ¥{p.price}
+              <ProductPrice p={p} />
             </Text>
             <Text type="secondary" style={{ fontSize: 12 }}>
               {t("market.sold")}{p.sales_count}
@@ -97,16 +93,10 @@ function PromotionCard({ p }: { p: PromotionOut }) {
     <Card
       hoverable
       size="small"
-      onClick={() => p.product_id && nav(`/product/${p.product_id}`)}
+      onClick={() => p.product_id && nav(`/products/${p.product_id}`)}
       cover={
         <div style={{ height: 120, background: "#f5f5f5", overflow: "hidden" }}>
-          {p.product_image && (
-            <img
-              src={p.product_image}
-              alt={p.product_name || ""}
-              style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            />
-          )}
+          <ProductImage name={p.product_name || ""} image_url={p.product_image || undefined} height={120} rounded={0} />
         </div>
       }
     >
@@ -212,7 +202,7 @@ function FloorBody({ floor }: { floor: FloorOut }) {
           <Tag.CheckableTag
             key={c.id}
             checked={false}
-            onChange={() => nav(`/search?keyword=${encodeURIComponent(c.name)}`)}
+            onChange={() => nav(`/search?keyword=${encodeURIComponent(c.name)}`)} // 复用 /search 结果页
             style={{ border: "1px solid #d9d9d9", borderRadius: 14, padding: "4px 12px" }}
           >
             {c.name}
@@ -243,7 +233,7 @@ function FloorBody({ floor }: { floor: FloorOut }) {
       <Row gutter={[12, 12]}>
         {shops.map((s) => (
           <Col span={8} key={s.id}>
-            <Card size="small" hoverable onClick={() => nav(`/shop/${s.id}`)}>
+            <Card size="small" hoverable onClick={() => nav(`/shops/${s.id}`)}>
               <Text strong>{s.name}</Text>
               <div>
                 <Text type="secondary" style={{ fontSize: 12 }}>

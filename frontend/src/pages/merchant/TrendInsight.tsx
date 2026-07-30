@@ -16,23 +16,21 @@ import {
 } from "antd";
 import { RefreshCw, TrendingUp } from "lucide-react";
 import { useI18n } from "../../i18n";
+import ProductImage from "../../components/ProductImage";
 import { ProductOut, TrendInsightOut, trendInsight } from "../../api";
 
 const { Title, Paragraph, Text } = Typography;
 
 function ProductCard({ p }: { p: ProductOut }) {
   const nav = useNavigate();
-  const img = p.image_url || "";
   return (
     <Card
       hoverable
       size="small"
-      onClick={() => nav(`/product/${p.id}`)}
+      onClick={() => nav(`/products/${p.id}`)}
       cover={
         <div style={{ height: 110, background: "#f5f5f5", overflow: "hidden" }}>
-          {img && (
-            <img src={img} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          )}
+          <ProductImage name={p.name} image_url={p.image_url} height={110} rounded={0} />
         </div>
       }
     >

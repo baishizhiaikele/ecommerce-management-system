@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Card, Tabs, Button, Tag, message, Empty, Spin, Tooltip } from "antd";
+import { Card, Tabs, Button, Tag, message, Modal, Empty, Spin, Tooltip } from "antd";
 import { Gift, Coins, Sparkles, Ticket as TicketIcon } from "lucide-react";
 import { useAuth } from "../store/auth";
 import { useI18n } from "../i18n";
 import { listRewards, redeemReward, myRedemptions, me, RedemptionItemOut, RedemptionRecordOut } from "../api";
+import { formatDateTime } from "../utils/format";
 
 function RewardCard({
   item,
@@ -88,19 +89,33 @@ export default function Mall() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleRedeem = async (id: string) => {
-    setBusyId(id);
-    try {
-      const rec = await redeemReward(id);
-      const fresh = await me();
-      setUser({ ...fresh, points: fresh.points ?? 0 });
-      message.success(`${t("mall.exchangeSuccess")}：${rec.reward || rec.item_name}`);
-      load();
-    } catch (e: any) {
-      message.error(e?.response?.data?.detail || t("mall.exchangeFail"));
-    } finally {
-      setBusyId(null);
-    }
+  const handleRedeem = (id: string) => {
+    const it = items.find((x) => x.id === id);
+    if (!it) return;
+    Modal.confirm({
+      title: t("mall.confirmTitle"),
+      icon: <Gift className="text-[#F97316]" size={20} />,
+      content: t("mall.confirmContent")
+        .replace("{name}", it.name)
+        .replace("{cost}", String(it.cost_points))
+        .replace("{left}", String(points - it.cost_points)),
+      okText: t("mall.confirmOk"),
+      cancelText: t("mall.confirmCancel"),
+      onOk: async () => {
+        setBusyId(id);
+        try {
+          const rec = await redeemReward(id);
+          const fresh = await me();
+          setUser({ ...fresh, points: fresh.points ?? 0 });
+          message.success(`${t("mall.exchangeSuccess")}：${rec.reward || rec.item_name}`);
+          load();
+        } catch (e: any) {
+          message.error(e?.response?.data?.detail || t("mall.exchangeFail"));
+        } finally {
+          setBusyId(null);
+        }
+      },
+    });
   };
 
   const items_tab = (
@@ -159,7 +174,7 @@ export default function Mall() {
                 <div className="text-right">
                   <div className="text-[#F97316] font-bold">-{r.cost_points}</div>
                   <div className="text-xs text-slate-400">
-                    {new Date(r.created_at).toLocaleDateString()}
+                    {formatDateTime(r.created_at)}
                   </div>
                 </div>
               </div>

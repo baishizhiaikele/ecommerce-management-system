@@ -11,7 +11,7 @@ import {
   type PresaleReservationOut,
 } from "../api";
 import { useI18n } from "../i18n";
-import { money } from "../utils/format";
+import { formatDateTime, money } from "../utils/format";
 import ProductImage from "../components/ProductImage";
 import { useAuth } from "../store/auth";
 
@@ -104,7 +104,7 @@ export default function Presales() {
               {p.end_at && (
                 <div className="text-xs text-slate-400 flex items-center gap-1">
                   <CalendarClock size={12} />
-                  {t("ps.endAt").replace("{time}", new Date(p.end_at).toLocaleString())}
+                  {t("ps.endAt").replace("{time}", formatDateTime(p.end_at))}
                 </div>
               )}
               <Button type="primary" block onClick={() => deposit(p)}>

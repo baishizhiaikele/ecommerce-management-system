@@ -26,6 +26,11 @@ async def list_promotions(
         stmt = stmt.where(Promotion.type == type)
     if active_only:
         stmt = stmt.where(Promotion.is_active == 1)
+        # 排除已过期活动（end_at 在过去视为不活跃），避免展示"已结束"的秒杀
+        now = datetime.now(timezone.utc)
+        stmt = stmt.where(
+            (Promotion.end_at.is_(None)) | (Promotion.end_at > now)
+        )
     stmt = stmt.order_by(Promotion.created_at.desc())
     rows = await db.scalars(stmt)
 

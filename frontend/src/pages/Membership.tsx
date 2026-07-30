@@ -9,7 +9,9 @@ import {
   Typography,
   message,
   Divider,
+  Collapse,
 } from "antd";
+import { QuestionCircleOutlined } from "@ant-design/icons";
 import { CrownOutlined, GiftOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import EmptyState from "../components/EmptyState";
 import {
@@ -23,6 +25,7 @@ import {
   PlusStatus,
 } from "../api";
 import { useI18n } from "../i18n";
+import { formatDateTime } from "../utils/format";
 
 const { Paragraph, Text } = Typography;
 
@@ -94,6 +97,43 @@ export default function Membership() {
   return (
     <div className="space-y-6">
       <Card
+        className="rounded-2xl soft-card fade-up"
+        title={
+          <span className="flex items-center gap-2">
+            <QuestionCircleOutlined style={{ color: "#4F46E5" }} />
+            {tr("membership.explainTitle")}
+          </span>
+        }
+      >
+        <Collapse
+          ghost
+          defaultActiveKey={["growth"]}
+          items={[
+            {
+              key: "growth",
+              label: tr("membership.explainGrowthTitle"),
+              children: <div className="text-slate-600">{tr("membership.explainGrowth")}</div>,
+            },
+            {
+              key: "points",
+              label: tr("membership.explainPointsTitle"),
+              children: <div className="text-slate-600">{tr("membership.explainPoints")}</div>,
+            },
+            {
+              key: "tier",
+              label: tr("membership.explainTierTitle"),
+              children: <div className="text-slate-600">{tr("membership.explainTier")}</div>,
+            },
+            {
+              key: "plus",
+              label: tr("membership.explainPlusTitle"),
+              children: <div className="text-slate-600">{tr("membership.explainPlus")}</div>,
+            },
+          ]}
+        />
+      </Card>
+
+      <Card
         className="rounded-2xl fade-up"
         style={{ background: `linear-gradient(135deg, ${color}, #4F46E5)`, border: "none", color: "#fff" }}
       >
@@ -143,7 +183,7 @@ export default function Membership() {
             <Paragraph className="!mb-3 text-slate-600">
               {tr("plus.expireAt").replace(
                 "{d}",
-                plus.expire_at ? new Date(plus.expire_at).toLocaleDateString() : "-"
+                plus.expire_at ? formatDateTime(plus.expire_at) : "-"
               )}
             </Paragraph>
           )}

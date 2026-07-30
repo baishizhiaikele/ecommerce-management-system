@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Table, Tag, Button, Spin, Card } from "antd";
 import EmptyState from "../components/EmptyState";
 import { listOrders, OrderOut, OrderStatus } from "../api";
-import { money, orderStatusMeta } from "../utils/format";
+import { money, orderStatusMeta, formatDateTime } from "../utils/format";
 import { useI18n } from "../i18n";
 
 export default function Orders() {
@@ -39,9 +39,27 @@ export default function Orders() {
             render: (s: OrderStatus) => <Tag color={orderStatusMeta[s].color}>{orderStatusMeta[s].label}</Tag>,
           },
           {
+            title: t("od.deliveryType"),
+            dataIndex: "delivery_type",
+            render: (v: string, r: OrderOut) => (
+              <div>
+                {r.delivery_type === "pickup" ? (
+                  <Tag color="purple">{t("cart.deliveryPickup")}</Tag>
+                ) : (
+                  <Tag>{t("cart.deliveryExpress")}</Tag>
+                )}
+                <div className="text-xs text-gray-500 mt-0.5">
+                  {r.delivery_type === "pickup"
+                    ? r.pickup_store || "-"
+                    : [r.receiver, r.address].filter(Boolean).join(" ") || "-"}
+                </div>
+              </div>
+            ),
+          },
+          {
             title: t("col.createdAt"),
             dataIndex: "created_at",
-            render: (v) => new Date(v).toLocaleString(),
+            render: (v) => formatDateTime(v),
           },
           {
             title: t("common.action"),

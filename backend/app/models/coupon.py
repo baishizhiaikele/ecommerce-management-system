@@ -34,6 +34,9 @@ class Coupon(Base):
     total = Column(Integer, default=0)   # 发行量，0 表示不限量
     issued = Column(Integer, default=0, nullable=False)
     merchant_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
+    # 适用品类：顶级品类 slug（如 "culture"/"digital"）。空=全品类可用。
+    # 用于限制「文创满99减15」等品类券只能用于对应品类商品，避免买耳机也能用文创券。
+    applicable_category = Column(String(80), nullable=True, default=None, index=True)
     start_at = Column(DateTime(timezone=True), nullable=True)
     end_at = Column(DateTime(timezone=True), nullable=True)
     expire_at = Column(DateTime(timezone=True), nullable=True)

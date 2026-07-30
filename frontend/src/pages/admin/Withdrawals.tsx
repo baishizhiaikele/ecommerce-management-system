@@ -6,6 +6,7 @@ import {
   type AffiliateWithdrawalOut,
 } from "../../api";
 import { useI18n } from "../../i18n";
+import { formatDateTime } from "../../utils/format";
 
 const COLORS: Record<string, string> = { pending: "gold", approved: "green", rejected: "red" };
 
@@ -54,7 +55,7 @@ export default function AdminWithdrawals() {
             {
               title: t("aff.colTime"),
               dataIndex: "created_at",
-              render: (v: string | null) => (v ? new Date(v).toLocaleString() : "-"),
+              render: (v: string | null) => (v ? formatDateTime(v) : "-"),
             },
             { title: t("aff.adm.user"), dataIndex: "user_id", render: (v: string) => <span className="font-mono text-xs">{v.slice(0, 8)}</span> },
             { title: t("aff.colAmount"), dataIndex: "amount", render: (v: number) => `¥${v.toFixed(2)}` },

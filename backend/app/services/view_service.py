@@ -58,12 +58,19 @@ async def recently_bought(db: AsyncSession, user_id: str, limit: int = 10) -> li
     rows = (await db.execute(stmt)).all()
     ids = [r.product_id for r in rows]
     names: dict[str, str] = {}
+    images: dict[str, str] = {}
     if ids:
         prods = list(
             await db.scalars(select(Product).where(Product.id.in_(ids)))
         )
         names = {p.id: p.name for p in prods}
+        images = {p.id: p.image_url for p in prods}
     return [
-        {"product_id": r.product_id, "product_name": names.get(r.product_id, ""), "times": r.cnt}
+        {
+            "product_id": r.product_id,
+            "product_name": names.get(r.product_id, ""),
+            "times": r.cnt,
+            "image_url": images.get(r.product_id),
+        }
         for r in rows
     ]

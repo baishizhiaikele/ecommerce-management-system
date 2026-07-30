@@ -6,7 +6,8 @@ import { HeartFilled, ShoppingCartOutlined } from "@ant-design/icons";
 import EmptyState from "../components/EmptyState";
 import { listFavorites, removeFavorite, addCartItem, ProductOut } from "../api";
 import { useCart } from "../store/cart";
-import { money } from "../utils/format";
+import ProductPrice from "../components/ProductPrice";
+import { getFlashPrice } from "../context/FlashPriceContext";
 import { useI18n } from "../i18n";
 
 export default function Favorites() {
@@ -47,7 +48,7 @@ export default function Favorites() {
       add({
         product_id: p.id,
         name: p.name,
-        price: Number(p.price),
+        price: getFlashPrice(p),
         quantity: 1,
         image_url: p.image_url || undefined,
       });
@@ -91,7 +92,12 @@ export default function Favorites() {
                 />
               }
               actions={[
-                <ShoppingCartOutlined key="add" onClick={() => onAdd(p)} />,
+                <Button
+                  key="add"
+                  type="text"
+                  icon={<ShoppingCartOutlined />}
+                  onClick={() => onAdd(p)}
+                />,
                 <Popconfirm
                   key="del"
                   title={t("favorites.confirmRemove")}
@@ -99,7 +105,7 @@ export default function Favorites() {
                   okText={t("common.confirm")}
                   cancelText={t("common.cancel")}
                 >
-                  <HeartFilled style={{ color: "#EF4444" }} />
+                  <Button type="text" icon={<HeartFilled style={{ color: "#EF4444" }} />} />
                 </Popconfirm>,
               ]}
             >
@@ -111,7 +117,7 @@ export default function Favorites() {
                 }
                 description={
                   <div className="flex items-center justify-between">
-                    <span className="text-[#4F46E5] font-semibold">{money(p.price)}</span>
+                    <ProductPrice p={p} className="text-[#4F46E5] font-semibold" />
                     <Tag color={p.stock > 0 ? "green" : "red"}>
                       {p.stock > 0 ? t("market.inStock") : t("market.outStock")}
                     </Tag>

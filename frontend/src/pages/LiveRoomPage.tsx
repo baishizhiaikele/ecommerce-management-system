@@ -12,7 +12,7 @@ import {
   type LiveRoomDetail,
 } from "../api";
 import { useI18n } from "../i18n";
-import { money } from "../utils/format";
+import ProductPrice from "../components/ProductPrice";
 import ProductImage from "../components/ProductImage";
 import { useAuth } from "../store/auth";
 
@@ -216,7 +216,7 @@ export default function LiveRoomPage() {
                 <div className="p-2">
                   <div className="text-xs truncate">{p.name}</div>
                   <div className="flex items-center justify-between mt-1">
-                    <span className="text-rose-600 font-bold text-sm">¥{money(p.price)}</span>
+                    <ProductPrice p={p} className="text-rose-600 font-bold text-sm" />
                     <ShoppingCart size={14} className="text-slate-400" />
                   </div>
                 </div>

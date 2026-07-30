@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { AxiosError } from "axios";
-import { Avatar, Button, Divider, Image, Input, Rate, Tag, message } from "antd";
+import { Avatar, Button, Divider, Image, Input, Rate, Select, Tag, message } from "antd";
 import { UserOutlined } from "@ant-design/icons";
 import { listProductReviews, createProductReview, appendReview, type ReviewOut } from "../api";
 import { useI18n } from "../i18n";
@@ -27,6 +27,8 @@ export default function ProductReviews({ productId }: { productId: string }) {
   const [appendText, setAppendText] = useState("");
   const [appendImages, setAppendImages] = useState("");
   const [appendSubmitting, setAppendSubmitting] = useState(false);
+  const [onlyImg, setOnlyImg] = useState(false);
+  const [filterRating, setFilterRating] = useState<number | undefined>();
 
   const load = async () => {
     setItems(await listProductReviews(productId));
@@ -86,12 +88,50 @@ export default function ProductReviews({ productId }: { productId: string }) {
     }
   };
 
+  const filtered = items.filter((r) => {
+    if (onlyImg && (!r.images || r.images.length === 0)) return false;
+    if (filterRating && r.rating !== filterRating) return false;
+    return true;
+  });
+
   return (
     <div className="space-y-3">
-      {items.length === 0 ? (
-        <div className="text-slate-400 text-sm">{t("review.empty")}</div>
+      <div className="flex items-center gap-2 flex-wrap mb-1">
+        <Button
+          size="small"
+          type={onlyImg ? "primary" : "default"}
+          onClick={() => setOnlyImg((v) => !v)}
+        >
+          {t("review.onlyImg")}
+        </Button>
+        <Select
+          size="small"
+          style={{ width: 120 }}
+          placeholder={t("review.byRating")}
+          allowClear
+          value={filterRating}
+          onChange={(v) => setFilterRating(v)}
+          options={[5, 4, 3, 2, 1].map((n) => ({ value: n, label: `${n}★` }))}
+        />
+        {(onlyImg || filterRating) && (
+          <Button
+            size="small"
+            type="link"
+            onClick={() => {
+              setOnlyImg(false);
+              setFilterRating(undefined);
+            }}
+          >
+            {t("market.clearAll")}
+          </Button>
+        )}
+      </div>
+      {filtered.length === 0 ? (
+        <div className="text-slate-400 text-sm">
+          {items.length === 0 ? t("review.empty") : t("market.noResult")}
+        </div>
       ) : (
-        items.map((r) => (
+        filtered.map((r) => (
           <div key={r.id} className="flex gap-3">
             <Avatar icon={<UserOutlined />} />
             <div className="flex-1">

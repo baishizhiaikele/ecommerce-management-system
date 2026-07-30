@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Card, Button, Spin, Result, Typography, Descriptions, message } from "antd";
 import { getOrder, confirmPayment, OrderOut } from "../api";
-import { money } from "../utils/format";
+import { money, formatDateTime } from "../utils/format";
 import { useI18n } from "../i18n";
 
 const { Paragraph, Text } = Typography;
@@ -82,6 +82,16 @@ export default function Pay() {
           <Descriptions.Item label={t("pay.payable")}>
             <Text strong style={{ fontSize: 20, color: "#f5222d" }}>¥{money(order.total_amount)}</Text>
           </Descriptions.Item>
+          {order.created_at && (
+            <Descriptions.Item label={t("pay.orderTime")}>
+              {formatDateTime(order.created_at)}
+            </Descriptions.Item>
+          )}
+          {order.paid_at && (
+            <Descriptions.Item label={t("pay.paidTime")}>
+              {formatDateTime(order.paid_at)}
+            </Descriptions.Item>
+          )}
         </Descriptions>
         <Paragraph type="secondary" className="mt-3 mb-4 text-sm">
           {t("pay.sandboxNote")}

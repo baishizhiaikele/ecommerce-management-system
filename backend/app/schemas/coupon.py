@@ -26,6 +26,7 @@ class CouponOut(BaseModel):
     expire_at: Optional[datetime] = None
     is_active: bool
     merchant_id: Optional[str] = None
+    applicable_category: Optional[str] = None  # 适用顶级品类 slug；空=全品类可用
     start_at: Optional[datetime] = None
     end_at: Optional[datetime] = None
     total: int = 0
@@ -40,8 +41,11 @@ class CouponCreate(BaseModel):
     total: int = 0
     start_at: Optional[datetime] = None
     end_at: Optional[datetime] = None
+    # 消费券到期时间（用户领取后在该时间前可用）。留空则同步为 end_at。
+    expire_at: Optional[datetime] = None
     # 仅管理员可指定归属商家；商家创建时始终为本人
     merchant_id: Optional[str] = None
+    applicable_category: Optional[str] = None  # 适用顶级品类 slug；空=全品类可用
 
     @field_validator("threshold")
     @classmethod
@@ -73,7 +77,9 @@ class CouponUpdate(BaseModel):
     total: Optional[int] = None
     start_at: Optional[datetime] = None
     end_at: Optional[datetime] = None
+    expire_at: Optional[datetime] = None
     is_active: Optional[bool] = None
+    applicable_category: Optional[str] = None  # 适用顶级品类 slug；空=全品类可用
 
     @field_validator("threshold")
     @classmethod
@@ -98,3 +104,5 @@ class UserCouponOut(BaseModel):
     expire_at: Optional[datetime] = None
     is_used: bool
     claimed_at: datetime
+    merchant_id: Optional[str] = None  # 从关联 coupon 取，供前端做商家券适用范围判断
+    applicable_category: Optional[str] = None  # 适用顶级品类 slug，空=全品类可用

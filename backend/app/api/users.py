@@ -90,13 +90,7 @@ async def signin(
 ) -> dict:
     """每日签到：当日首次签到发放积分，连签可叠加奖励（简化版）。"""
     today = date.today()
-    already = await db.scalar(
-        select(PointLog).where(
-            PointLog.user_id == user.id,
-            PointLog.action == PointAction.SIGNIN,
-            func.date(PointLog.created_at) == today.isoformat(),
-        )
-    )
+    already = await _signed_today(db, user.id, today)
     if already:
         return {"signed_today": True, "points": user.points, "gained": 0}
 
@@ -131,6 +125,29 @@ async def signin(
     )
     await db.commit()
     return {"signed_today": False, "points": new_balance, "gained": gained, "streak": streak + 1}
+
+
+@router.get("/signin/status")
+async def signin_status(
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> dict:
+    """只读查询：今日是否已签到（用于进入页面时同步按钮状态，不触发发分）。"""
+    signed = await _signed_today(db, user.id, date.today())
+    return {"signed_today": signed}
+
+
+async def _signed_today(db: AsyncSession, user_id: str, day: date) -> bool:
+    # 用 localtime 取日期，与 date.today() 的服务器本地日期口径一致，避免 UTC 存储导致跨天误判
+    return bool(
+        await db.scalar(
+            select(PointLog).where(
+                PointLog.user_id == user_id,
+                PointLog.action == PointAction.SIGNIN,
+                func.date(PointLog.created_at, "localtime") == day.isoformat(),
+            )
+        )
+    )
+
 
 
 @router.get("/membership")

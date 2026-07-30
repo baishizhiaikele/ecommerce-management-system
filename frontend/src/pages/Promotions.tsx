@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Card, Tag, Empty, Spin, Segmented, Row, Col } from "antd";
-import { Flame, Zap, Gift, PackagePlus, Percent, Boxes } from "lucide-react";
-import { getPromotions, type PromotionOut, type PromotionType } from "../api";
+import { Card, Tag, Empty, Spin, Segmented, Row, Col, Button, message } from "antd";
+import type { AxiosError } from "axios";
+import { Flame, Zap, Gift, PackagePlus, Percent, Boxes, ShoppingCart } from "lucide-react";
+import { getPromotions, addCartItem, ApiError, type PromotionOut, type PromotionType } from "../api";
+import { useCart } from "../store/cart";
 import { money } from "../utils/format";
 import { useI18n, translate } from "../i18n";
 import ProductImage from "../components/ProductImage";
@@ -61,7 +63,26 @@ function Countdown({ endAt }: { endAt?: string | null }) {
 export default function Promotions() {
   const { t } = useI18n();
   const navigate = useNavigate();
+  const { add } = useCart();
   const [list, setList] = useState<PromotionOut[]>([]);
+
+  const onAddToCart = async (p: PromotionOut) => {
+    if (!p.product_id) return;
+    try {
+      await addCartItem({ product_id: p.product_id, quantity: 1 });
+      add({
+        product_id: p.product_id,
+        name: p.product_name || p.title,
+        price: finalPrice(p) ?? Number(p.original_price) ?? 0,
+        quantity: 1,
+        image_url: p.product_image,
+      });
+      message.success(t("pd.addedCart"));
+    } catch (e) {
+      const err = e as AxiosError<ApiError>;
+      message.error(err.response?.data?.detail || t("pd.addCartFail"));
+    }
+  };
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<PromotionType | "all">("all");
 
@@ -147,20 +168,35 @@ export default function Promotions() {
                               {promoRule(p, t)}
                             </div>
                           )}
-                          <div className="flex items-end gap-2">
-                            {fp != null ? (
-                              <>
-                                <span className="text-xl font-extrabold text-rose-600">
-                                  ¥{money(fp)}
-                                </span>
-                                {p.original_price != null && (
-                                  <span className="text-xs text-slate-400 line-through">
-                                    ¥{money(Number(p.original_price))}
+                          <div className="flex items-end justify-between gap-2">
+                            <div className="flex items-end gap-2">
+                              {fp != null ? (
+                                <>
+                                  <span className="text-xl font-extrabold text-rose-600">
+                                    ¥{money(fp)}
                                   </span>
-                                )}
-                              </>
-                            ) : (
-                              <span className="text-sm text-slate-500">{t("promo.viewDetail")}</span>
+                                  {p.original_price != null && (
+                                    <span className="text-xs text-slate-400 line-through">
+                                      ¥{money(Number(p.original_price))}
+                                    </span>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="text-sm text-slate-500">{t("promo.viewDetail")}</span>
+                              )}
+                            </div>
+                            {p.product_id && (
+                              <Button
+                                type="primary"
+                                size="small"
+                                icon={<ShoppingCart size={14} />}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onAddToCart(p);
+                                }}
+                              >
+                                {t("pd.addCart")}
+                              </Button>
                             )}
                           </div>
                           {p.end_at && (

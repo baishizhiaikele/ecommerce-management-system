@@ -10,6 +10,7 @@ import {
 } from "@ant-design/icons";
 import { listNotifications, markRead, markAllRead, NotificationOut, NotificationType } from "../api";
 import { useI18n } from "../i18n";
+import { useNavigate } from "react-router-dom";
 import EmptyState from "../components/EmptyState";
 
 const META: Record<NotificationType, { icon: React.ReactNode; color: string }> = {
@@ -38,6 +39,7 @@ export default function Notifications() {
   const [tab, setTab] = useState<"all" | NotificationType>("all");
   const [muted, setMuted] = useState<NotificationType[]>(readMute);
   const { t } = useI18n();
+  const nav = useNavigate();
 
   const load = async () => {
     setLoading(true);
@@ -117,6 +119,9 @@ export default function Notifications() {
           <h2 className="text-xl font-bold m-0">{t("page.notifications.title")}</h2>
         </div>
         <div className="flex items-center gap-2">
+          <Button icon={<NotificationOutlined />} onClick={() => nav("/settings/notifications")}>
+            {t("notif.title")}
+          </Button>
           <Popover content={mutePopover} title={t("notif.mute")} trigger="click">
             <Button icon={<NotificationOutlined />}>{t("notif.mute")}</Button>
           </Popover>

@@ -3,6 +3,7 @@ import { Table, Card, Spin, Tag, Tabs, Drawer, Button, List, Input, message } fr
 import EmptyState from "../../components/EmptyState";
 import { adminAuditLogs, AuditLogOut, getAuditAlerts, getAuditReplay, AuditAlert, AuditLogItem } from "../../api";
 import { useI18n } from "../../i18n";
+import { formatDateTime } from "../../utils/format";
 
 export default function AdminAudit() {
   const { t } = useI18n();
@@ -55,7 +56,7 @@ export default function AdminAudit() {
   };
 
   const logColumns = [
-    { title: t("admin.time"), dataIndex: "created_at", render: (v: string) => new Date(v).toLocaleString() },
+    { title: t("admin.time"), dataIndex: "created_at", render: (v: string) => formatDateTime(v) },
     { title: t("common.action"), dataIndex: "action", render: (v: string) => <Tag color="blue">{v}</Tag> },
     { title: t("admin.entity"), dataIndex: "entity" },
     { title: t("admin.entityId"), dataIndex: "entity_id", render: (v: string) => v || "-" },
@@ -113,7 +114,7 @@ export default function AdminAudit() {
                     <List.Item>
                       <div>
                         <Tag color="blue">{it.action}</Tag>
-                        <span className="text-xs text-slate-500">{it.created_at ? new Date(it.created_at).toLocaleString() : "-"}</span>
+                        <span className="text-xs text-slate-500">{it.created_at ? formatDateTime(it.created_at) : "-"}</span>
                         <div className="text-sm">{it.detail || "-"}</div>
                       </div>
                     </List.Item>
@@ -179,7 +180,7 @@ function TimelineList({ data }: { data: AuditLogItem[] }) {
         <List.Item>
           <div>
             <Tag color="blue">{it.action}</Tag>
-            <span className="text-xs text-slate-500">{it.created_at ? new Date(it.created_at).toLocaleString() : "-"}</span>
+            <span className="text-xs text-slate-500">{it.created_at ? formatDateTime(it.created_at) : "-"}</span>
             <div className="text-sm">{it.detail || "-"}</div>
           </div>
         </List.Item>

@@ -37,6 +37,9 @@ class UserOut(BaseModel):
     role: Role
     is_active: bool
     points: int = 0
+    # 成长值与等级：等级由成长值决定，与可消费的 points 余额解耦
+    growth_value: int = 0
+    level: str = "bronze"
     created_at: datetime
 
 

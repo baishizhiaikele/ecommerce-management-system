@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   Row,
@@ -25,15 +25,29 @@ import {
   MessageOutlined,
   CameraOutlined,
 } from "@ant-design/icons";
-import { getProduct, listProductReviews, listVariants, addCartItem, logView, type ProductOut, type ReviewOut, type VariantOut } from "../api";
+import { getProduct, listProductReviews, listVariants, addCartItem, logView, proxyImg, listProducts, addFavorite, removeFavorite, isFavorited, type ProductOut, type ReviewOut, type VariantOut } from "../api";
 import { money, productStatusMeta } from "../utils/format";
+import { useFlashPrice } from "../context/FlashPriceContext";
 import { useAuth } from "../store/auth";
 import { useCart } from "../store/cart";
 import { useI18n } from "../i18n";
+import ProductImage from "../components/ProductImage";
 import EmptyState from "../components/EmptyState";
 import ProductReviews from "../components/ProductReviews";
 import ProductChat from "../components/ProductChat";
 import ProductQA from "../components/ProductQA";
+import ProductCard from "../components/ProductCard";
+import Reveal from "../components/Reveal";
+import { CheckCircle2, RotateCcw, ShieldCheck, Zap, PackageCheck } from "lucide-react";
+
+// 详情页服务承诺条（对标淘宝/京东信任背书）
+const SERVICES: { key: string; Icon: ComponentType<{ size?: number; className?: string }> }[] = [
+  { key: "pd.svcAuth", Icon: CheckCircle2 },
+  { key: "pd.svcReturn", Icon: RotateCcw },
+  { key: "pd.svcShip", Icon: Zap },
+  { key: "pd.svcFreight", Icon: ShieldCheck },
+  { key: "pd.svcBad", Icon: PackageCheck },
+];
 
 // L3：本地浏览历史的条目结构（与写入时一致），消除 any[]。
 interface BrowseHistoryItem {
@@ -153,12 +167,78 @@ export default function ProductDetail() {
     );
   }, [variants, selected]);
 
+  const flash = useFlashPrice(p);
   const displayPrice = useMemo(() => {
+    if (flash.isFlash) return flash.price;
     const base = Number(p?.price || 0);
     return base + (matchedVariant ? Number(matchedVariant.price_delta || 0) : 0);
-  }, [p, matchedVariant]);
+  }, [p, matchedVariant, flash]);
 
   const stock = matchedVariant ? matchedVariant.stock : p?.stock ?? 0;
+
+  // —— 体验增强：图廊 / 收藏 / 同类推荐 ——
+  const [activeImg, setActiveImg] = useState(0);
+  const [faved, setFaved] = useState(false);
+  const [related, setRelated] = useState<ProductOut[]>([]);
+
+  const gallery = useMemo(() => {
+    const extra: string[] = [];
+    try {
+      const arr = JSON.parse(p?.images || "[]");
+      if (Array.isArray(arr)) extra.push(...arr.filter((x: unknown) => typeof x === "string"));
+    } catch {
+      /* ignore */
+    }
+    const base = p?.image_url ? [p.image_url] : [];
+    return Array.from(new Set([...base, ...extra])).filter(Boolean) as string[];
+  }, [p?.image_url, p?.images]);
+
+  useEffect(() => {
+    setActiveImg(0);
+  }, [p?.id]);
+
+  useEffect(() => {
+    let alive = true;
+    if (p && user) {
+      isFavorited(p.id)
+        .then((r) => alive && setFaved(r.favorited))
+        .catch(() => {});
+    } else {
+      setFaved(false);
+    }
+    return () => {
+      alive = false;
+    };
+  }, [p?.id, user]);
+
+  useEffect(() => {
+    if (!p?.category_id) return;
+    listProducts({ category_id: p.category_id, page_size: 12 })
+      .then((r) => setRelated(r.items.filter((x) => x.id !== p.id).slice(0, 10)))
+      .catch(() => {});
+  }, [p?.category_id, p?.id]);
+
+  const toggleFav = async () => {
+    if (!user) {
+      message.info(t("common.loginFirst"));
+      navigate("/login");
+      return;
+    }
+    if (!p) return;
+    try {
+      if (faved) {
+        await removeFavorite(p.id);
+        setFaved(false);
+        message.success(t("pd.fav"));
+      } else {
+        await addFavorite(p.id);
+        setFaved(true);
+        message.success(t("pd.unfav"));
+      }
+    } catch {
+      message.error(t("common.submitFail"));
+    }
+  };
 
   if (loading) return <div className="text-center py-20"><Spin /></div>;
   if (!p) return <EmptyState title={t("pd.notFound")} description={t("pd.maybeOff")} />;
@@ -219,16 +299,48 @@ export default function ProductDetail() {
       : 0;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 pb-28 md:pb-0">
       <Row gutter={[32, 24]}>
         <Col xs={24} md={10}>
-          <div className="aspect-square rounded-2xl overflow-hidden bg-slate-100 flex items-center justify-center">
-            {p.image_url ? (
-              <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
-            ) : (
-              <EmptyState title={t("pd.noImage")} />
-            )}
+          <div
+            className="relative aspect-square rounded-2xl overflow-hidden bg-slate-100 flex items-center justify-center cursor-zoom-in group"
+            onMouseMove={(e) => {
+              const el = e.currentTarget.querySelector("img");
+              if (el) {
+                const r = e.currentTarget.getBoundingClientRect();
+                const x = ((e.clientX - r.left) / r.width) * 100;
+                const y = ((e.clientY - r.top) / r.height) * 100;
+                el.style.transformOrigin = `${x}% ${y}%`;
+              }
+            }}
+            onMouseLeave={(e) => {
+              const el = e.currentTarget.querySelector("img");
+              if (el) el.style.transformOrigin = "center center";
+            }}
+          >
+            <ProductImage
+              name={p.name}
+              image_url={gallery[activeImg] || p.image_url}
+              height="100%"
+              rounded={16}
+              className="w-full h-full transition-transform duration-200 group-hover:scale-125"
+            />
           </div>
+          {gallery.length > 1 && (
+            <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
+              {gallery.map((src, i) => (
+                <button
+                  key={i}
+                  onClick={() => setActiveImg(i)}
+                  className={`shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 ${
+                    i === activeImg ? "border-indigo-500" : "border-transparent"
+                  }`}
+                >
+                  <ProductImage name={p.name} image_url={src} height={64} rounded={8} className="w-full h-full" />
+                </button>
+              ))}
+            </div>
+          )}
         </Col>
         <Col xs={24} md={14}>
           <h1 className="text-2xl font-extrabold text-slate-800">{p.name}</h1>
@@ -248,6 +360,19 @@ export default function ProductDetail() {
                 {Number(matchedVariant.price_delta) > 0 ? "+" : ""}¥{money(Number(matchedVariant.price_delta))}
               </Tag>
             )}
+          </div>
+
+          {/* 服务承诺（对标淘宝/京东信任背书） */}
+          <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+            {SERVICES.map(({ key, Icon }) => (
+              <span
+                key={key}
+                className="inline-flex items-center gap-1 bg-slate-50 border border-slate-100 rounded-full px-2.5 py-1"
+              >
+                <Icon size={13} className="text-emerald-500" />
+                {t(key)}
+              </span>
+            ))}
           </div>
 
           {/* 规格选择 */}
@@ -279,11 +404,36 @@ export default function ProductDetail() {
             </div>
           )}
 
+          {/* 核心卖点（对标 Amazon 五点描述） */}
+          {p && Object.keys(p.attributes || {}).length > 0 && (
+            <div className="mt-4">
+              <div className="text-sm font-medium text-slate-700 mb-2">{t("pd.sellingPoints")}</div>
+              <ul className="space-y-1.5">
+                {Object.entries(p.attributes)
+                  .slice(0, 5)
+                  .map(([k, v]) => (
+                    <li key={k} className="flex items-start gap-1.5 text-sm text-slate-600">
+                      <CheckCircle2 size={15} className="text-indigo-500 mt-0.5 shrink-0" />
+                      <span>
+                        <span className="text-slate-400">{k}：</span>
+                        {v}
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          )}
+
           <div className="mt-4 flex items-center gap-3">
             <span className="text-slate-500">{t("pd.quantity")}</span>
             <InputNumber min={1} max={Math.max(stock, 1)} value={qty} onChange={(v) => setQty(v || 1)} />
             <span className="text-slate-400 text-sm">
               {t("pd.stockInfo").replace("{n}", String(stock))}
+              {stock > 0 && stock <= 20 && (
+                <span className="ml-2 text-rose-500 font-medium">
+                  {t("pd.lowStock").replace("{n}", String(stock))}
+                </span>
+              )}
             </span>
           </div>
 
@@ -302,6 +452,17 @@ export default function ProductDetail() {
             <Button size="large" onClick={buyNow} disabled={stock <= 0}>
               {t("pd.buyNow")}
             </Button>
+            <Tooltip title={t("pd.fav")}>
+              <Button
+                size="large"
+                danger={faved}
+                icon={faved ? <HeartFilled /> : <HeartOutlined />}
+                onClick={toggleFav}
+                disabled={!user}
+              >
+                {faved ? t("pd.unfav") : t("pd.fav")}
+              </Button>
+            </Tooltip>
             <Tooltip title={t("pd.aiChat")}>
               <Button size="large" icon={<RobotOutlined />} onClick={() => setChatOpen(true)}>
                 {t("pd.chat")}
@@ -345,6 +506,24 @@ export default function ProductDetail() {
         ]}
       />
 
+      {/* 同类推荐（对标"猜你喜欢"） */}
+      {related.length > 0 && (
+        <section className="mt-10">
+          <div className="section-title">
+            <span className="st-text">{t("pd.related")}</span>
+          </div>
+          <div className="rail-scroll">
+            {related.map((rp, i) => (
+              <div key={rp.id} className="!w-44 shrink-0">
+                <Reveal delay={i * 40}>
+                  <ProductCard p={rp} />
+                </Reveal>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       <Modal
         title={t("pd.ar")}
         open={arOpen}
@@ -359,7 +538,7 @@ export default function ProductDetail() {
           <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
           {p && (
             <img
-              src={p.image_url || ""}
+              src={p.image_url ? proxyImg(p.image_url) : ""}
               alt=""
               className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-1/2 opacity-80 pointer-events-none mix-blend-screen"
             />

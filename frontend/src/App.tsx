@@ -10,6 +10,7 @@ import AdminLayout from "./layouts/AdminLayout";
 import Market from "./pages/Market";
 import Notifications from "./pages/Notifications";
 import { LanguageProvider, getLang } from "./i18n";
+import { FlashPriceProvider } from "./context/FlashPriceContext";
 import { useAuth } from "./store/auth";
 import { trackAffiliate } from "./api";
 
@@ -58,6 +59,7 @@ const MerchantPresales = lazy(() => import("./pages/merchant/Presales"));
 const MerchantStaff = lazy(() => import("./pages/merchant/Staff"));
 const MerchantReports = lazy(() => import("./pages/merchant/Reports"));
 const NotificationSettings = lazy(() => import("./pages/NotificationSettings"));
+const SearchPage = lazy(() => import("./pages/Search"));
 const AdminWithdrawals = lazy(() => import("./pages/admin/Withdrawals"));
 
 function RouteFallback() {
@@ -116,6 +118,7 @@ export default function App() {
 
   return (
     <LanguageProvider>
+      <FlashPriceProvider>
       {/* P2-14 a11y：键盘用户可跳过顶部导航直接到达主内容 */}
       <a
         href="#main-content"
@@ -129,6 +132,7 @@ export default function App() {
             <Route path="/login" element={<Login />} />
           <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
             <Route path="/" element={<Market />} />
+            <Route path="/market" element={<Market />} />
             <Route path="/products/:id" element={<ProductDetail />} />
             <Route path="/cart" element={<Cart />} />
             <Route path="/orders" element={<Orders />} />
@@ -154,6 +158,8 @@ export default function App() {
             <Route path="/live" element={<Live />} />
             <Route path="/live/:id" element={<LiveRoomPage />} />
             <Route path="/presales" element={<Presales />} />
+            <Route path="/settings/notifications" element={<NotificationSettings />} />
+            <Route path="/search" element={<SearchPage />} />
           </Route>
           <Route element={<ProtectedRoute roles={["merchant"]}><MerchantLayout /></ProtectedRoute>}>
             <Route path="/merchant" element={<MerchantDashboard />} />
@@ -170,7 +176,6 @@ export default function App() {
             <Route path="/merchant/presales" element={<MerchantPresales />} />
             <Route path="/merchant/staff" element={<MerchantStaff />} />
             <Route path="/merchant/reports" element={<MerchantReports />} />
-            <Route path="/settings/notifications" element={<NotificationSettings />} />
           </Route>
           <Route element={<ProtectedRoute roles={["admin"]}><AdminLayout /></ProtectedRoute>}>
             <Route path="/admin" element={<AdminDashboard />} />
@@ -186,6 +191,7 @@ export default function App() {
         </Routes>
       </Suspense>
       </ErrorBoundary>
+      </FlashPriceProvider>
     </LanguageProvider>
   );
 }

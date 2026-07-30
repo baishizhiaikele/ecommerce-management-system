@@ -60,7 +60,8 @@ async def create_charge(db: AsyncSession, order: Order) -> dict:
     return charge
 
 
-async def confirm_payment(db: AsyncSession, payment: Payment, order: Order) -> Payment:
+async def confirm_payment(db: AsyncSession, order: Order) -> Payment:
+    payment = await get_or_create_payment(db, order)
     provider = get_provider(payment.gateway)
     ts = int(_utcnow().timestamp())
     payload = {

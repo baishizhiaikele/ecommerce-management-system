@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Col, Empty, Row, Spin, Tag, Typography } from "antd";
+import { Col, Empty, Row, Spin, Typography } from "antd";
 import {
   listHistory,
   listRecentlyBought,
@@ -93,18 +93,17 @@ export default function History() {
         {bought.length > 0 && (
           <section>
             <Typography.Title level={4}>{t("history.recentlyBought")}</Typography.Title>
-            <div className="flex flex-wrap gap-3">
+            <Row gutter={[12, 12]}>
               {bought.map((b) => (
-                <Tag
-                  key={b.product_id}
-                  color="blue"
-                  className="cursor-pointer px-3 py-1 text-sm"
-                  onClick={() => navigate(`/products/${b.product_id}`)}
-                >
-                  {b.product_name} ×{b.times}
-                </Tag>
+                <Col key={b.product_id} xs={12} sm={8} md={6} lg={4}>
+                  <ProductCard
+                    id={b.product_id}
+                    name={`${b.product_name} ×${b.times}`}
+                    image={b.image_url}
+                  />
+                </Col>
               ))}
-            </div>
+            </Row>
           </section>
         )}
       </Spin>

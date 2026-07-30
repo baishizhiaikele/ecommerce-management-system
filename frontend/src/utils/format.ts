@@ -6,6 +6,15 @@ export const money = (v: string | number) => {
   return isNaN(n) ? "0.00" : n.toFixed(2);
 };
 
+/** 把时间格式化为「年-月-日 时:分:秒」，保证精确到秒（不受浏览器区域设置影响）。 */
+export const formatDateTime = (v?: string | null): string => {
+  if (!v) return "-";
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return String(v);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+};
+
 type Meta = { color: string; label: string };
 
 /** 把带 key 的元数据转成「访问时才翻译」的代理，切换语言时自动刷新。 */

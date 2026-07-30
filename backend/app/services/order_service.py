@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.db_errors import is_deadlock
 from app.models.cart import CartItem
+from app.models.catalog import Category
 from app.models.order import Order, OrderItem, OrderStatus
 from app.models.product import Product, ProductStatus
 from app.models.variant import ProductVariant
@@ -134,6 +135,8 @@ async def _apply_promotions_and_discounts(
     plus_active: bool,
     coupon_id: str | None = None,
     use_points: bool = False,
+    category_slugs: set[str] | None = None,
+    merchant_ids: set[str] | None = None,
 ) -> float:
     """汇总所有优惠（商品促销 / 会员等级 / PLUS / 优惠券 / 积分），返回总抵扣金额。
     赠品 OrderItem、优惠券核销、积分扣减等副作用均在此完成，与下单主事务同提交。"""
@@ -160,7 +163,12 @@ async def _apply_promotions_and_discounts(
         uc = await find_usable_user_coupon(db, buyer.id, coupon_id)
         if not uc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="优惠券不可用")
-        coupon_discount = compute_discount(uc.coupon, subtotal)
+        coupon_discount = compute_discount(
+            uc.coupon,
+            subtotal,
+            category_slugs=category_slugs,
+            merchant_ids=merchant_ids,
+        )
         if coupon_discount <= 0:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="优惠券不满足使用条件")
         discount += coupon_discount
@@ -199,16 +207,26 @@ async def checkout(
     *,
     buyer: User,
     address: str,
+    receiver: str | None = None,
+    contact: str | None = None,
     coupon_id: str | None = None,
     use_points: bool = False,
     delivery_type: str = "express",
     pickup_store: str | None = None,
+    cart_item_ids: list[str] | None = None,
 ) -> Order:
     cart_rows = list(
         await db.scalars(select(CartItem).where(CartItem.user_id == buyer.id))
     )
     if not cart_rows:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="购物车为空")
+
+    # 支持「批量选择支付」：仅结算被勾选的购物车项；未传则结算全部（向后兼容）
+    if cart_item_ids:
+        wanted = set(cart_item_ids)
+        cart_rows = [r for r in cart_rows if r.id in wanted]
+    if not cart_rows:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请选择要结算的商品")
 
     # P1-M13：锁定买家行，避免并发下单超扣积分
     buyer = await db.scalar(select(User).where(User.id == buyer.id).with_for_update())
@@ -223,6 +241,8 @@ async def checkout(
         buyer_id=buyer.id,
         status=OrderStatus.PENDING_PAYMENT,
         address=address,
+        receiver=receiver,
+        contact=contact,
         delivery_type=delivery_type,
         pickup_store=pickup_store,
     )
@@ -237,6 +257,28 @@ async def checkout(
         )
     )
     pmap = {p.id: p for p in locked}
+
+    # 解析订单商品的「顶级品类 slug」与「涉及商家」集合，用于优惠券适用范围校验
+    # （文创券 applicable_category='culture' 只能用于文创品类商品，避免买耳机也能用）。
+    cat_ids = {p.category_id for p in locked if p.category_id}
+    cat_rows = (
+        list(await db.scalars(select(Category).where(Category.id.in_(cat_ids))))
+        if cat_ids
+        else []
+    )
+    cat_by_id = {c.id: c for c in cat_rows}
+    category_slugs: set[str] = set()
+    for c in cat_rows:
+        # 子品类取父级 slug 作为顶级 slug；顶级品类用自身 slug
+        top = c
+        while top.parent_id and top.parent_id in cat_by_id:
+            top = cat_by_id[top.parent_id]
+        if not top.parent_id:
+            category_slugs.add(top.slug)
+        else:
+            # 父级不在本次集合内（理论上顶级一定在），兜底用自身 slug
+            category_slugs.add(c.slug)
+    merchant_ids = {p.merchant_id for p in locked if p.merchant_id}
 
     # 库存锁定 + 构建订单明细
     total, merchant_subtotals, promo_input, out_of_stock = await _build_order_items(
@@ -260,6 +302,8 @@ async def checkout(
         plus_active=plus_active,
         coupon_id=coupon_id,
         use_points=use_points,
+        category_slugs=category_slugs,
+        merchant_ids=merchant_ids,
     )
 
     # 运费计算

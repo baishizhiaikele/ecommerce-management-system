@@ -18,14 +18,10 @@ export default defineConfig({
           if (id.includes("react-icons") || id.includes("lucide-react")) {
             return "icons";
           }
-          if (
-            id.includes("react-dom") ||
-            id.includes("react-router") ||
-            id.includes("/react/") ||
-            id.includes("scheduler")
-          ) {
-            return "react-vendor";
-          }
+          // NOTE: react/react-dom/scheduler/react-router must stay in `vendor`.
+          // Splitting them into a separate "react-vendor" chunk creates a
+          // `vendor -> react-vendor -> vendor` circular dependency in Rollup's
+          // chunk graph, which triggers a build warning.
           return "vendor";
         },
       },

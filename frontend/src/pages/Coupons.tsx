@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AxiosError } from "axios";
 import { Card, Button, Tabs, Tag, Spin, message } from "antd";
 import { GiftOutlined } from "@ant-design/icons";
+import dayjs from "dayjs";
 import EmptyState from "../components/EmptyState";
 import { listCoupons, claimCoupon, myCoupons, CouponOut, UserCouponOut } from "../api";
 import { useI18n, translate } from "../i18n";
@@ -25,23 +26,48 @@ function CouponCard({
   c: CouponOut | UserCouponOut;
   footer: React.ReactNode;
 }) {
+  // 用户券到期时间：领取到的券以 expire_at 为准（无则回退 end_at）
+  const expire = (c as UserCouponOut).expire_at || (c as CouponOut).expire_at || (c as CouponOut).end_at || null;
+  const now = dayjs();
+  const expired = expire ? now.isAfter(dayjs(expire)) : false;
+  const expiringSoon = expire ? !expired && now.add(7, "day").isAfter(dayjs(expire)) : false;
+
   return (
-    <div className="flex rounded-2xl overflow-hidden card-soft fade-up">
+    <div
+      className="flex rounded-2xl overflow-hidden card-soft fade-up"
+      style={expired ? { opacity: 0.6 } : undefined}
+    >
       <div
-        className="w-28 flex flex-col items-center justify-center text-white"
-        style={{ background: "#4F46E5" }}
+        className="w-32 px-2 py-4 flex flex-col items-center justify-center text-white shrink-0"
+        style={{ background: expired ? "#9CA3AF" : "#4F46E5" }}
       >
-        <div className="text-2xl font-bold">{couponLabel(c)}</div>
-        <div className="text-xs opacity-90 mt-1">{couponDesc(c)}</div>
+        <div className="text-2xl font-bold leading-tight whitespace-nowrap">{couponLabel(c)}</div>
+        <div className="text-xs opacity-90 mt-1 text-center leading-tight px-1">
+          {couponDesc(c)}
+        </div>
       </div>
-      <div className="flex-1 flex items-center justify-between px-4 py-3">
-        <div>
-          <div className="font-semibold">{c.name}</div>
-          <Tag color="blue" className="mt-1">
+      <div className="flex-1 min-w-0 px-4 py-3 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="font-semibold truncate" title={c.name}>{c.name}</div>
+          <Tag color="blue" className="mt-2">
             {c.type === "discount" ? translate("coupon.type.discount") : translate("coupon.type.full_reduce")}
           </Tag>
+          <div className="text-xs mt-1.5 text-gray-500">
+            {expire ? (
+              <>
+                {translate("coupon.expireAt")}：{dayjs(expire).format("YYYY-MM-DD")}
+                {expired ? (
+                  <Tag color="default" className="ml-1">{translate("coupon.expired")}</Tag>
+                ) : expiringSoon ? (
+                  <Tag color="volcano" className="ml-1">{translate("coupon.expiredSoon")}</Tag>
+                ) : null}
+              </>
+            ) : (
+              <span>{translate("coupon.permanent")}</span>
+            )}
+          </div>
         </div>
-        {footer}
+        <div className="shrink-0">{footer}</div>
       </div>
     </div>
   );
@@ -68,6 +94,13 @@ export default function Coupons() {
   useEffect(() => {
     load();
   }, []);
+
+  // 已领取的券（按 coupon_id）不应再出现在「可领取」列表中
+  const claimedIds = useMemo(() => new Set(mine.map((c) => c.coupon_id)), [mine]);
+  const claimable = useMemo(
+    () => avail.filter((c) => !claimedIds.has(c.id)),
+    [avail, claimedIds]
+  );
 
   const onClaim = async (id: string) => {
     try {
@@ -116,13 +149,13 @@ export default function Coupons() {
             },
             {
               key: "avail",
-              label: `${t("coupon.available")}（${avail.length}）`,
+              label: `${t("coupon.available")}（${claimable.length}）`,
               children:
-                avail.length === 0 ? (
+                claimable.length === 0 ? (
                   <EmptyState title={t("coupon.noAvail")} description={t("coupon.availDesc")} />
                 ) : (
                   <div className="grid gap-3">
-                    {avail.map((c) => (
+                    {claimable.map((c) => (
                       <CouponCard
                         key={c.id}
                         c={c}

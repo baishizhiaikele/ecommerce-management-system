@@ -13,6 +13,7 @@ from app.models.favorite import Favorite
 from app.models.notification import Notification, NotificationType
 from app.models.order import Order, OrderItem, OrderStatus
 from app.models.points import PointLog, PointAction
+from app.models.presale import Presale
 from app.models.product import Product, ProductStatus
 from app.models.reward import RedemptionItem, RedemptionType
 from app.models.review import Review, Sentiment
@@ -140,92 +141,94 @@ def _make_specs(sub: str) -> str:
     return json.dumps({**SPEC_BASE, **SPEC_EXTRA.get(sub, {})}, ensure_ascii=False)
 
 
-# ---- 商品图：按关键词取真实商品图（Wikimedia Commons 主图源，loremflickr 兜底）----
-# 关键词即图片内容，保证「图与商品一致」；lock 固定每张图避免刷新变化。
+# ---- 商品图：本地 AI 生成渲染图 ----
+# 由 image_gen 工具预生成到 backend/product_images/<商品名>.jpg，
+# 后端经 /api/images/product/{name} 直接返回，离线、稳定、与商品一一对应、无水印。
+#（积分商城兑换项仍使用 loremflickr，见下方 _img）
+
+def _img(tag: str, w: int = 600, lock: int = 0) -> str:
+    """返回 loremflickr 真实商品图片 URL。
+    前端 ProductImage 会将外链转为 /api/images/proxy 代理请求 → 后端拉取并
+    缓存到本地 .cache/img/ 目录。首次加载需联网，之后离线可用。
+    lock=N 保证同一关键词组合始终返回同一张稳定图片。"""
+    from urllib.parse import quote
+
+    return f"https://loremflickr.com/{w}/{w}/{quote(tag)}?lock={lock}"
 
 
-def _lorem(keywords: str, w: int = 600, lock: int = 1) -> str:
-    """兜底图源（loremflickr）：按关键词取图，lock 固定结果避免刷新变化。"""
-    return f"https://loremflickr.com/{w}/{w}/{keywords}?lock={lock}"
+def _local_img(name: str) -> str:
+    """返回本地 AI 生成商品图的 URL（后端 /api/images/product/{name} 静态读取）。"""
+    from urllib.parse import quote
 
-
-from app.core.commons_imgs import COMMONS_IMGS
-
-
-def _img(keywords: str, w: int = 600) -> str:
-    """按关键词取真实商品图（Wikimedia Commons，CC 授权，预抓取写死在 commons_imgs.py）。
-    命中即用；未命中（如 star/vacuum bag 等难匹配词）回退到 loremflickr。
-    键统一用空格分隔，兼容 PRODUCT_IMGS 中的逗号写法。"""
-    key = keywords.replace(",", " ")
-    if key in COMMONS_IMGS:
-        return COMMONS_IMGS[key]
-    return _lorem(keywords, w, lock=abs(hash(keywords)) % 1000 + 1)
+    return f"/api/images/product/{quote(name)}"
 
 
 # 商品名 -> 图片键（首图 + 相册），保证图与商品一致
 # 商品名 -> 图片关键词（首图 + 相册）。英文逗号分隔表示多标签，提高相关性。
+# 商品名 -> 图片标签（首图 + 相册）。统一使用 loremflickr 图片池充足、且更“产品化”
+# 的单词标签（已逐一验证可返回真实 JPEG，避免 500 / 场景图）。同标签不同 lock 即不同图。
 PRODUCT_IMGS = {
-    "无线降噪耳机": ("headphones", "headphone"),
-    "入耳式运动耳机": ("earbuds", "headphones"),
-    "桌面蓝牙音箱": ("speaker", "bluetooth,speaker"),
-    "便携蓝牙音箱": ("portable,speaker", "speaker"),
-    "氮化镓快充头 65W": ("usb charger", "adapter"),
-    "磁吸无线充电板": ("wireless,charger", "usb,charger"),
-    "20000mAh 充电宝": ("powerbank", "usb,charger"),
-    "多彩编织数据线": ("usb,cable", "cable"),
-    "智能运动手环": ("fitness,band", "wristband"),
-    "户外运动手表": ("smartwatch", "watch"),
-    "健康智能戒指": ("smart,ring", "ring"),
-    "手机拍摄三脚架": ("tripod", "camera,tripod"),
-    "桌面环形补光灯": ("ring,light", "studio,light"),
-    "复古胶片相机": ("film,camera", "camera"),
-    "北欧风香薰灯": ("lamp", "candle,light"),
-    "护眼学习台灯": ("desk,lamp", "lamp"),
-    "极简氛围落地灯": ("floor,lamp", "lamp"),
-    "手冲咖啡入门套装": ("coffee,pot", "pour,coffee"),
-    "麦饭石不粘煎锅": ("frying,pan", "pan"),
-    "陶瓷餐具六件套": ("tableware", "plate"),
-    "纯棉四件套": ("bedding", "bedsheet"),
+    "无线降噪耳机": ("headphones", "headphones"),
+    "入耳式运动耳机": ("earbuds", "earbuds"),
+    "桌面蓝牙音箱": ("speaker", "speaker"),
+    "便携蓝牙音箱": ("speaker", "speaker"),
+    "氮化镓快充头 65W": ("charger", "charger"),
+    "磁吸无线充电板": ("wirelesscharger", "wirelesscharger"),
+    "20000mAh 充电宝": ("powerbank", "powerbank"),
+    "多彩编织数据线": ("cable", "cable"),
+    "智能运动手环": ("fitnessband", "fitnessband"),
+    "户外运动手表": ("smartwatch", "smartwatch"),
+    "健康智能戒指": ("smartring", "smartring"),
+    "手机拍摄三脚架": ("tripod", "tripod"),
+    "桌面环形补光灯": ("ringlight", "ringlight"),
+    "复古胶片相机": ("camera", "camera"),
+    "北欧风香薰灯": ("lamp", "lamp"),
+    "护眼学习台灯": ("desklamp", "desklamp"),
+    "极简氛围落地灯": ("floorlamp", "floorlamp"),
+    "手冲咖啡入门套装": ("coffeemaker", "coffeemaker"),
+    "麦饭石不粘煎锅": ("pan", "pan"),
+    "陶瓷餐具六件套": ("tableware", "tableware"),
+    "纯棉四件套": ("bedding", "bedding"),
     "大豆纤维护颈枕": ("pillow", "pillow"),
-    "羊毛混纺盖毯": ("blanket", "knit"),
-    "可折叠收纳箱": ("storage basket", "box"),
-    "桌面多层置物架": ("desk shelf", "storage rack"),
-    "真空压缩收纳袋": ("storage,bag", "vacuum,bag"),
-    "手账本礼盒装": ("notebook", "journal"),
-    "彩色中性笔套装": ("pen", "stationery"),
-    "便签纸砖": ("sticky,note", "memo"),
-    "戳戳绣 DIY 材料包": ("embroidery", "craft"),
-    "微景观生态瓶": ("terrarium", "plant"),
-    "羊毛毡材料包": ("felt", "craft"),
-    "金属珐琅徽章": ("badge", "pin"),
-    "夜光星球贴纸": ("sticker", "star"),
-    "立体冰箱贴": ("fridge,magnet", "magnet"),
-    "独立设计杂志": ("magazine", "book"),
-    "解压涂色书": ("coloring,book", "book"),
-    "经典黑胶唱片": ("vinyl", "record"),
-    "电竞头戴耳机": ("gaming,headset", "headset"),
-    "高清网络摄像头": ("webcam", "camera"),
-    "天然大豆香薰蜡烛": ("candle", "scented,candle"),
-    "浴室防滑地垫": ("bath,mat", "rug"),
-    "原创帆布托特包": ("tote,bag", "canvas,bag"),
-    "金属钥匙扣": ("keychain", "key"),
-    "加宽游戏鼠标垫": ("mousepad", "mousepad"),
-    "客制化机械键盘": ("keyboard", "mechanical,keyboard"),
-    "门后收纳挂袋": ("hanging organizer", "hanging organizer"),
-    "桌面陶瓷绿植盆": ("planter", "flower,pot"),
-    "和纸手帐胶带": ("washi,tape", "tape"),
-    "1000 片治愈拼图": ("puzzle", "jigsaw"),
-    "铝合金平板支架": ("tablet,stand", "ipad,stand"),
-    "Type-C 扩展坞": ("usb,hub", "adapter"),
-    "电竞无线鼠标": ("gaming,mouse", "mouse"),
-    "无线游戏手柄": ("gamepad", "controller"),
-    "速干亲肤浴巾": ("towel", "bath,towel"),
-    "沐浴精油套装": ("bath,set", "shower,gel"),
-    "抽象装饰画": ("wall,art", "poster"),
-    "香薰扩香石": ("diffuser", "aroma,stone"),
-    "盲盒手办摆件": ("figure", "blind,box"),
-    "木质拼装模型": ("model,kit", "wooden,toy"),
-    "入门尤克里里": ("ukulele", "guitar"),
+    "羊毛混纺盖毯": ("blanket", "blanket"),
+    "可折叠收纳箱": ("storagebox", "storagebox"),
+    "桌面多层置物架": ("shelf", "shelf"),
+    "真空压缩收纳袋": ("storagebag", "storagebag"),
+    "手账本礼盒装": ("notebook", "notebook"),
+    "彩色中性笔套装": ("pen", "pen"),
+    "便签纸砖": ("stickynotes", "stickynotes"),
+    "戳戳绣 DIY 材料包": ("embroidery", "embroidery"),
+    "微景观生态瓶": ("terrarium", "terrarium"),
+    "羊毛毡材料包": ("felt", "felt"),
+    "金属珐琅徽章": ("badge", "badge"),
+    "夜光星球贴纸": ("sticker", "sticker"),
+    "立体冰箱贴": ("fridgemagnet", "fridgemagnet"),
+    "独立设计杂志": ("magazine", "magazine"),
+    "解压涂色书": ("coloringbook", "coloringbook"),
+    "经典黑胶唱片": ("vinyl", "vinyl"),
+    "电竞头戴耳机": ("headset", "headset"),
+    "高清网络摄像头": ("camera", "camera"),
+    "天然大豆香薰蜡烛": ("candle", "candle"),
+    "浴室防滑地垫": ("bathmat", "bathmat"),
+    "原创帆布托特包": ("totebag", "totebag"),
+    "金属钥匙扣": ("keyring", "keyring"),
+    "加宽游戏鼠标垫": ("mouse", "mouse"),
+    "客制化机械键盘": ("keyboard", "keyboard"),
+    "门后收纳挂袋": ("organizer", "organizer"),
+    "桌面陶瓷绿植盆": ("planter", "planter"),
+    "和纸手帐胶带": ("washitape", "washitape"),
+    "1000 片治愈拼图": ("puzzle", "puzzle"),
+    "铝合金平板支架": ("tabletstand", "tabletstand"),
+    "Type-C 扩展坞": ("hub", "hub"),
+    "电竞无线鼠标": ("mouse", "mouse"),
+    "无线游戏手柄": ("gamepad", "gamepad"),
+    "速干亲肤浴巾": ("towel", "towel"),
+    "沐浴精油套装": ("bath", "bath"),
+    "抽象装饰画": ("poster", "poster"),
+    "香薰扩香石": ("diffuser", "diffuser"),
+    "盲盒手办摆件": ("figure", "figure"),
+    "木质拼装模型": ("model", "model"),
+    "入门尤克里里": ("ukulele", "ukulele"),
 }
 
 
@@ -279,7 +282,7 @@ async def seed_demo() -> None:
         products: dict[str, Product] = {}
         for i, (name, sub, desc, price, stock, sales) in enumerate(PRODUCTS, start=1):
             slug = f"p{i}"
-            imgs = [_img(kw, 600) for kw in PRODUCT_IMGS[name]]
+            imgs = [_local_img(name)]
             p = Product(
                 merchant_id=users[merchants[i % len(merchants)]].id,
                 category_id=sub_cats[sub].id,
@@ -349,14 +352,15 @@ async def seed_demo() -> None:
         await db.flush()
 
         # ---- 优惠券（平台 + 店铺）----
+        _now = datetime.now(timezone.utc)
         coupons = [
-            Coupon(name="新人专享券（满100减20）", type=CouponType.FULL_REDUCE, threshold=100, value=20, total=200),
-            Coupon(name="全平台满200减30", type=CouponType.FULL_REDUCE, threshold=200, value=30, total=200),
-            Coupon(name="数码品类券（满300减50）", type=CouponType.FULL_REDUCE, threshold=300, value=50, total=150, merchant_id=users["merchant"].id),
-            Coupon(name="家居满150减25", type=CouponType.FULL_REDUCE, threshold=150, value=25, total=150, merchant_id=users["merchant_2"].id),
-            Coupon(name="文创满99减15", type=CouponType.FULL_REDUCE, threshold=99, value=15, total=150, merchant_id=users["merchant_3"].id),
-            Coupon(name="会员折扣券（8.8折）", type=CouponType.DISCOUNT, threshold=0, value=0.88, total=100),
-            Coupon(name="限时秒杀补给券（满50减10）", type=CouponType.FULL_REDUCE, threshold=50, value=10, total=300),
+            Coupon(name="新人专享券（满100减20）", type=CouponType.FULL_REDUCE, threshold=100, value=20, total=200, end_at=_now + timedelta(days=30)),
+            Coupon(name="全平台满200减30", type=CouponType.FULL_REDUCE, threshold=200, value=30, total=200, end_at=_now + timedelta(days=60)),
+            Coupon(name="数码品类券（满300减50）", type=CouponType.FULL_REDUCE, threshold=300, value=50, total=150, merchant_id=users["merchant"].id, applicable_category="digital", end_at=_now + timedelta(days=45)),
+            Coupon(name="家居满150减25", type=CouponType.FULL_REDUCE, threshold=150, value=25, total=150, merchant_id=users["merchant_2"].id, applicable_category="home", end_at=_now + timedelta(days=90)),
+            Coupon(name="文创满99减15", type=CouponType.FULL_REDUCE, threshold=99, value=15, total=150, applicable_category="culture", end_at=_now + timedelta(days=30)),
+            Coupon(name="会员折扣券（8.8折）", type=CouponType.DISCOUNT, threshold=0, value=0.88, total=100, end_at=_now + timedelta(days=180)),
+            Coupon(name="限时秒杀补给券（满50减10）", type=CouponType.FULL_REDUCE, threshold=50, value=10, total=300, end_at=_now + timedelta(days=3)),
         ]
         for c in coupons:
             db.add(c)
@@ -396,6 +400,36 @@ async def seed_demo() -> None:
                     link_id=lid,
                     link_url="http://localhost:5173/" if ltype == "url" else None,
                     sort_order=i,
+                )
+            )
+
+        # ---- 预售活动（定金膨胀：付定金 X 抵 X*inflate_rate，到期付尾款转订单）----
+        # (商品slug, 商家, 标题, 原价参考, 定金, 膨胀系数, 截止天数)
+        # 预售价按商品原价 8 折生成（original_price 仍展示商品原价），保证页面可见真实折扣
+        PRESALES = [
+            ("p1", "merchant", "无线降噪耳机 尝鲜预售", 299.0, 50.0, 1.5, 7),
+            ("p14", "merchant", "复古胶片相机 限量预售", 899.0, 200.0, 2.0, 10),
+            ("p10", "merchant", "户外运动手表 新品预售", 599.0, 100.0, 1.8, 14),
+            ("p90", "merchant", "客制化机械键盘 团购预售", 399.0, 80.0, 1.5, 12),
+            ("p22", "merchant_3", "微景观生态瓶 治愈预售", 89.0, 15.0, 2.0, 5),
+            ("p106", "merchant_3", "经典黑胶唱片 收藏预售", 129.0, 30.0, 2.0, 9),
+            ("p36", "merchant_2", "北欧风香薰灯 节日预售", 159.0, 30.0, 2.0, 6),
+            ("p63", "merchant_2", "手冲咖啡入门套装 预售", 249.0, 50.0, 1.8, 8),
+        ]
+        for slug, m_uname, title, _orig, deposit, rate, days in PRESALES:
+            if slug not in products or m_uname not in users:
+                continue
+            presale_price = round(float(products[slug].price) * 0.8, 2)
+            db.add(
+                Presale(
+                    merchant_id=users[m_uname].id,
+                    product_id=products[slug].id,
+                    title=title,
+                    presale_price=presale_price,
+                    deposit=deposit,
+                    inflate_rate=rate,
+                    end_at=now + timedelta(days=days),
+                    is_active=1,
                 )
             )
 

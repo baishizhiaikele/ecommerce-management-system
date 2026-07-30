@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useI18n } from "../../i18n";
+import { formatDateTime } from "../../utils/format";
 import {
   createReportTask,
   deleteReportTask,
@@ -105,7 +106,7 @@ export default function Reports() {
     {
       title: t("report.lastSent"),
       dataIndex: "last_sent_at",
-      render: (v?: string) => (v ? new Date(v).toLocaleString() : t("report.never")),
+      render: (v?: string) => (v ? formatDateTime(v) : t("report.never")),
     },
     {
       title: t("common.status"),

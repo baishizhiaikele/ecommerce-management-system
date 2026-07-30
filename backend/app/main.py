@@ -38,7 +38,7 @@ from app.api.recommendations import router as recommendations_router
 from app.api.reviews import router as reviews_router
 from app.api.shops import router as shops_router
 from app.api.support import router as support_router
-from app.api.upload import UPLOAD_DIR
+from app.api.upload import UPLOAD_DIR, router as upload_router
 from app.api.ws import router as ws_router
 from app.api.shipping import router as shipping_router
 from app.api.payments import router as payments_router
@@ -92,6 +92,8 @@ async def _ensure_demo_columns() -> None:
         "ALTER TABLE reviews ADD COLUMN reply TEXT",
         "ALTER TABLE reviews ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE order_items ADD COLUMN variant_info TEXT",
+        "ALTER TABLE order_items ADD COLUMN variant_id TEXT",
+        "ALTER TABLE coupons ADD COLUMN applicable_category VARCHAR(80)",
         "ALTER TABLE orders ADD COLUMN refund_amount NUMERIC NOT NULL DEFAULT 0",
         "ALTER TABLE cart_items ADD COLUMN variant_id TEXT",
         "ALTER TABLE reviews ADD COLUMN helpful_count INTEGER NOT NULL DEFAULT 0",
@@ -122,6 +124,20 @@ async def _ensure_demo_columns() -> None:
         "ALTER TABLE promotions ADD COLUMN bundle_count INTEGER",
         "ALTER TABLE promotions ADD COLUMN bundle_price NUMERIC",
         "ALTER TABLE invoices ADD COLUMN pdf_url VARCHAR(512)",
+        # 客服工单增强：优先级/分类/订单关联/满意度/未读计数/内部备注
+        "ALTER TABLE support_tickets ADD COLUMN order_id VARCHAR(36)",
+        "ALTER TABLE support_tickets ADD COLUMN priority VARCHAR(20) NOT NULL DEFAULT 'normal'",
+        "ALTER TABLE support_tickets ADD COLUMN category VARCHAR(20) NOT NULL DEFAULT 'other'",
+        "ALTER TABLE support_tickets ADD COLUMN satisfaction_rating INTEGER",
+        "ALTER TABLE support_tickets ADD COLUMN satisfaction_comment TEXT",
+        "ALTER TABLE support_tickets ADD COLUMN unread_for_buyer INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE support_tickets ADD COLUMN unread_for_merchant INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE support_messages ADD COLUMN is_internal INTEGER NOT NULL DEFAULT 0",
+        # 客服工单枚举值归一：统一存储为枚举 value（小写），与新增列 DEFAULT 及 API/前端一致
+        "UPDATE support_tickets SET status = LOWER(status) WHERE status IN ('OPEN','ANSWERED','CLOSED')",
+        "UPDATE support_tickets SET priority = LOWER(priority) WHERE priority IN ('LOW','NORMAL','HIGH','URGENT')",
+        "UPDATE support_tickets SET category = LOWER(category) WHERE category IN ('INQUIRY','AFTERSALE','LOGISTICS','OTHER')",
+        "UPDATE support_messages SET sender_role = LOWER(sender_role) WHERE sender_role IN ('BUYER','MERCHANT','AI')",
     ]
     async with engine.begin() as conn:
         for stmt in statements:
@@ -257,6 +273,7 @@ app.include_router(live_router, prefix=settings.API_V1_PREFIX)
 app.include_router(invoices_router, prefix=settings.API_V1_PREFIX)
 app.include_router(presale_router, prefix=settings.API_V1_PREFIX)
 app.include_router(images_router, prefix=settings.API_V1_PREFIX)
+app.include_router(upload_router, prefix=settings.API_V1_PREFIX)
 app.include_router(staff_router, prefix=settings.API_V1_PREFIX)
 app.include_router(report_router, prefix=settings.API_V1_PREFIX)
 

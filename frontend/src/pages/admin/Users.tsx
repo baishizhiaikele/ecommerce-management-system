@@ -4,6 +4,7 @@ import { Table, Tag, message, Card, Select, Switch, Spin } from "antd";
 import EmptyState from "../../components/EmptyState";
 import { adminListUsers, adminUpdateUser, UserOut, Role } from "../../api";
 import { useI18n } from "../../i18n";
+import { formatDateTime } from "../../utils/format";
 
 export default function AdminUsers() {
   const { t } = useI18n();
@@ -94,7 +95,7 @@ export default function AdminUsers() {
             {
               title: t("admin.regTime"),
               dataIndex: "created_at",
-              render: (v) => new Date(v).toLocaleString(),
+              render: (v) => formatDateTime(v),
             },
           ]}
         />

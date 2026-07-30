@@ -112,11 +112,16 @@ export interface CartItemOut {
   quantity: number;
   variant_id?: string | null;
   variant_label?: string | null;
+  merchant_id?: string | null;
+  category_id?: string | null;
+  is_flash?: boolean;
+  original?: number | null;
 }
 export interface OrderItemOut {
   id: string;
   product_id: string;
   name: string;
+  image_url?: string | null;
   price: Decimal;
   quantity: number;
 }
@@ -127,6 +132,8 @@ export interface OrderOut {
   total_amount: Decimal;
   discount_amount: Decimal;
   address?: string | null;
+  receiver?: string | null;
+  contact?: string | null;
   delivery_type?: "express" | "pickup";
   pickup_store?: string | null;
   pickup_code?: string | null;
@@ -165,6 +172,8 @@ export interface UserCouponOut {
   expire_at?: string | null;
   is_used: boolean;
   claimed_at: string;
+  merchant_id?: string | null;
+  applicable_category?: string | null;
 }
 export interface NotificationOut {
   id: string;
@@ -345,6 +354,10 @@ export const signIn = () =>
   api.post<{ signed_today: boolean; points: number; gained: number; streak?: number }>(
     "/me/signin"
   ).then((r) => r.data);
+export const getSignInStatus = () =>
+  api
+    .get<{ signed_today: boolean }>("/me/signin/status")
+    .then((r) => r.data);
 
 // ---------- 积分商城 ----------
 export type RewardType = "coupon" | "virtual";
@@ -465,19 +478,25 @@ export const removeCartItem = (itemId: string) =>
 export const checkout = (
   address: string,
   opts?: {
+    receiver?: string;
+    contact?: string;
     coupon_id?: string;
     use_points?: boolean;
     delivery_type?: "express" | "pickup";
     pickup_store?: string;
+    cart_item_ids?: string[];
   }
 ) =>
   api
     .post<OrderOut>("/orders/checkout", {
       address,
+      receiver: opts?.receiver || undefined,
+      contact: opts?.contact || undefined,
       coupon_id: opts?.coupon_id || undefined,
       use_points: opts?.use_points || false,
       delivery_type: opts?.delivery_type || "express",
       pickup_store: opts?.pickup_store || undefined,
+      cart_item_ids: opts?.cart_item_ids || undefined,
     })
     .then((r) => r.data);
 
@@ -712,6 +731,7 @@ export interface CouponCreate {
   is_active?: boolean;
   start_at?: string | null;
   end_at?: string | null;
+  expire_at?: string | null;
   merchant_id?: string;
 }
 
@@ -834,34 +854,93 @@ export const trendInsight = () =>
   api.get<TrendInsightOut>("/ai/trend-insight").then((r) => r.data);
 
 // ---------- 售后工单 ----------
+export interface SupportAttachmentOut {
+  id: string;
+  url: string;
+  filename?: string | null;
+  content_type?: string | null;
+}
 export interface SupportMessageOut {
   id: string;
   sender_role: "buyer" | "merchant" | "ai";
   content: string;
+  is_internal: boolean;
+  attachments: SupportAttachmentOut[];
   created_at: string;
 }
+export type TicketStatus = "open" | "answered" | "closed";
+export type TicketPriority = "low" | "normal" | "high" | "urgent";
+export type TicketCategory = "inquiry" | "aftersale" | "logistics" | "other";
 export interface SupportTicketOut {
   id: string;
-  status: "open" | "answered" | "closed";
+  status: TicketStatus;
   subject?: string | null;
   product_id?: string | null;
   product_name?: string | null;
+  order_id?: string | null;
+  order_no?: string | null;
   user_id: string;
   user_name: string;
+  priority: TicketPriority;
+  category: TicketCategory;
+  satisfaction_rating?: number | null;
+  satisfaction_comment?: string | null;
+  unread_for_buyer: number;
+  unread_for_merchant: number;
   created_at: string;
   updated_at: string;
   messages: SupportMessageOut[];
 }
-export const createTicket = (data: { product_id?: string; message: string; subject?: string }) =>
+export interface SupportTicketPage {
+  items: SupportTicketOut[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+export interface CreateTicketRequest {
+  product_id?: string;
+  message: string;
+  subject?: string;
+  priority?: TicketPriority;
+  category?: TicketCategory;
+  order_id?: string;
+  attachments?: string[];
+}
+export interface ReplyRequest {
+  content: string;
+  is_internal?: boolean;
+  attachments?: string[];
+}
+
+export const createTicket = (data: CreateTicketRequest) =>
   api.post<SupportTicketOut>("/support/tickets", data).then((r) => r.data);
-export const listTickets = () =>
-  api.get<SupportTicketOut[]>("/support/tickets").then((r) => r.data);
+export const listTickets = (params?: {
+  status?: string;
+  priority?: string;
+  category?: string;
+  search?: string;
+  page?: number;
+  page_size?: number;
+}) =>
+  api.get<SupportTicketPage>("/support/tickets", { params }).then((r) => r.data);
 export const getTicket = (id: string) =>
   api.get<SupportTicketOut>(`/support/tickets/${id}`).then((r) => r.data);
-export const replyTicket = (id: string, content: string) =>
-  api.post<SupportTicketOut>(`/support/tickets/${id}/messages`, { content }).then((r) => r.data);
+export const replyTicket = (id: string, data: ReplyRequest) =>
+  api.post<SupportTicketOut>(`/support/tickets/${id}/messages`, data).then((r) => r.data);
 export const closeTicket = (id: string) =>
   api.post<SupportTicketOut>(`/support/tickets/${id}/close`).then((r) => r.data);
+export const rateTicket = (id: string, rating: number, comment?: string) =>
+  api.post<SupportTicketOut>(`/support/tickets/${id}/rate`, { rating, comment }).then((r) => r.data);
+export const aiReplyTicket = (id: string) =>
+  api.post<{ content: string }>(`/support/tickets/${id}/ai-reply`).then((r) => r.data);
+export const supportUnread = () =>
+  api.get<{ unread: number }>("/support/unread").then((r) => r.data);
+export const deleteTicket = (id: string) =>
+  api.delete<{ ok: boolean }>(`/support/tickets/${id}`).then((r) => r.data);
+export const deleteTickets = (ids: string[]) =>
+  api
+    .delete<{ ok: boolean; deleted: number }>("/support/tickets", { data: { ids } })
+    .then((r) => r.data);
 
 // ---------- 库存管理（商家）----------
 export interface StockLogOut {
@@ -1009,6 +1088,7 @@ export interface BoughtOut {
   product_id: string;
   product_name: string;
   times: number;
+  image_url?: string | null;
 }
 export const logView = (data: ViewLogIn) =>
   api.post(`/me/view-log`, data).then((r) => r.data);

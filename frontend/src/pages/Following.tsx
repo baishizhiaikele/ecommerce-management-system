@@ -4,6 +4,7 @@ import { Card, Button, Spin, Empty, message, Tabs, Tag } from "antd";
 import { useNavigate } from "react-router-dom";
 import { myFollowing, unfollowShop, followFeed, FollowShopOut, ShopEventOut } from "../api";
 import { useI18n } from "../i18n";
+import { formatDateTime } from "../utils/format";
 
 export default function Following() {
   const { t } = useI18n();
@@ -59,7 +60,7 @@ export default function Following() {
           key={f.merchant_id}
           className="soft-card"
           actions={[
-            <Button key="go" type="link" onClick={() => nav(`/shop/${f.merchant_id}`)}>
+            <Button key="go" type="link" onClick={() => nav(`/shops/${f.merchant_id}`)}>
               {t("follow.visitShop")}
             </Button>,
             <Button key="un" type="link" danger onClick={() => unfollow(f.merchant_id)}>
@@ -120,7 +121,7 @@ export default function Following() {
               </div>
               <div className="truncate text-slate-600">{e.product_name}</div>
               <div className="text-xs text-slate-400">
-                {new Date(e.created_at).toLocaleString()}
+                {formatDateTime(e.created_at)}
               </div>
             </div>
             <div className="text-right">

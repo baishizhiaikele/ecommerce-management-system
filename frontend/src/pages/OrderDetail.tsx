@@ -34,10 +34,11 @@ import {
   OrderStatus,
   LogisticsEvent,
 } from "../api";
-import { money, orderStatusMeta, nextActions, actionLabel, escrowMeta } from "../utils/format";
+import { money, orderStatusMeta, nextActions, actionLabel, escrowMeta, formatDateTime } from "../utils/format";
 import { getPaymentStatus, PaymentStatus } from "../api";
 import { useAuth } from "../store/auth";
 import { useI18n } from "../i18n";
+import ProductImage from "../components/ProductImage";
 
 export default function OrderDetail() {
   const { id } = useParams();
@@ -248,7 +249,7 @@ export default function OrderDetail() {
     if (!order || !logDesc.trim()) return;
     try {
       const d = await addLogistics(order.id, logTrack, {
-        time: new Date().toLocaleString(),
+        time: formatDateTime(new Date().toISOString()),
         location: "",
         description: logDesc.trim(),
       });
@@ -337,12 +338,20 @@ export default function OrderDetail() {
           )}
           {order.picked_up_at && (
             <Descriptions.Item label={t("od.pickedUpAt")}>
-              {new Date(order.picked_up_at).toLocaleString()}
+              {formatDateTime(order.picked_up_at)}
             </Descriptions.Item>
           )}
-          <Descriptions.Item label={t("od.address")}>{order.address || "-"}</Descriptions.Item>
+          <Descriptions.Item label={t("od.receiver")}>
+            {order.receiver || "-"}
+          </Descriptions.Item>
+          <Descriptions.Item label={t("od.contact")}>
+            {order.contact || "-"}
+          </Descriptions.Item>
+          <Descriptions.Item label={t("od.address")}>
+            {order.address || "-"}
+          </Descriptions.Item>
           <Descriptions.Item label={t("od.createdAt")}>
-            {new Date(order.created_at).toLocaleString()}
+            {formatDateTime(order.created_at)}
           </Descriptions.Item>
         </Descriptions>
         <List
@@ -363,7 +372,22 @@ export default function OrderDetail() {
                   : []
               }
             >
-              <List.Item.Meta title={it.name} description={`¥${money(it.price)} × ${it.quantity}`} />
+              <div className="flex items-center gap-3 w-full">
+                <ProductImage
+                  name={it.name}
+                  image_url={it.image_url}
+                  height={56}
+                  rounded={8}
+                />
+                <div className="flex-1 min-w-0 break-words font-medium">{it.name}</div>
+                <div className="whitespace-nowrap text-slate-500 text-sm">
+                  ¥{money(it.price)}
+                </div>
+                <div className="whitespace-nowrap text-slate-500 text-sm">×{it.quantity}</div>
+                <div className="whitespace-nowrap font-semibold">
+                  ¥{money(it.price * it.quantity)}
+                </div>
+              </div>
             </List.Item>
           )}
         />

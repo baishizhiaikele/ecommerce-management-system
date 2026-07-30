@@ -1,14 +1,13 @@
-import { useEffect, useRef, useState, Fragment } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AxiosError } from "axios";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Carousel, Card, Button, Input, Row, Col, Empty, Spin, Tag, message, Select, Switch, InputNumber, Rate, Space, AutoComplete } from "antd";
-import { Search, Sparkles, Flame, Zap, ShoppingBag, Clock, Store, Gift, TrendingUp } from "lucide-react";
+import { Search, Sparkles, Flame, Zap, ShoppingBag, Clock, Store, Gift, TrendingUp, Tag as TagIcon } from "lucide-react";
 import {
   listProducts,
   listCategories,
   recommendations,
   getBanners,
-  getPromotions,
   listShops,
   searchHot,
   searchRecord,
@@ -29,6 +28,8 @@ import ProductImage from "../components/ProductImage";
 import ProductCard from "../components/ProductCard";
 import ProductGrid from "../components/ProductGrid";
 import Reveal from "../components/Reveal";
+import ProductPrice from "../components/ProductPrice";
+import { useFlashList } from "../context/FlashPriceContext";
 
 function FlashCountdown({ endAt }: { endAt?: string | null }) {
   const [left, setLeft] = useState("");
@@ -59,15 +60,25 @@ function FlashCountdown({ endAt }: { endAt?: string | null }) {
 
 export default function Market() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { t } = useI18n();
+  const SORT_LABEL: Record<string, string> = {
+    price_asc: t("market.priceAsc"),
+    price_desc: t("market.priceDesc"),
+    sales: t("market.sortSales"),
+    top_rating: t("market.sortRating"),
+    newest: t("market.sortNewest"),
+  };
   const [items, setItems] = useState<ProductOut[]>([]);
   const [cats, setCats] = useState<CategoryOut[]>([]);
   const [banners, setBanners] = useState<BannerOut[]>([]);
-  const [promos, setPromos] = useState<PromotionOut[]>([]);
+  const promos = useFlashList();
   const [shops, setShops] = useState<{ id: string; name: string; product_count: number }[]>([]);
   const [topSales, setTopSales] = useState<ProductOut[]>([]);
   const [topRating, setTopRating] = useState<ProductOut[]>([]);
-  const [kw, setKw] = useState("");
+  const [topNew, setTopNew] = useState<ProductOut[]>([]);
+  const [topPrice, setTopPrice] = useState<ProductOut[]>([]);
+  const [kw, setKw] = useState(searchParams.get("kw") || "");
   const [cat, setCat] = useState<string | undefined>();
   const [sort, setSort] = useState<string | undefined>();
   const [minPrice, setMinPrice] = useState<number | null>(null);
@@ -82,11 +93,24 @@ export default function Market() {
   const [rating, setRating] = useState<number | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [facets, setFacets] = useState<Facets | null>(null);
+  // 商品列表区锚点，点击分类时平滑滚动到此以便用户看到筛选结果（UX 修复）
+  const productSectionRef = useRef<HTMLElement | null>(null);
   // 以 ref 持有最新筛选条件，保证 setX + setTimeout(load, 0) 读取到最新值（P1-6 分面检索）
   const filterRef = useRef({ kw, cat, sort, minPrice, maxPrice, inStock, rating, page: 1 });
   useEffect(() => {
     filterRef.current = { kw, cat, sort, minPrice, maxPrice, inStock, rating, page: 1 };
   });
+  // 兼容通过 /market?kw= 进入时预填搜索词（顶部全局搜索现跳转 /search，此处仅作兜底）
+  useEffect(() => {
+    const k = searchParams.get("kw");
+    if (k && k !== kw) {
+      setKw(k);
+      setCat(undefined);
+      setSort(undefined);
+      setTimeout(load, 0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const HISTORY_KEY = "market_search_history";
   useEffect(() => {
@@ -125,7 +149,6 @@ export default function Market() {
   };
 
   const topCats = cats.filter((c) => !c.parent_id);
-  const subOf = (pid?: string) => cats.filter((c) => c.parent_id === pid);
 
   const load = async () => {
     const f = filterRef.current;
@@ -177,10 +200,11 @@ export default function Market() {
       listCategories().then(setCats).catch(onLoadFail("categories")),
       recommendations().then(setRecs).catch(onLoadFail("recommendations")),
       getBanners().then(setBanners).catch(onLoadFail("banners")),
-      getPromotions("flash").then(setPromos).catch(onLoadFail("promotions")),
       listShops().then(setShops).catch(onLoadFail("shops")),
       listProducts({ sort: "sales", page_size: 6 }).then(setTopSales).catch(onLoadFail("topSales")),
       listProducts({ sort: "top_rating", page_size: 6 }).then(setTopRating).catch(onLoadFail("topRating")),
+      listProducts({ sort: "newest", page_size: 6 }).then(setTopNew).catch(onLoadFail("topNew")),
+      listProducts({ sort: "price_asc", page_size: 6 }).then(setTopPrice).catch(onLoadFail("topPrice")),
       listCoupons().then(setCoupons).catch(onLoadFail("coupons")),
       searchFacets().then(setFacets).catch(onLoadFail("facets")),
     ]).then(() => {
@@ -207,7 +231,10 @@ export default function Market() {
 
   const pickCat = (id?: string) => {
     setCat(id);
-    setTimeout(load, 0);
+    setTimeout(() => {
+      load();
+      productSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
   };
 
   const goBanner = (b: BannerOut) => {
@@ -227,14 +254,22 @@ export default function Market() {
 
   return (
     <div className="page-shell stack-lg py-8">
-      {/* 轮播 Banner（放大 + 柔和叠层） */}
+      {/* 轮播 Banner（放大 + 柔和叠层）
+          走 ProductImage：可代理外链、加载失败自动回退到 lucide 图标+渐变+标题，
+          避免出现“只有 alt 文字 / 空白块”的情况。 */}
       {banners.length > 0 && (
         <Carousel autoplay className="hero-shell" dots>
           {banners.map((b) => (
             <div key={b.id} onClick={() => goBanner(b)} className="cursor-pointer">
-              <div className="h-[240px] md:h-[340px] w-full relative">
-                <img src={b.image_url} alt={b.title} className="w-full h-full object-cover" />
-                <div className="absolute left-6 bottom-6">
+              <div className="relative h-[240px] md:h-[340px]">
+                <ProductImage
+                  name={b.title}
+                  image_url={b.image_url}
+                  height="100%"
+                  rounded={0}
+                  className="absolute inset-0 w-full h-full"
+                />
+                <div className="absolute left-6 bottom-6 z-10">
                   <div className="hero-caption max-w-md">{b.title}</div>
                 </div>
               </div>
@@ -275,36 +310,48 @@ export default function Market() {
             </Button>
           </div>
           <div className="rail-scroll">
-            {coupons.map((c) => (
-              <div
-                key={c.id}
-                className="!w-56 shrink-0 flex rounded-2xl overflow-hidden border border-slate-100 shadow-sm"
-              >
+            {coupons.map((c) => {
+              const isDiscount = c.type === "discount";
+              const bigText = isDiscount
+                ? `${(Number(c.value) * 10).toFixed(1)}${t("membership.zhe")}`
+                : `¥${c.value}`;
+              const subText = isDiscount
+                ? translate("coupon.noThresholdDiscount")
+                : translate("coupon.thresholdHint").replace("{threshold}", c.threshold);
+              return (
                 <div
-                  className="w-24 flex flex-col items-center justify-center text-white"
-                  style={{ background: "#4F46E5" }}
+                  key={c.id}
+                  className="w-64 shrink-0 flex rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-white"
                 >
-                  <div className="text-xl font-bold">
-                    {c.type === "discount"
-                      ? `${(Number(c.value) * 10).toFixed(1)}${t("membership.zhe")}`
-                      : `¥${c.value}`}
+                  {/* 左侧金额区 */}
+                  <div
+                    className="w-28 px-2 py-3 flex flex-col items-center justify-center text-white shrink-0"
+                    style={{ background: "#4F46E5" }}
+                  >
+                    <div className="text-xl font-bold leading-tight whitespace-nowrap">
+                      {bigText}
+                    </div>
+                    <div className="text-[10px] opacity-90 mt-1 text-center leading-tight px-1">
+                      {subText}
+                    </div>
                   </div>
-                  <div className="text-[10px] opacity-90 mt-1 px-1 text-center">
-                    {c.type === "discount"
-                      ? translate("coupon.noThresholdDiscount")
-                      : translate("coupon.thresholdHint").replace("{threshold}", c.threshold)}
+                  {/* 右侧信息区 */}
+                  <div className="flex-1 min-w-0 px-3 py-3 flex flex-col justify-between">
+                    <div className="text-sm font-semibold text-slate-800 truncate" title={c.name}>
+                      {c.name}
+                    </div>
+                    <div className="flex items-center justify-between mt-2">
+                      <Tag color="blue" className="!m-0">
+                        {isDiscount ? translate("coupon.type.discount") : translate("coupon.type.full_reduce")}
+                      </Tag>
+                      <Button type="primary" size="small" onClick={() => onClaim(c)}>
+                        {t("coupon.receive")}
+                      </Button>
+                    </div>
                   </div>
                 </div>
-                <div className="flex-1 flex items-center justify-between px-3 py-2">
-                  <div className="min-w-0">
-                    <div className="font-semibold truncate text-sm">{c.name}</div>
-                  </div>
-                  <Button type="primary" size="small" onClick={() => onClaim(c)}>
-                    {t("coupon.receive")}
-                  </Button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       )}
@@ -343,40 +390,13 @@ export default function Market() {
         </section>
       )}
 
-      {/* 分类快捷筛选（精简为横向 capsule，释放首屏） */}
-      <section>
-        <div className="section-title">
-          <span className="st-text">{t("market.allCats")}</span>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button className={`chip ${!cat ? "chip-active" : ""}`} onClick={() => pickCat(undefined)}>
-            全部
-          </button>
-          {topCats.map((tc) => (
-            <Fragment key={tc.id}>
-              <button className={`chip ${cat === tc.id ? "chip-active" : ""}`} onClick={() => pickCat(tc.id)}>
-                {tc.name}
-              </button>
-              {cat === tc.id &&
-                subOf(tc.id).map((sc) => (
-                  <button
-                    key={sc.id}
-                    className={`chip ${cat === sc.id ? "chip-active" : ""}`}
-                    onClick={() => pickCat(sc.id)}
-                  >
-                    {sc.name}
-                  </button>
-                ))}
-            </Fragment>
-          ))}
-        </div>
-      </section>
-
-      {/* 双榜单：热销榜 / 好评榜 */}
+      {/* 多榜单：热销榜 / 好评榜 / 新品榜 / 低价好物榜 */}
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {[
           { titleKey: "market.topSales", icon: <Flame size={16} className="text-rose-500" />, data: topSales, key: "sales" },
           { titleKey: "market.topRating", icon: <TrendingUp size={16} className="text-[#4F46E5]" />, data: topRating, key: "rating" },
+          { titleKey: "market.topNew", icon: <Sparkles size={16} className="text-fuchsia-500" />, data: topNew, key: "new" },
+          { titleKey: "market.topPrice", icon: <TagIcon size={16} className="text-emerald-500" />, data: topPrice, key: "price" },
         ].map((board) => (
           <div key={board.key} className="card-soft p-4">
             <div className="flex items-center gap-2 mb-3">
@@ -401,12 +421,16 @@ export default function Market() {
                   <ProductImage name={p.name} image_url={p.image_url} height={44} rounded={8} />
                   <div className="min-w-0 flex-1">
                     <div className="text-sm truncate">{p.name}</div>
-                    <div className="text-[#4F46E5] font-bold text-sm">¥{money(p.price)}</div>
+                    <ProductPrice p={p} showTag={false} className="text-[#4F46E5] font-bold text-sm" />
                   </div>
                   {board.key === "sales" ? (
                     <span className="text-xs text-slate-400">{t("market.sold")} {p.sales_count}</span>
-                  ) : (
+                  ) : board.key === "rating" ? (
                     <Rate disabled value={5} style={{ fontSize: 12 }} />
+                  ) : board.key === "new" ? (
+                    <Tag color="magenta" className="ml-1">{t("market.newArrival")}</Tag>
+                  ) : (
+                    <Tag color="green" className="ml-1">{t("market.greatValue")}</Tag>
                   )}
                 </div>
               ))}
@@ -467,31 +491,6 @@ export default function Market() {
         </section>
       )}
 
-      {/* 主题频道 */}
-      <section>
-          <div className="section-title">
-            <span className="st-text">{t("market.themeChannels")}</span>
-          </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {topCats.map((tc, i) => (
-            <div
-              key={tc.id}
-              onClick={() => pickCat(tc.id)}
-              className="relative h-28 rounded-2xl overflow-hidden cursor-pointer group"
-            >
-              <div
-                className={`absolute inset-0 ${
-                  i % 3 === 0 ? "bg-indigo-500" : i % 3 === 1 ? "bg-emerald-500" : "bg-amber-500"
-                } opacity-90 group-hover:opacity-100 transition`}
-              />
-              <div className="relative z-10 h-full flex flex-col justify-center px-5 text-white">
-                <div className="text-lg font-bold">{tc.name}</div>
-                <div className="text-sm opacity-90">{t("market.pickNow")}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
 
       {/* 最近浏览 */}
       {recent.length > 0 && (
@@ -512,7 +511,7 @@ export default function Market() {
       )}
 
       {/* 精选好物 + 筛选 */}
-      <section>
+      <section ref={productSectionRef}>
         <div className="section-title">
           <span className="st-text">{cat ? cats.find((c) => c.id === cat)?.name : t("market.featured")}</span>
         </div>
@@ -592,21 +591,102 @@ export default function Market() {
           <Button type="primary" onClick={load}>
             {t("market.query")}
           </Button>
-          {(cat || kw || sort || minPrice || maxPrice || inStock) && (
-            <Button
-              onClick={() => {
-                setCat(undefined);
-                setKw("");
-                setSort(undefined);
-                setMinPrice(null);
-                setMaxPrice(null);
-                setInStock(false);
-                setRating(null);
-                setTimeout(load, 0);
-              }}
-            >
-              {t("common.reset")}
-            </Button>
+          {(cat || kw || sort || minPrice || maxPrice || inStock || rating) && (
+            <div className="w-full flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-slate-400">{t("market.selectedFilters")}</span>
+              <Space size={[6, 6]} wrap>
+                {kw && (
+                  <Tag
+                    closable
+                    onClose={(e) => {
+                      e.preventDefault();
+                      setKw("");
+                      setTimeout(load, 0);
+                    }}
+                  >
+                    {t("market.chipKeyword")}: {kw}
+                  </Tag>
+                )}
+                {cat && (
+                  <Tag
+                    closable
+                    onClose={(e) => {
+                      e.preventDefault();
+                      setCat(undefined);
+                      setTimeout(load, 0);
+                    }}
+                  >
+                    {t("market.chipCategory")}: {cats.find((c) => c.id === cat)?.name}
+                  </Tag>
+                )}
+                {rating != null && (
+                  <Tag
+                    closable
+                    onClose={(e) => {
+                      e.preventDefault();
+                      setRating(null);
+                      setTimeout(load, 0);
+                    }}
+                  >
+                    {t("market.chipRating")}: {rating}★
+                  </Tag>
+                )}
+                {sort && (
+                  <Tag
+                    closable
+                    onClose={(e) => {
+                      e.preventDefault();
+                      setSort(undefined);
+                      setTimeout(load, 0);
+                    }}
+                  >
+                    {t("market.chipSort")}: {SORT_LABEL[sort]}
+                  </Tag>
+                )}
+                {(minPrice != null || maxPrice != null) && (
+                  <Tag
+                    closable
+                    onClose={(e) => {
+                      e.preventDefault();
+                      setMinPrice(null);
+                      setMaxPrice(null);
+                      setTimeout(load, 0);
+                    }}
+                  >
+                    {t("market.chipPrice")}: ¥{minPrice ?? 0}
+                    {maxPrice != null ? `-¥${maxPrice}` : "+"}
+                  </Tag>
+                )}
+                {inStock && (
+                  <Tag
+                    closable
+                    onClose={(e) => {
+                      e.preventDefault();
+                      setInStock(false);
+                      setTimeout(load, 0);
+                    }}
+                  >
+                    {t("market.chipInStock")}
+                  </Tag>
+                )}
+                <Button
+                  type="link"
+                  size="small"
+                  onClick={() => {
+                    setCat(undefined);
+                    setKw("");
+                    setSort(undefined);
+                    setMinPrice(null);
+                    setMaxPrice(null);
+                    setInStock(false);
+                    setRating(null);
+                    setTimeout(load, 0);
+                  }}
+                >
+                  {t("market.clearAll")}
+                </Button>
+              </Space>
+            </div>
           )}
         </div>
 
@@ -670,7 +750,24 @@ export default function Market() {
             ))}
           </Row>
         ) : items.length === 0 ? (
-          <Empty className="py-20" description={t("market.noProducts")} />
+          <div className="py-16 text-center">
+            <Empty description={t("market.noResult")} />
+            <p className="text-slate-400 text-sm mt-2">{t("market.noResultHint")}</p>
+            {hot.length > 0 && (
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                {hot.map((h) => (
+                  <Tag
+                    key={h}
+                    color="volcano"
+                    style={{ cursor: "pointer" }}
+                    onClick={() => doSearch(h)}
+                  >
+                    {h}
+                  </Tag>
+                ))}
+              </div>
+            )}
+          </div>
         ) : (
           <ProductGrid items={items} gutter={[20, 20]} xs={24} sm={12} md={8} lg={6} />
         )}

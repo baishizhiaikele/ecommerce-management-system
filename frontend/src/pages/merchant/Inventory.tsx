@@ -26,6 +26,7 @@ import {
   LowStockOut,
 } from "../../api";
 import { useI18n, translate } from "../../i18n";
+import { formatDateTime } from "../../utils/format";
 
 const changeMeta: Record<string, { labelKey: string; color: string }> = {
   restock: { labelKey: "inv.restock", color: "green" },
@@ -159,7 +160,7 @@ export default function MerchantInventory() {
             {
               title: t("inv.time"),
               dataIndex: "created_at",
-              render: (v) => new Date(v).toLocaleString(),
+              render: (v) => formatDateTime(v),
             },
             { title: t("inv.product"), dataIndex: "product_name" },
             {

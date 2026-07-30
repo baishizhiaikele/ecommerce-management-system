@@ -39,6 +39,9 @@ class Order(Base):
     discount_amount = Column(Numeric(12, 2), default=0, nullable=False, server_default="0")
     freight = Column(Numeric(12, 2), default=0, nullable=False, server_default="0")
     address = Column(Text)
+    # 结构化收货信息（与 address 拆分，便于订单页清晰展示）
+    receiver = Column(String(60))
+    contact = Column(String(40))
     refund_reason = Column(Text)
     refund_amount = Column(Numeric(12, 2), nullable=False, default=0)
     # 退货退款 / 换货 / 仲裁相关字段

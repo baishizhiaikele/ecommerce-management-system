@@ -49,10 +49,9 @@ export default function CouponManager({ mode }: { mode: "admin" | "merchant" }) 
     return t("coupon.full", { min: money(r.threshold), val: money(r.value) });
   };
   const renderPeriod = (r: CouponOut) => {
-    if (!r.start_at && !r.end_at) return t("coupon.permanent");
-    const s = r.start_at ? dayjs(r.start_at).format("YYYY-MM-DD HH:mm") : "—";
-    const e = r.end_at ? dayjs(r.end_at).format("YYYY-MM-DD HH:mm") : "—";
-    return `${s} ~ ${e}`;
+    const expire = r.expire_at || r.end_at;
+    if (!expire) return t("coupon.permanent");
+    return `${t("coupon.expireAt")}：${dayjs(expire).format("YYYY-MM-DD")}`;
   };
 
   const load = async () => {
@@ -91,6 +90,7 @@ export default function CouponManager({ mode }: { mode: "admin" | "merchant" }) 
       is_active: r.is_active,
       start_at: r.start_at ? dayjs(r.start_at) : null,
       end_at: r.end_at ? dayjs(r.end_at) : null,
+      expire_at: r.expire_at ? dayjs(r.expire_at) : null,
     });
     setOpen(true);
   };
@@ -105,6 +105,7 @@ export default function CouponManager({ mode }: { mode: "admin" | "merchant" }) 
       is_active: v.is_active,
       start_at: v.start_at ? (v.start_at as Dayjs).toISOString() : null,
       end_at: v.end_at ? (v.end_at as Dayjs).toISOString() : null,
+      expire_at: v.expire_at ? (v.expire_at as Dayjs).toISOString() : null,
     };
     if (mode === "admin" && v.merchant_id) payload.merchant_id = v.merchant_id;
     setSaving(true);
@@ -245,6 +246,13 @@ export default function CouponManager({ mode }: { mode: "admin" | "merchant" }) 
             <DatePicker showTime className="w-full" />
           </Form.Item>
           <Form.Item name="end_at" label={t("coupon.endTime")}>
+            <DatePicker showTime className="w-full" />
+          </Form.Item>
+          <Form.Item
+            name="expire_at"
+            label={t("coupon.expireAt")}
+            tooltip={t("coupon.expireTip")}
+          >
             <DatePicker showTime className="w-full" />
           </Form.Item>
           <Form.Item name="is_active" label={t("coupon.enableNow")} valuePropName="checked">

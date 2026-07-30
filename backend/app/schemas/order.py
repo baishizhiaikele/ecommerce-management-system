@@ -9,16 +9,20 @@ from app.models.order import OrderStatus
 
 class CheckoutRequest(BaseModel):
     address: str = Field(min_length=5, max_length=500)
+    receiver: Optional[str] = Field(default=None, max_length=60)
+    contact: Optional[str] = Field(default=None, max_length=40)
     coupon_id: Optional[str] = None
     use_points: bool = False
     delivery_type: str = Field(default="express", pattern="^(express|pickup)$")
     pickup_store: Optional[str] = Field(default=None, max_length=200)
+    cart_item_ids: list[str] = []
 
 
 class OrderItemOut(BaseModel):
     id: str
     product_id: str
     name: str
+    image_url: Optional[str] = None
     price: Decimal
     quantity: int
 
@@ -36,6 +40,8 @@ class OrderOut(BaseModel):
     return_carrier: Optional[str] = None
     dispute_reason: Optional[str] = None
     address: Optional[str]
+    receiver: Optional[str] = None
+    contact: Optional[str] = None
     delivery_type: str = "express"
     pickup_store: Optional[str] = None
     pickup_code: Optional[str] = None

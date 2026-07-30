@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from typing import Optional
+from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api._product_snapshot import load_product_map, snapshot_name
@@ -10,6 +11,7 @@ from app.models.cart import CartItem
 from app.models.product import Product, ProductStatus
 from app.models.variant import ProductVariant
 from app.models.user import User
+from app.models.content import Promotion, PromotionType
 from app.schemas.cart import CartItemAdd, CartItemOut, CartItemUpdate
 from app.services.audit_service import record
 
@@ -25,18 +27,57 @@ def _variant_label(variant: Optional[ProductVariant]) -> Optional[str]:
     return " / ".join(f"{k}:{v}" for k, v in specs.items())
 
 
-def _serialize(item: CartItem, snapshot: dict, variant_label: Optional[str] = None) -> CartItemOut:
+async def _effective_price(db: AsyncSession, product: Product) -> tuple[float, bool]:
+    """计算加购时的实际成交价：优先取进行中的单品秒杀价，否则原价。
+
+    返回 (成交价, 是否为限时秒杀)。
+    """
+    now = datetime.now(timezone.utc)
+    promo = await db.scalar(
+        select(Promotion).where(
+            and_(
+                Promotion.product_id == product.id,
+                Promotion.type == PromotionType.FLASH,
+                Promotion.is_active == 1,
+                Promotion.start_at.isnot(None),
+                Promotion.end_at.isnot(None),
+                Promotion.start_at <= now,
+                Promotion.end_at >= now,
+            )
+        )
+    )
+    if not promo:
+        return float(product.price), False
+    if promo.discount_price is not None:
+        return float(promo.discount_price), True
+    if promo.discount_rate is not None:
+        return round(float(product.price) * float(promo.discount_rate), 2), True
+    return float(product.price), False
+
+
+def _serialize(
+    item: CartItem, snapshot: dict, variant_label: Optional[str] = None, is_flash: bool = False
+) -> CartItemOut:
     product = snapshot.get(item.product_id)
+    price = item.price if item.price is not None else (product.price if product else 0)
+    original = None
+    if is_flash and product is not None:
+        # 限时秒杀：透传商品原价，供前端以划线价展示，凸显优惠力度
+        original = float(product.price)
     return CartItemOut(
         id=item.id,
         product_id=item.product_id,
         name=snapshot_name(snapshot, item.product_id),
-        price=product.price if product else 0,
+        price=price,
         image_url=product.image_url if product else None,
         stock=product.stock if product else 0,
         quantity=item.quantity,
         variant_id=item.variant_id,
         variant_label=variant_label,
+        merchant_id=product.merchant_id if product else None,
+        category_id=product.category_id if product else None,
+        is_flash=is_flash,
+        original=original,
     )
 
 
@@ -57,7 +98,8 @@ async def get_cart(
         for v in variants:
             variant_map[v.id] = _variant_label(v)
     return [
-        _serialize(it, snapshot, variant_map.get(it.variant_id)) for it in rows
+        _serialize(it, snapshot, variant_map.get(it.variant_id), bool(it.is_flash))
+        for it in rows
     ]
 
 
@@ -90,19 +132,25 @@ async def add_item(
     )
     if existing:
         new_qty = min(existing.quantity + data.quantity, 99)
+        existing.quantity = new_qty
+        # 已存在则按最新促销刷新成交价与秒杀标记
+        existing.price, existing.is_flash = await _effective_price(db, product)
         await record(db, user.id, "cart.add", "cart", existing.id, f"商品 {product.id} x{new_qty}")
         await db.commit()
-        return _serialize(existing, {product.id: product}, _variant_label(variant))
+        return _serialize(existing, {product.id: product}, _variant_label(variant), bool(existing.is_flash))
+    effective_price, is_flash = await _effective_price(db, product)
     item = CartItem(
         user_id=user.id,
         product_id=data.product_id,
         quantity=data.quantity,
         variant_id=data.variant_id,
+        price=effective_price,
+        is_flash=is_flash,
     )
     db.add(item)
     await record(db, user.id, "cart.add", "cart", item.id, f"商品 {data.product_id} x{data.quantity}")
     await db.commit()
-    return _serialize(item, {product.id: product}, _variant_label(variant))
+    return _serialize(item, {product.id: product}, _variant_label(variant), is_flash)
 
 
 @router.put("/items/{item_id}", response_model=CartItemOut)
@@ -125,7 +173,7 @@ async def update_item(
     item.quantity = data.quantity
     await record(db, user.id, "cart.update", "cart", item.id, f"数量->{data.quantity}")
     await db.commit()
-    return _serialize(item, {product.id: product} if product else {}, variant_label)
+    return _serialize(item, {product.id: product} if product else {}, variant_label, bool(item.is_flash))
 
 
 @router.delete("/items/{item_id}", status_code=204)

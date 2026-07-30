@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../store/auth";
 import { useI18n } from "../i18n";
+import { supportUnread } from "../api";
 import {
   Store,
   Coins,
@@ -22,6 +23,8 @@ import {
   History,
   Radio,
   Receipt,
+  Search,
+  ChevronDown,
 } from "lucide-react";
 
 const NAV = [
@@ -36,13 +39,18 @@ const NAV = [
   { key: "shops", labelKey: "nav.shops", path: "/shops", icon: <Store size={16} /> },
   { key: "discover", labelKey: "nav.discover", path: "/discover", icon: <BookOpen size={16} /> },
   { key: "history", labelKey: "nav.history", path: "/history", icon: <History size={16} /> },
-  { key: "follow", labelKey: "nav.follow", path: "/follow", icon: <UserPlus size={16} /> },
+  { key: "follow", labelKey: "nav.follow", path: "/following", icon: <UserPlus size={16} /> },
   { key: "promotions", labelKey: "nav.promotions", path: "/promotions", icon: <Tag size={16} /> },
   { key: "live", labelKey: "nav.live", path: "/live", icon: <Radio size={16} /> },
   { key: "presales", labelKey: "nav.presales", path: "/presales", icon: <Receipt size={16} /> },
   { key: "ai-mall", labelKey: "nav.aiHome", path: "/ai-mall", icon: <Sparkles size={16} /> },
   { key: "support", labelKey: "nav.support", path: "/support", icon: <MessageCircle size={16} /> },
 ];
+
+// 高频入口常驻导航条（保留滑动下划线），其余收进「更多 ▾」下拉，避免横向滚动找
+const PRIMARY_KEYS = ["market", "cart", "favorites", "orders"];
+const PRIMARY_NAV = PRIMARY_KEYS.map((k) => NAV.find((n) => n.key === k)!).filter(Boolean);
+const MORE_NAV = NAV.filter((n) => !PRIMARY_KEYS.includes(n.key));
 
 // 移动端底部导航（仅展示高频入口）
 const MOBILE_NAV = [
@@ -60,9 +68,66 @@ export default function MainLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [headerKw, setHeaderKw] = useState("");
+  const [unread, setUnread] = useState(0);
+
+  // 客服工单未读红点：进入页面时拉取，并随路由切换/定时刷新
+  useEffect(() => {
+    let alive = true;
+    const fetchUnread = async () => {
+      if (!user) {
+        setUnread(0);
+        return;
+      }
+      try {
+        const r = await supportUnread();
+        if (alive) setUnread(r.unread);
+      } catch {
+        /* 忽略 */
+      }
+    };
+    fetchUnread();
+    const timer = setInterval(fetchUnread, 20000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [user, location.pathname]);
 
   const go = (path: string) => navigate(path);
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path: string) =>
+    location.pathname === path || location.pathname.startsWith(path + "/");
+
+  // 全局滑动下划线：测量当前 active 按钮位置，平滑滑动到其下方
+  const navRef = useRef<HTMLDivElement>(null);
+  const [indStyle, setIndStyle] = useState<{ left: number; width: number } | null>(null);
+  const updateIndicator = useCallback(() => {
+    const el = navRef.current;
+    if (!el) return;
+    const activeBtn = el.querySelector<HTMLElement>('button[data-active="true"]');
+    if (activeBtn) setIndStyle({ left: activeBtn.offsetLeft, width: activeBtn.offsetWidth });
+    else setIndStyle(null);
+  }, []);
+  useEffect(() => {
+    updateIndicator();
+  }, [location.pathname, updateIndicator]);
+  useEffect(() => {
+    window.addEventListener("resize", updateIndicator);
+    return () => window.removeEventListener("resize", updateIndicator);
+  }, [updateIndicator]);
+
+  // 「更多 ▾」下拉：仅展示非高频入口，点击外部自动收起
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
+  const moreActive = MORE_NAV.some((n) => isActive(n.path));
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) setMoreOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [moreOpen]);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -75,22 +140,109 @@ export default function MainLayout() {
             <span className="font-bold text-lg hidden sm:block">{t("nav.brand")}</span>
           </Link>
 
-          <nav className="hidden lg:flex items-center gap-1 flex-1 overflow-x-auto">
-            {NAV.map((n) => (
+          <div className="hidden lg:flex items-center gap-1 flex-1 min-w-0">
+            <nav
+              ref={navRef}
+              className="relative flex items-center gap-1 min-w-0 overflow-x-auto flex-1"
+            >
+              {PRIMARY_NAV.map((n) => {
+                const active = isActive(n.path);
+                return (
+                  <button
+                    key={n.key}
+                    data-active={active}
+                    onClick={() => go(n.path)}
+                    className={`relative shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition ${
+                      active
+                        ? "text-indigo-600 font-medium"
+                        : "text-slate-600 hover:text-indigo-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    <span className="relative inline-flex">
+                      {n.icon}
+                      {n.key === "support" && unread > 0 && (
+                        <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-rose-500" />
+                      )}
+                    </span>
+                    {t(n.labelKey)}
+                  </button>
+                );
+              })}
+              <span
+                className="pointer-events-none absolute bottom-0 h-0.5 rounded-full bg-indigo-500 transition-all duration-300 ease-out"
+                style={
+                  indStyle
+                    ? { left: indStyle.left, width: indStyle.width, opacity: 1 }
+                    : { left: 0, width: 0, opacity: 0 }
+                }
+              />
+            </nav>
+            <div className="relative shrink-0" ref={moreRef}>
               <button
-                key={n.key}
-                onClick={() => go(n.path)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition ${
-                  isActive(n.path)
-                    ? "bg-indigo-50 text-indigo-600 font-medium"
-                    : "text-slate-600 hover:bg-slate-100"
+                onClick={() => setMoreOpen((v) => !v)}
+                className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm transition ${
+                  moreActive
+                    ? "text-indigo-600 font-medium bg-indigo-50"
+                    : "text-slate-600 hover:text-indigo-600 hover:bg-slate-100"
                 }`}
               >
-                {n.icon}
-                {t(n.labelKey)}
+                {t("nav.more")}
+                <ChevronDown size={14} />
               </button>
-            ))}
-          </nav>
+              {moreOpen && (
+                <div className="absolute right-0 top-full mt-2 w-56 max-h-80 overflow-y-auto rounded-xl bg-white shadow-lg border border-slate-100 py-1 z-50">
+                  {MORE_NAV.map((n) => {
+                    const a = isActive(n.path);
+                    return (
+                      <button
+                        key={n.key}
+                        onClick={() => {
+                          go(n.path);
+                          setMoreOpen(false);
+                        }}
+                        className={`w-full flex items-center gap-2 px-4 py-2 text-sm text-left transition ${
+                          a
+                            ? "text-indigo-600 bg-indigo-50 font-medium"
+                            : "text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                    {n.icon}
+                    <span className="flex-1">{t(n.labelKey)}</span>
+                    {n.key === "support" && unread > 0 && (
+                      <span className="w-2 h-2 rounded-full bg-rose-500" />
+                    )}
+                  </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 全局搜索框（对标 Amazon / 淘宝头顶部搜索） */}
+          <div className="hidden md:flex items-center flex-1 max-w-md mx-4">
+            <div className="relative w-full">
+              <button
+                onClick={() =>
+                  headerKw.trim() && navigate(`/search?keyword=${encodeURIComponent(headerKw.trim())}`)
+                }
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                aria-label={t("market.searchBox")}
+              >
+                <Search size={16} />
+              </button>
+              <input
+                value={headerKw}
+                onChange={(e) => setHeaderKw(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && headerKw.trim())
+                    navigate(`/search?keyword=${encodeURIComponent(headerKw.trim())}`);
+                }}
+                placeholder={t("market.searchBox")}
+                className="w-full pl-9 pr-3 py-2 rounded-full border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300"
+              />
+            </div>
+          </div>
 
           <div className="ml-auto flex items-center gap-2">
             <button

@@ -14,6 +14,7 @@ import {
   type AffiliateWithdrawalOut,
 } from "../api";
 import { useI18n } from "../i18n";
+import { formatDateTime } from "../utils/format";
 
 const WD_COLORS: Record<string, string> = {
   pending: "gold",
@@ -138,7 +139,7 @@ export default function Affiliate() {
             {
               title: t("aff.colTime"),
               dataIndex: "created_at",
-              render: (v: string | null) => (v ? new Date(v).toLocaleString() : "-"),
+              render: (v: string | null) => (v ? formatDateTime(v) : "-"),
             },
             {
               title: t("aff.colOrderAmount"),
@@ -174,7 +175,7 @@ export default function Affiliate() {
             {
               title: t("aff.colTime"),
               dataIndex: "created_at",
-              render: (v: string | null) => (v ? new Date(v).toLocaleString() : "-"),
+              render: (v: string | null) => (v ? formatDateTime(v) : "-"),
             },
             {
               title: t("aff.colAmount"),

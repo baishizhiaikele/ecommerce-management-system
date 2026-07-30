@@ -23,7 +23,8 @@ import {
   toggleNoteLike,
 } from "../api";
 import ProductImage from "../components/ProductImage";
-import { money } from "../utils/format";
+import ProductPrice from "../components/ProductPrice";
+import { formatDateTime } from "../utils/format";
 import { useAuth } from "../store/auth";
 import { useI18n } from "../i18n";
 
@@ -142,7 +143,7 @@ export default function Discover() {
                 </span>
                 <span className="text-sm font-medium">{n.author_name}</span>
                 <span className="text-xs text-slate-400 ml-auto">
-                  {n.created_at ? new Date(n.created_at).toLocaleDateString() : ""}
+                  {n.created_at ? formatDateTime(n.created_at) : ""}
                 </span>
               </div>
               <div className="font-bold text-base">{n.title}</div>
@@ -174,7 +175,7 @@ export default function Discover() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm line-clamp-1">{p.name}</div>
-                        <div className="text-[#F97316] font-bold text-sm">{money(p.price)}</div>
+                        <ProductPrice p={p} className="text-[#F97316] font-bold text-sm" />
                       </div>
                       <Tag color="orange">{t("note.buyNow")}</Tag>
                     </div>

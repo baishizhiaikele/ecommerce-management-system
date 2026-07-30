@@ -24,3 +24,4 @@ class BoughtOut(BaseModel):
     product_id: str
     product_name: str
     times: int
+    image_url: Optional[str] = None

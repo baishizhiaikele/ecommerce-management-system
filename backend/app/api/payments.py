@@ -55,7 +55,8 @@ async def confirm_pay(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="订单不在待支付状态"
         )
-    return await payment_service.confirm_payment(db, order)
+    payment = await payment_service.confirm_payment(db, order)
+    return payment
 
 
 @router.post("/webhook/{gateway}")

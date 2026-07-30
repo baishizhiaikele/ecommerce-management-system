@@ -3,14 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { Card, Button, Tag, message } from "antd";
 import { Package, Gift, MapPin, Heart, Bell, Ticket, Sparkles, Share2 } from "lucide-react";
 import { useAuth } from "../store/auth";
-import { signIn, listAddresses } from "../api";
+import { signIn, getSignInStatus, listAddresses } from "../api";
 import { useI18n } from "../i18n";
 
 export default function Me() {
   const navigate = useNavigate();
   const user = useAuth((s) => s.user);
+  const setUser = useAuth((s) => s.setUser);
   const { t } = useI18n();
-  const [points, setPoints] = useState(user?.points ?? 0);
   const [signed, setSigned] = useState(false);
   const [gained, setGained] = useState(0);
   const [addrCount, setAddrCount] = useState(0);
@@ -19,14 +19,20 @@ export default function Me() {
     listAddresses()
       .then((a) => setAddrCount(a.length))
       .catch(() => {});
+    // 进入页面时同步今日签到状态（只读，不触发发分）
+    getSignInStatus()
+      .then((r) => setSigned(r.signed_today))
+      .catch(() => {});
   }, []);
 
   const doSign = async () => {
+    if (signed) return; // 今日已签到，防御重复点击
     try {
       const r = await signIn();
       setSigned(r.signed_today);
       setGained(r.gained);
-      setPoints(r.points);
+      // 回写全局用户积分，保证积分页（读 store）与签到页一致
+      if (user) setUser({ ...user, points: r.points });
       if (r.signed_today) message.info(t("me.signedToday"));
       else message.success(t("me.signInSuccess").replace("{n}", String(r.gained)));
     } catch {
@@ -42,7 +48,6 @@ export default function Me() {
     { labelKey: "page.notifications.title", icon: <Bell size={20} />, go: () => navigate("/notifications") },
     { labelKey: "page.coupons.title", icon: <Ticket size={20} />, go: () => navigate("/coupons") },
     { labelKey: "page.mall.title", icon: <Sparkles size={20} />, go: () => navigate("/mall") },
-    { labelKey: "notif.title", icon: <Bell size={20} />, go: () => navigate("/settings/notifications") },
   ];
 
   return (
@@ -55,10 +60,16 @@ export default function Me() {
           <div className="flex-1">
             <div className="text-xl font-bold">{user?.username}</div>
             <Tag color="purple" className="mt-1">
-              {t("me.points")} {points}
+              {t("me.points")} {user?.points ?? 0}
             </Tag>
           </div>
-          <Button type="primary" size="large" icon={<Sparkles size={16} />} onClick={doSign}>
+          <Button
+            type="primary"
+            size="large"
+            icon={<Sparkles size={16} />}
+            disabled={signed}
+            onClick={doSign}
+          >
             {signed ? t("me.signedToday") : `${t("me.signIn")}${gained ? ` +${gained}` : ""}`}
           </Button>
         </div>

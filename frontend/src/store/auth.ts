@@ -8,14 +8,36 @@ export interface AuthUser {
   role: "buyer" | "merchant" | "admin";
   is_active: boolean;
   points: number;
+  growth_value?: number;
+  level?: string;
   created_at: string;
 }
 
-export function vipTier(points: number): { name: string; color: string; next: number } {
-  if (points >= 5000) return { name: "钻石会员", color: "#7C3AED", next: 999999 };
-  if (points >= 2000) return { name: "黄金会员", color: "#F59E0B", next: 5000 };
-  if (points >= 500) return { name: "白银会员", color: "#94A3B8", next: 2000 };
-  return { name: "普通会员", color: "#10B981", next: 500 };
+export interface VipTier {
+  key: string;
+  name: string;
+  color: string;
+  min: number;
+  next: number;
+}
+
+// 与后端 app/core/member_levels.py 的 MEMBER_TIERS 保持一致。
+// 注意：等级由「成长值 growth_value」决定，而不是可消费的积分余额 points。
+export const VIP_TIERS: VipTier[] = [
+  { key: "bronze", name: "青铜会员", color: "#B45309", min: 0, next: 1000 },
+  { key: "silver", name: "白银会员", color: "#94A3B8", min: 1000, next: 5000 },
+  { key: "gold", name: "黄金会员", color: "#F59E0B", min: 5000, next: 20000 },
+  { key: "diamond", name: "钻石会员", color: "#7C3AED", min: 20000, next: 999999 },
+];
+
+/** 依据成长值返回所属等级（与后端 get_tier 同语义）。 */
+export function vipTier(growthValue: number): VipTier {
+  let tier = VIP_TIERS[0];
+  for (const t of VIP_TIERS) {
+    if (growthValue >= t.min) tier = t;
+    else break;
+  }
+  return tier;
 }
 
 interface AuthState {

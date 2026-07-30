@@ -15,7 +15,7 @@ import {
   ShopDetail,
 } from "../api";
 import ProductImage from "../components/ProductImage";
-import { money } from "../utils/format";
+import ProductPrice from "../components/ProductPrice";
 import { useI18n } from "../i18n";
 
 function ShopCard({ shop, onClick }: { shop: ShopSummary; onClick: () => void }) {
@@ -204,9 +204,9 @@ export default function Shop() {
                     }
                   >
                     <div className="font-medium text-sm line-clamp-1">{p.name}</div>
-                    <div className="font-bold mt-1" style={{ color: deco.theme_color }}>
-                      {money(p.price)}
-                    </div>
+                  <div className="font-bold mt-1" style={{ color: deco.theme_color }}>
+                    <ProductPrice p={p} />
+                  </div>
                   </Card>
                 ))}
               </div>
@@ -229,7 +229,7 @@ export default function Shop() {
                   key={p.id}
                   hoverable
                   className="soft-card overflow-hidden"
-                  onClick={() => navigate(`/product/${p.id}`)}
+                  onClick={() => navigate(`/products/${p.id}`)}
                   cover={
                     <div className="h-40 bg-slate-100">
                       <ProductImage src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
@@ -237,7 +237,7 @@ export default function Shop() {
                   }
                 >
                   <div className="font-medium text-sm line-clamp-1">{p.name}</div>
-                  <div className="text-[#F97316] font-bold mt-1">{money(p.price)}</div>
+                  <ProductPrice p={p} className="text-[#F97316] font-bold mt-1" />
                   <div className="text-xs text-slate-400 mt-0.5">{t("market.sold")} {p.sales_count}</div>
                 </Card>
               ))}
@@ -262,7 +262,7 @@ export default function Shop() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {list.map((s) => (
-            <ShopCard key={s.id} shop={s} onClick={() => navigate(`/shop/${s.id}`)} />
+            <ShopCard key={s.id} shop={s} onClick={() => navigate(`/shops/${s.id}`)} />
           ))}
         </div>
       )}

@@ -57,6 +57,8 @@ async def my_coupons(
             expire_at=uc.coupon.expire_at or uc.coupon.end_at,
             is_used=uc.is_used,
             claimed_at=uc.claimed_at,
+            merchant_id=uc.coupon.merchant_id,
+            applicable_category=uc.coupon.applicable_category,
         )
         for uc in rows
         if uc.coupon is not None
