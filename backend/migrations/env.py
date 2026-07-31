@@ -58,8 +58,24 @@ async def run_async_migrations() -> None:
 
 
 def run_migrations_online() -> None:
-    """在线模式：连接数据库并执行迁移。"""
-    asyncio.run(run_async_migrations())
+    """在线模式：连接数据库并执行迁移。
+
+    SQLite 场景下 alembic 本身是同步工具，若复用 aiosqlite 异步引擎并通过
+    run_sync 把同步逻辑派发到线程执行，极易在事件循环/工作线程间死锁——表现为
+    startup 永久阻塞在 alembic 准备阶段且无任何报错（数据库连接因此长期持锁）。
+    故 SQLite 改用同步引擎直接执行，彻底规避死锁；PostgreSQL 等仍走异步路径。
+    """
+    url = settings.async_database_url
+    if url.startswith("sqlite"):
+        from sqlalchemy import create_engine
+
+        sync_url = url.replace("sqlite+aiosqlite", "sqlite")
+        connectable = create_engine(sync_url, poolclass=NullPool)
+        with connectable.connect() as connection:
+            do_run_migrations(connection)
+        connectable.dispose()
+    else:
+        asyncio.run(run_async_migrations())
 
 
 if context.is_offline_mode():

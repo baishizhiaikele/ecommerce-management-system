@@ -7,6 +7,8 @@ from app.models.product import Product
 from app.models.view import ProductView
 from app.schemas.view import ViewLogIn
 
+from app.core.cache import cache_delete
+
 
 async def log_view(db: AsyncSession, *, user_id: str, payload: ViewLogIn) -> None:
     db.add(
@@ -19,6 +21,8 @@ async def log_view(db: AsyncSession, *, user_id: str, payload: ViewLogIn) -> Non
         )
     )
     await db.commit()
+    # 浏览行为写入后，立即使用户推荐缓存失效，下次推荐请求即按新浏览序列重算
+    await cache_delete(f"recommend:{user_id}")
 
 
 async def list_history(db: AsyncSession, user_id: str, limit: int = 30) -> list[ProductView]:

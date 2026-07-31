@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Button, Card, Empty, InputNumber, Modal, Table, Tag, message } from "antd";
+import { Alert, Button, Card, Empty, InputNumber, Modal, Table, Tag, message } from "antd";
 import { Link2, Share2, Users, Wallet } from "lucide-react";
 import {
   affiliateSummary,
@@ -12,6 +12,7 @@ import {
   type AffiliateLinkOut,
   type AffiliateSummaryOut,
   type AffiliateWithdrawalOut,
+  getErrorMessage,
 } from "../api";
 import { useI18n } from "../i18n";
 import { formatDateTime } from "../utils/format";
@@ -31,11 +32,19 @@ export default function Affiliate() {
   const [wdOpen, setWdOpen] = useState(false);
   const [wdAmount, setWdAmount] = useState<number | null>(null);
 
+  // 佣金/提现属于资金数据：加载失败绝不能静默显示为 0，必须明确报错并可重试
+  const [loadError, setLoadError] = useState<string | null>(null);
   const load = () => {
-    affiliateSummary().then(setSum).catch(() => {});
-    listAffiliateLinks().then(setLinks).catch(() => {});
-    listAffiliateCommissions().then(setCommissions).catch(() => {});
-    listAffiliateWithdrawals().then(setWithdrawals).catch(() => {});
+    setLoadError(null);
+    Promise.allSettled([
+      affiliateSummary().then(setSum),
+      listAffiliateLinks().then(setLinks),
+      listAffiliateCommissions().then(setCommissions),
+      listAffiliateWithdrawals().then(setWithdrawals),
+    ]).then((rs) => {
+      const failed = rs.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
+      if (failed) setLoadError(getErrorMessage(failed.reason));
+    });
   };
   useEffect(load, []);
 
@@ -44,17 +53,22 @@ export default function Affiliate() {
   const genLink = async () => {
     try {
       const link = await createAffiliateLink();
-      await navigator.clipboard.writeText(shareUrl(link.code)).catch(() => {});
-      message.success(t("aff.linkCopied"));
+      await copy(link.code);
       load();
     } catch {
       message.error(t("common.operationFailed"));
     }
   };
 
+  // 非 HTTPS / 无剪贴板权限时 writeText 会抛错，此时必须提示失败并展示链接供手动复制
   const copy = async (code: string) => {
-    await navigator.clipboard.writeText(shareUrl(code)).catch(() => {});
-    message.success(t("aff.linkCopied"));
+    const url = shareUrl(code);
+    try {
+      await navigator.clipboard.writeText(url);
+      message.success(t("aff.linkCopied"));
+    } catch {
+      Modal.info({ title: t("aff.copy"), content: url });
+    }
   };
 
   const applyWd = async () => {
@@ -65,8 +79,8 @@ export default function Affiliate() {
       setWdOpen(false);
       setWdAmount(null);
       load();
-    } catch (e: any) {
-      message.error(e?.response?.data?.detail || t("common.operationFailed"));
+    } catch (e) {
+      message.error(getErrorMessage(e));
     }
   };
 
@@ -93,6 +107,20 @@ export default function Affiliate() {
           </Button>
         </div>
       </div>
+
+      {loadError && (
+        <Alert
+          type="warning"
+          showIcon
+          message={t("state.errorTitle")}
+          description={loadError}
+          action={
+            <Button size="small" onClick={load}>
+              {t("common.retry")}
+            </Button>
+          }
+        />
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {stats.map((s) => (

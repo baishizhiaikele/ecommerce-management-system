@@ -112,6 +112,17 @@ async def reply(
     )
 
 
+@router.post("/tickets/{ticket_id}/messages/{message_id}/revoke", response_model=SupportTicketOut)
+async def revoke(
+    ticket_id: str,
+    message_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> SupportTicketOut:
+    t = await support_service.get_ticket(db, ticket_id, user)
+    return await support_service.revoke_message(db, t, message_id, user)
+
+
 @router.delete("/tickets/{ticket_id}")
 async def delete(
     ticket_id: str,

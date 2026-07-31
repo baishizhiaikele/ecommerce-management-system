@@ -1,4 +1,5 @@
-import { useEffect, useState, useNavigate } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, Progress, List, Tag, Spin, Typography, Tooltip, Button } from "antd";
 import { TrophyOutlined, CheckCircleFilled } from "@ant-design/icons";
 import { Gift } from "lucide-react";

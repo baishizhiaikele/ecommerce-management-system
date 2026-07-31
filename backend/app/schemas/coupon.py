@@ -1,10 +1,11 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, field_serializer, field_validator, model_validator
 
 from app.models.coupon import CouponType
+from app.utils.time import iso_utc
 
 
 def _validate_coupon_value(type_: CouponType | None, value: Decimal | None) -> None:
@@ -31,6 +32,10 @@ class CouponOut(BaseModel):
     end_at: Optional[datetime] = None
     total: int = 0
     issued: int = 0
+
+    @field_serializer("expire_at", "start_at", "end_at")
+    def _ser_dt(self, v: Optional[datetime]) -> Optional[str]:
+        return iso_utc(v)
 
 
 class CouponCreate(BaseModel):
@@ -106,3 +111,7 @@ class UserCouponOut(BaseModel):
     claimed_at: datetime
     merchant_id: Optional[str] = None  # 从关联 coupon 取，供前端做商家券适用范围判断
     applicable_category: Optional[str] = None  # 适用顶级品类 slug，空=全品类可用
+
+    @field_serializer("expire_at", "claimed_at")
+    def _ser_user_dt(self, v: Optional[datetime]) -> Optional[str]:
+        return iso_utc(v)

@@ -3,6 +3,7 @@ from app.events import bus
 from app.models.notification import Notification, NotificationType
 from app.models.order import Order
 from app.models.product import Product
+from app.models.points import PointAction
 from app.models.review import Review, Sentiment
 from app.models.user import User
 from app.services.ai_service import ai_service
@@ -52,7 +53,7 @@ async def _on_order_completed(order_id: str, buyer_id: str) -> None:
             return
         earned = int(float(order.total_amount) * POINTS_PER_YUAN)
         if earned > 0:
-            await add_points(s, buyer_id, "order_complete", earned, f"订单 {order.order_no} 完成奖励")
+            await add_points(s, buyer_id, PointAction.ORDER_COMPLETE, earned, f"订单 {order.order_no} 完成奖励")
         # 分销：若买家由推广人邀请，结算佣金
         from app.services.affiliate_service import grant_commission
 
@@ -85,7 +86,7 @@ async def _on_order_refunded(order_id: str, buyer_id: str) -> None:
         refund_amt = float(order.refund_amount or order.total_amount or 0)
         revert = int(refund_amt * POINTS_PER_YUAN)
         if revert > 0:
-            await add_points(s, buyer_id, "refund", -revert, f"订单 {order.order_no} 退款回收积分")
+            await add_points(s, buyer_id, PointAction.REFUND, -revert, f"订单 {order.order_no} 退款回收积分")
         await notify(
             s,
             buyer_id,

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router-dom";
 import { Spin, message } from "antd";
 import Login from "./pages/Auth/Login";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -9,6 +9,7 @@ import MerchantLayout from "./layouts/MerchantLayout";
 import AdminLayout from "./layouts/AdminLayout";
 import Market from "./pages/Market";
 import Notifications from "./pages/Notifications";
+import NotFound from "./pages/NotFound";
 import { LanguageProvider, getLang } from "./i18n";
 import { FlashPriceProvider } from "./context/FlashPriceContext";
 import { useAuth } from "./store/auth";
@@ -49,6 +50,7 @@ const MerchantDecoration = lazy(() => import("./pages/merchant/Decoration"));
 const MerchantKnowledge = lazy(() => import("./pages/merchant/Knowledge"));
 const AIMall = lazy(() => import("./pages/AIMall"));
 const Discover = lazy(() => import("./pages/Discover"));
+const NoteDetail = lazy(() => import("./pages/NoteDetail"));
 const History = lazy(() => import("./pages/History"));
 const Affiliate = lazy(() => import("./pages/Affiliate"));
 const Live = lazy(() => import("./pages/Live"));
@@ -82,19 +84,59 @@ export default function App() {
 
   // 全局实时通知：连接 WebSocket，收到站内信即时 toast 提示。
   // 令牌位于 HttpOnly Cookie，握手时浏览器自动携带，后端从 cookie 鉴权。
+  // C6：增加断线自动重连 + 指数退避，网络抖动/服务重启后无需刷新即可恢复实时通知。
   useEffect(() => {
     if (!user) return;
     const proto = location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(`${proto}://${location.host}/api/ws/notifications`);
-    ws.onmessage = (e) => {
-      try {
-        const m = JSON.parse(e.data);
-        message.open({ content: `${m.title}：${m.content}`, duration: 4 });
-      } catch {
-        /* 忽略非 JSON 消息 */
-      }
+    const url = `${proto}://${location.host}/api/ws/notifications`;
+    let stopped = false;
+    let retry = 0;
+    let timer: number | undefined;
+    let ws: WebSocket | null = null;
+
+    const scheduleReconnect = () => {
+      if (stopped) return;
+      const delay = Math.min(1000 * 2 ** retry, 30000); // 指数退避，上限 30s
+      retry += 1;
+      timer = window.setTimeout(connect, delay);
     };
-    return () => ws.close();
+
+    function connect() {
+      if (stopped) return;
+      try {
+        ws = new WebSocket(url);
+      } catch {
+        scheduleReconnect();
+        return;
+      }
+      ws.onopen = () => {
+        retry = 0; // 连接成功，重置退避计数
+      };
+      ws.onmessage = (e) => {
+        try {
+          const m = JSON.parse(e.data);
+          message.open({ content: `${m.title}：${m.content}`, duration: 4 });
+        } catch {
+          /* 忽略非 JSON 消息 */
+        }
+      };
+      ws.onerror = () => {
+        ws?.close(); // 触发 onclose 以便统一重连
+      };
+      ws.onclose = () => {
+        ws = null;
+        scheduleReconnect();
+      };
+    }
+
+    connect();
+
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+      ws?.close();
+      ws = null;
+    };
   }, [user]);
 
   // 分销归因：带 ?ref=推广码 访问时上报点击并绑定邀请关系（每码每会话只上报一次）
@@ -153,6 +195,7 @@ export default function App() {
             <Route path="/following" element={<Following />} />
             <Route path="/ai-mall" element={<AIMall />} />
             <Route path="/discover" element={<Discover />} />
+            <Route path="/discover/:id" element={<NoteDetail />} />
             <Route path="/history" element={<History />} />
             <Route path="/affiliate" element={<Affiliate />} />
             <Route path="/live" element={<Live />} />
@@ -187,7 +230,7 @@ export default function App() {
             <Route path="/admin/coupons" element={<AdminCoupons />} />
             <Route path="/admin/withdrawals" element={<AdminWithdrawals />} />
           </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>
       </ErrorBoundary>

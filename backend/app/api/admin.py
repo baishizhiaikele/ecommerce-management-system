@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.deps import require_role
 from app.db.session import get_db
@@ -106,6 +107,7 @@ async def negative_reviews(
 
     rows = await db.scalars(
         select(Review)
+        .options(selectinload(Review.user))
         .where(Review.sentiment == Sentiment.NEGATIVE)
         .order_by(Review.created_at.desc())
     )

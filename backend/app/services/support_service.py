@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy import case, func, or_, select
@@ -16,8 +17,9 @@ from app.models.support import (
     TicketPriority,
     TicketStatus,
 )
-from app.models.user import User
+from app.models.user import Role, User
 from app.schemas.support import SupportMessageOut, SupportTicketOut
+from app.utils.time import iso_utc
 
 PRIORITY_VALUES = {p.value for p in TicketPriority}
 CATEGORY_VALUES = {c.value for c in TicketCategory}
@@ -48,8 +50,9 @@ def _message_out(m: SupportMessage, atts: dict) -> SupportMessageOut:
         sender_role=m.sender_role,
         content=m.content,
         is_internal=bool(m.is_internal),
+        is_revoked=bool(m.is_revoked),
         attachments=[a for a in atts.get(m.id, [])],
-        created_at=m.created_at,
+        created_at=iso_utc(m.created_at),
     )
 
 
@@ -221,7 +224,7 @@ async def list_tickets(
     base = select(SupportTicket).options(
         selectinload(SupportTicket.messages).selectinload(SupportMessage.attachments)
     )
-    if user.role == "merchant":
+    if user.role == Role.MERCHANT:
         base = base.where(SupportTicket.merchant_id == user.id)
     else:
         base = base.where(SupportTicket.user_id == user.id)
@@ -261,7 +264,7 @@ async def list_tickets(
 
 
 async def unread_count(db: AsyncSession, user: User) -> int:
-    if user.role == "merchant":
+    if user.role == Role.MERCHANT:
         col = SupportTicket.unread_for_merchant
         cond = SupportTicket.merchant_id == user.id
     else:
@@ -281,15 +284,15 @@ async def get_ticket(db: AsyncSession, ticket_id: str, user: User) -> SupportTic
     )
     if not t:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="工单不存在")
-    if user.role == "merchant" and t.merchant_id != user.id:
+    if user.role == Role.MERCHANT and t.merchant_id != user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权访问")
-    if user.role == "buyer" and t.user_id != user.id:
+    if user.role == Role.BUYER and t.user_id != user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权访问")
     return t
 
 
 async def mark_read(db: AsyncSession, ticket: SupportTicket, user: User) -> None:
-    if user.role == "merchant":
+    if user.role == Role.MERCHANT:
         ticket.unread_for_merchant = 0
     else:
         ticket.unread_for_buyer = 0
@@ -328,9 +331,61 @@ async def add_message(
     return await _to_out(db, ticket, viewer_role)
 
 
+# 撤回时间窗口：发送后 2 分钟内可由发送者本人撤回
+REVOKE_WINDOW_SECONDS = 120
+
+
+async def revoke_message(
+    db: AsyncSession,
+    ticket: SupportTicket,
+    message_id: str,
+    user: User,
+) -> SupportTicketOut:
+    # 直接按 id 取消息，避免依赖传入对象的懒加载关系
+    result = await db.execute(
+        select(SupportMessage).where(
+            SupportMessage.id == message_id, SupportMessage.ticket_id == ticket.id
+        )
+    )
+    msg = result.scalars().first()
+    if not msg:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="消息不存在")
+
+    # 仅发送者本人可撤回
+    sender_role = SenderRole.MERCHANT if user.role == Role.MERCHANT else SenderRole.BUYER
+    if msg.sender_role != sender_role:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="只能撤回自己发送的消息")
+
+    if msg.is_revoked:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="消息已撤回")
+
+    # 2 分钟时间窗口校验
+    if msg.created_at:
+        created = msg.created_at
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        elapsed = (datetime.now(timezone.utc) - created).total_seconds()
+        if elapsed > REVOKE_WINDOW_SECONDS:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="仅可在 2 分钟内撤回")
+
+    msg.is_revoked = True
+    msg.revoked_at = datetime.now(timezone.utc)
+    msg.content = ""
+    await db.commit()
+    ticket = await _reload(db, ticket.id)
+    return await _to_out(db, ticket, user.role.value)
+
+
 async def close_ticket(db: AsyncSession, ticket: SupportTicket, user: User) -> SupportTicketOut:
-    if user.role != "merchant":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅商家可关闭工单")
+    # 商家可关闭分配给自己的工单；买家可关闭自己发起的工单
+    if user.role == Role.MERCHANT:
+        if ticket.merchant_id and ticket.merchant_id != user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权关闭该工单")
+    elif user.role == Role.BUYER:
+        if ticket.user_id != user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权关闭该工单")
+    else:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权关闭该工单")
     ticket.status = TicketStatus.CLOSED
     # 知识库自学习：关闭时沉淀 买家首问 → 商家最新回答
     from app.services import knowledge_service
@@ -344,7 +399,7 @@ async def close_ticket(db: AsyncSession, ticket: SupportTicket, user: User) -> S
 async def rate_ticket(
     db: AsyncSession, ticket: SupportTicket, user: User, rating: int, comment: str | None
 ) -> SupportTicketOut:
-    if user.role != "buyer" or ticket.user_id != user.id:
+    if user.role != Role.BUYER or ticket.user_id != user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅买家本人可评价")
     ticket.satisfaction_rating = rating
     ticket.satisfaction_comment = comment
@@ -354,7 +409,7 @@ async def rate_ticket(
 
 
 async def delete_ticket(db: AsyncSession, ticket: SupportTicket, user: User) -> None:
-    if user.role != "buyer" or ticket.user_id != user.id:
+    if user.role != Role.BUYER or ticket.user_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="仅买家本人可删除自己的工单",
@@ -365,7 +420,7 @@ async def delete_ticket(db: AsyncSession, ticket: SupportTicket, user: User) -> 
 
 async def delete_tickets(db: AsyncSession, user: User, ids: list[str]) -> int:
     """批量删除买家自己的工单，仅删除属于当前用户的工单，返回删除数量。"""
-    if user.role != "buyer":
+    if user.role != Role.BUYER:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="仅买家本人可删除工单",

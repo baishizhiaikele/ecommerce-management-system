@@ -8,6 +8,7 @@ from app.models.user import Role, User
 from app.core.config import settings
 from app.services import payment_service
 from app.services.order_service import get_order
+from app.utils.time import iso_utc
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
@@ -19,7 +20,7 @@ async def create_pay(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """买家发起支付：生成支付单与跳转参数（sandbox 自测网关）。"""
-    order = await get_order(db, order_id, user_id=user.id, role="buyer")
+    order = await get_order(db, order_id, user_id=user.id, role=user.role.value)
     if order.status.value != "pending_payment":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="订单不在待支付状态"
@@ -34,7 +35,7 @@ async def pay_status(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """查询订单支付与担保状态（托管/已释放/已逆向）。"""
-    order = await get_order(db, order_id, user_id=user.id, role="buyer")
+    order = await get_order(db, order_id, user_id=user.id, role=user.role.value)
     return await payment_service.get_payment_status(db, order)
 
 
@@ -50,7 +51,7 @@ async def confirm_pay(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="当前环境不支持自助确认支付"
         )
-    order = await get_order(db, order_id, user_id=user.id, role="buyer")
+    order = await get_order(db, order_id, user_id=user.id, role=user.role.value)
     if order.status.value != "pending_payment":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="订单不在待支付状态"
@@ -95,8 +96,8 @@ async def list_settlements(
             "amount": float(s.amount),
             "currency": s.currency,
             "status": s.status,
-            "created_at": s.created_at.isoformat() if s.created_at else None,
-            "settled_at": s.settled_at.isoformat() if s.settled_at else None,
+            "created_at": iso_utc(s.created_at),
+            "settled_at": iso_utc(s.settled_at),
         }
         for s in rows
     ]

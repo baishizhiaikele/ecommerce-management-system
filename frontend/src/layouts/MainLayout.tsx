@@ -15,7 +15,6 @@ import {
   UserPlus,
   Tag,
   MessageCircle,
-  Bell,
   User,
   LogOut,
   Languages,
@@ -52,14 +51,33 @@ const PRIMARY_KEYS = ["market", "cart", "favorites", "orders"];
 const PRIMARY_NAV = PRIMARY_KEYS.map((k) => NAV.find((n) => n.key === k)!).filter(Boolean);
 const MORE_NAV = NAV.filter((n) => !PRIMARY_KEYS.includes(n.key));
 
-// 移动端底部导航（仅展示高频入口）
+// 「更多」里的 13 个入口按语义分 4 组，避免一长条平铺让用户逐行扫描
+const MORE_GROUPS: { titleKey: string; keys: string[] }[] = [
+  {
+    titleKey: "nav.group.discover",
+    keys: ["ai-mall", "shops", "discover", "live", "promotions", "presales"],
+  },
+  { titleKey: "nav.group.benefits", keys: ["membership", "points", "coupons", "mall"] },
+  { titleKey: "nav.group.mine", keys: ["history", "follow"] },
+  { titleKey: "nav.group.service", keys: ["support"] },
+];
+const GROUPED_MORE = MORE_GROUPS.map((g) => ({
+  titleKey: g.titleKey,
+  items: g.keys.map((k) => MORE_NAV.find((n) => n.key === k)!).filter(Boolean),
+})).filter((g) => g.items.length > 0);
+// 兜底：任何未被分组的入口仍要可达，避免新增导航项后被"吃掉"
+const UNGROUPED_MORE = MORE_NAV.filter(
+  (n) => !MORE_GROUPS.some((g) => g.keys.includes(n.key))
+);
+
+// 移动端底部导航：严格控制在 5 项，保证每个热区 ≥ 64px 宽，避免误触
+// （通知入口收进「我的」页面，客服入口移到移动端顶栏）
 const MOBILE_NAV = [
   { key: "market", labelKey: "nav.market", path: "/market", icon: <Store size={20} /> },
+  { key: "ai-mall", labelKey: "nav.aiHome", path: "/ai-mall", icon: <Sparkles size={20} /> },
   { key: "cart", labelKey: "nav.cart", path: "/cart", icon: <ShoppingCart size={20} /> },
-  { key: "notifications", labelKey: "nav.notifications", path: "/notifications", icon: <Bell size={20} /> },
   { key: "orders", labelKey: "nav.orders", path: "/orders", icon: <ShoppingBag size={20} /> },
   { key: "me", labelKey: "nav.profile", path: "/me", icon: <User size={20} /> },
-  { key: "ai-mall", labelKey: "nav.aiHome", path: "/ai-mall", icon: <Sparkles size={20} /> },
 ];
 
 export default function MainLayout() {
@@ -190,37 +208,49 @@ export default function MainLayout() {
                 <ChevronDown size={14} />
               </button>
               {moreOpen && (
-                <div className="absolute right-0 top-full mt-2 w-56 max-h-80 overflow-y-auto rounded-xl bg-white shadow-lg border border-slate-100 py-1 z-50">
-                  {MORE_NAV.map((n) => {
-                    const a = isActive(n.path);
-                    return (
-                      <button
-                        key={n.key}
-                        onClick={() => {
-                          go(n.path);
-                          setMoreOpen(false);
-                        }}
-                        className={`w-full flex items-center gap-2 px-4 py-2 text-sm text-left transition ${
-                          a
-                            ? "text-indigo-600 bg-indigo-50 font-medium"
-                            : "text-slate-700 hover:bg-slate-50"
-                        }`}
-                      >
-                    {n.icon}
-                    <span className="flex-1">{t(n.labelKey)}</span>
-                    {n.key === "support" && unread > 0 && (
-                      <span className="w-2 h-2 rounded-full bg-rose-500" />
-                    )}
-                  </button>
-                    );
-                  })}
+                <div className="absolute right-0 top-full mt-2 w-60 max-h-[26rem] overflow-y-auto rounded-xl bg-white shadow-lg border border-slate-100 py-1.5 z-50">
+                  {[
+                    ...GROUPED_MORE,
+                    ...(UNGROUPED_MORE.length
+                      ? [{ titleKey: "nav.more", items: UNGROUPED_MORE }]
+                      : []),
+                  ].map((group) => (
+                    <div key={group.titleKey} className="py-0.5">
+                      <div className="px-4 pt-1.5 pb-1 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                        {t(group.titleKey)}
+                      </div>
+                      {group.items.map((n) => {
+                        const a = isActive(n.path);
+                        return (
+                          <button
+                            key={n.key}
+                            onClick={() => {
+                              go(n.path);
+                              setMoreOpen(false);
+                            }}
+                            className={`w-full flex items-center gap-2 px-4 py-2 text-sm text-left transition ${
+                              a
+                                ? "text-indigo-600 bg-indigo-50 font-medium"
+                                : "text-slate-700 hover:bg-slate-50"
+                            }`}
+                          >
+                            {n.icon}
+                            <span className="flex-1">{t(n.labelKey)}</span>
+                            {n.key === "support" && unread > 0 && (
+                              <span className="w-2 h-2 rounded-full bg-rose-500" />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
           </div>
 
-          {/* 全局搜索框（对标 Amazon / 淘宝头顶部搜索） */}
-          <div className="hidden md:flex items-center flex-1 max-w-md mx-4">
+          {/* 全局搜索框（对标 Amazon / 淘宝头顶部搜索）；移动端同样常驻，搜索是电商第一入口 */}
+          <div className="flex items-center flex-1 min-w-0 md:max-w-md md:mx-4">
             <div className="relative w-full">
               <button
                 onClick={() =>
@@ -244,7 +274,18 @@ export default function MainLayout() {
             </div>
           </div>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-1 sm:gap-2 shrink-0">
+            {/* 移动端底部导航只放 5 项，客服入口移到顶栏，未读时显示红点 */}
+            <button
+              onClick={() => go("/support")}
+              className="lg:hidden relative p-2 rounded-lg text-slate-600 hover:bg-slate-100"
+              aria-label={t("nav.support")}
+            >
+              <MessageCircle size={18} />
+              {unread > 0 && (
+                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-500" />
+              )}
+            </button>
             <button
               onClick={() => setLang(lang === "zh" ? "en" : "zh")}
               className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-100"
@@ -307,7 +348,7 @@ export default function MainLayout() {
       <main id="main-content" tabIndex={-1} className="max-w-7xl mx-auto px-4 py-8 pb-24 lg:pb-8 outline-none"><Outlet /></main>
 
       {/* 移动端底部导航 */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur border-t border-slate-100 grid grid-cols-6">
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur border-t border-slate-100 grid grid-cols-5 pb-[env(safe-area-inset-bottom)]">
         {MOBILE_NAV.map((n) => (
           <button
             key={n.key}

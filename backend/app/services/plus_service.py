@@ -9,6 +9,7 @@ from app.models.paid_membership import PaidMembership
 from app.models.points import PointAction
 from app.models.user import User
 from app.services.points_service import add_points
+from app.utils.time import iso_utc
 
 # PLUS 方案配置：价格、时长、开通赠送积分
 PLUS_PLANS: dict[str, dict] = {
@@ -43,7 +44,7 @@ async def get_plus_status(db: AsyncSession, user: User) -> dict:
     return {
         "active": active,
         "plan": rec.plan if rec else None,
-        "expire_at": rec.expire_at.isoformat() if rec else None,
+        "expire_at": iso_utc(rec.expire_at if rec else None),
         "plans": [
             {"key": k, **v} for k, v in PLUS_PLANS.items()
         ],

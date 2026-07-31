@@ -44,6 +44,7 @@ class Order(Base):
     contact = Column(String(40))
     refund_reason = Column(Text)
     refund_amount = Column(Numeric(12, 2), nullable=False, default=0)
+    refund_rejections = Column(Integer, nullable=False, default=0, server_default="0")
     # 退货退款 / 换货 / 仲裁相关字段
     return_tracking_no = Column(String(60))
     return_carrier = Column(String(60))
@@ -66,7 +67,7 @@ class Order(Base):
 
     buyer = relationship("User", back_populates="orders")
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
-    settlement = relationship("Settlement", back_populates="order", uselist=False, cascade="all, delete-orphan")
+    settlement = relationship("Settlement", back_populates="order", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("ix_order_buyer", "buyer_id"),
@@ -85,6 +86,9 @@ class OrderItem(Base):
     variant_id = Column(String(36), ForeignKey("product_variants.id"), nullable=True, index=True)
     quantity = Column(Integer, nullable=False)
     price = Column(Numeric(12, 2), nullable=False)
+    # 下单时快照商品名称与图片，避免商品下架/改名后订单详情丢失（P1-M11）
+    name = Column(String(200), nullable=True)
+    image_url = Column(String(500), nullable=True)
     variant_info = Column(Text)
 
     order = relationship("Order", back_populates="items")

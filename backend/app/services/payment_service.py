@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.utils.time import iso_utc
 from app.models.order import Order, OrderItem, OrderStatus
 from app.models.payment import Payment
 from app.models.product import Product
@@ -133,14 +134,22 @@ async def get_payment_status(db: AsyncSession, order: Order) -> dict:
         "status": payment.status,
         "escrow_status": payment.escrow_status,
         "transaction_id": payment.transaction_id,
-        "released_at": payment.released_at.isoformat() if payment.released_at else None,
+        "released_at": iso_utc(payment.released_at),
     }
 
 
 async def refund_payment(db: AsyncSession, order: Order) -> Payment:
     payment = await get_or_create_payment(db, order)
+    # 幂等：已退款直接返回，避免重复退款
+    if payment.status == "refunded":
+        return payment
+    # 仅已支付订单可退款；未支付订单凭空退款会造成资损
+    if payment.status != "paid":
+        raise ValueError("仅已支付订单可申请退款")
     provider = get_provider(payment.gateway)
-    res = provider.build_refund(payment, float(payment.amount))
+    # 按订单实际申请退款金额退，而非全额 payment.amount（避免超退资损）
+    refund_amount = float(order.refund_amount or payment.amount)
+    res = provider.build_refund(payment, refund_amount)
     payment.status = "refunded"
     payment.raw_data = json.dumps(res, ensure_ascii=False)
     # 逆向托管资金
@@ -158,54 +167,83 @@ async def refund_order_for_user(db: AsyncSession, order_id: str) -> Payment:
 
 
 # ---------- 担保交易：资金释放 / 逆向 ----------
-async def release_escrow(db: AsyncSession, order: Order, payment: Payment | None = None) -> Settlement:
-    """买家确认收货后释放资金给商家（结算台账置为 settled）。"""
+async def release_escrow(db: AsyncSession, order: Order, payment: Payment | None = None) -> list[Settlement]:
+    """买家确认收货后释放资金给商家（结算台账置为 settled）。多商家订单按商家分别结算。"""
     if payment is None:
         payment = await get_or_create_payment(db, order)
     now = _utcnow()
     payment.escrow_status = "released"
     payment.released_at = now
 
-    settlement = (
-        await db.scalars(select(Settlement).where(Settlement.order_id == order.id))
-    ).first()
-    if not settlement:
-        merchant_id = await _order_merchant_id(db, order)
-        settlement = Settlement(
-            order_id=order.id,
-            merchant_id=merchant_id,
-            amount=order.total_amount,
-            currency="CNY",
-            status="settled",
-            settled_at=now,
-        )
-        db.add(settlement)
-    else:
-        settlement.status = "settled"
-        settlement.settled_at = now
+    # 多商家订单：按商家分别结算，避免货款全进首个商家
+    merchant_amounts = await _order_merchant_subtotals(db, order)
+    settlements: list[Settlement] = []
+    if not merchant_amounts:
+        # 兜底：无商品明细时整单结算给首个商家（兼容历史数据）
+        merchant_amounts = {await _order_merchant_id(db, order): float(order.total_amount)}
+    for merchant_id, amount in merchant_amounts.items():
+        settlement = (
+            await db.scalars(
+                select(Settlement).where(
+                    Settlement.order_id == order.id, Settlement.merchant_id == merchant_id
+                )
+            )
+        ).first()
+        if not settlement:
+            settlement = Settlement(
+                order_id=order.id,
+                merchant_id=merchant_id,
+                amount=amount,
+                currency="CNY",
+                status="settled",
+                settled_at=now,
+            )
+            db.add(settlement)
+        else:
+            settlement.status = "settled"
+            settlement.settled_at = now
+            settlement.amount = amount
+        settlements.append(settlement)
     await db.flush()
-    return settlement
+    return settlements
 
 
 async def reverse_escrow(db: AsyncSession, order: Order, payment: Payment | None = None) -> None:
-    """退款时逆向托管资金（结算台账置为 reversed）。"""
+    """退款时逆向托管资金（结算台账置为 reversed）。撤销该订单下所有商家结算记录。"""
     if payment is None:
         payment = await get_or_create_payment(db, order)
     payment.escrow_status = "reversed"
     payment.released_at = None
-    settlement = (
+    # 多商家订单可能有多条结算记录，逐条逆向
+    settlements = (
         await db.scalars(select(Settlement).where(Settlement.order_id == order.id))
-    ).first()
-    if settlement:
+    ).all()
+    for settlement in settlements:
         settlement.status = "reversed"
         settlement.settled_at = None
 
 
-async def _order_merchant_id(db: AsyncSession, order: Order) -> str | None:
+async def _order_merchant_subtotals(db: AsyncSession, order: Order) -> dict[str, float]:
+    """按商家拆分订单货款：多商家订单需分别给各商家结算。
+
+    返回 {merchant_id: 该商家商品小计(price*quantity 求和)}。
+    """
     items = (
         await db.scalars(select(OrderItem).where(OrderItem.order_id == order.id))
     ).all()
     if not items:
-        return None
-    product = await db.get(Product, items[0].product_id)
-    return product.merchant_id if product else None
+        return {}
+    products = (
+        await db.scalars(
+            select(Product).where(Product.id.in_([it.product_id for it in items]))
+        )
+    ).all()
+    pmap = {p.id: p for p in products}
+    result: dict[str, float] = {}
+    for it in items:
+        product = pmap.get(it.product_id)
+        mid = product.merchant_id if product else None
+        if not mid:
+            continue
+        result[mid] = result.get(mid, 0.0) + float(it.price) * it.quantity
+    return {mid: round(amt, 2) for mid, amt in result.items()}

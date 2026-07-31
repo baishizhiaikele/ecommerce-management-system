@@ -6,13 +6,35 @@ from app.models.product import Product, ProductStatus
 from app.models.catalog import Category
 from app.models.review import Review
 
+from app.core.cache import cache_get, cache_set
 
-async def _expand_category(db: AsyncSession, pid: str) -> list:
-    """展开一级分类为其自身 + 全部子类 id 列表。"""
+
+# 分类树极稳定（低频管理操作），缓存 children_map 避免每次带类目筛选都全表扫描
+_CATEGORY_TREE_TTL = 300
+
+
+async def _category_children_map(db: AsyncSession) -> dict:
+    """返回 parent_id -> [子分类 id] 映射，带短 TTL 进程内缓存。
+
+    资源加载优化（v6）：原 ``_expand_category`` 每次调用都 ``SELECT Category`` 全表，
+    在带类目的商品列表请求下形成稳定开销。分类树极少变化，缓存 5 分钟可大幅降低 DB 压力；
+    分类变更最多 5 分钟后在筛选中生效（管理端低频操作，可接受）。若需更强一致性，
+    可在分类写操作后调用 ``await cache_delete("cat:children_map")`` 主动失效。
+    """
+    cached = await cache_get("cat:children_map")
+    if cached is not None:
+        return cached
     all_cats = (await db.scalars(select(Category))).all()
     children_map: dict = {}
     for c in all_cats:
         children_map.setdefault(c.parent_id, []).append(c.id)
+    await cache_set("cat:children_map", children_map, ttl=_CATEGORY_TREE_TTL)
+    return children_map
+
+
+async def _expand_category(db: AsyncSession, pid: str) -> list:
+    """展开一级分类为其自身 + 全部子类 id 列表。"""
+    children_map = await _category_children_map(db)
 
     def _desc(p: str) -> list:
         ids: list = []

@@ -385,7 +385,7 @@ export default function OrderDetail() {
                 </div>
                 <div className="whitespace-nowrap text-slate-500 text-sm">×{it.quantity}</div>
                 <div className="whitespace-nowrap font-semibold">
-                  ¥{money(it.price * it.quantity)}
+                  ¥{money(Number(it.price) * it.quantity)}
                 </div>
               </div>
             </List.Item>

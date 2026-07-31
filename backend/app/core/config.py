@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     # 业务规则（P2-16 / P2-18）
     MAX_COUPONS_PER_ORDER: int = 1  # 每单最多使用的优惠券张数
     DEFAULT_LOW_STOCK_THRESHOLD: int = 10  # 商品未单独设置阈值时的默认低库存阈值
-    PAYMENT_SECRET: str = "change-me-in-prod-payment-secret"
+    PAYMENT_SECRET: str = Field(default=..., description="支付回调验签密钥，生产环境必须注入环境变量，禁止弱默认值")
     PAYMENT_NOTIFY_BASE_URL: str = ""
 
     # AI 商品图生成（P1）：未配置则走 mock 占位图降级

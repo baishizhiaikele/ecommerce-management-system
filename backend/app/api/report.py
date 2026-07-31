@@ -7,6 +7,7 @@ from app.db.session import get_db
 from app.models.report import ReportFrequency
 from app.schemas.report import ReportTaskCreate, ReportTaskOut, ReportTaskUpdate
 from app.services import report_task_service
+from app.utils.time import iso_utc
 
 router = APIRouter(prefix="/merchant/report-tasks", tags=["report"])
 
@@ -18,8 +19,8 @@ def _to_out(t) -> ReportTaskOut:
         frequency=t.frequency.value,
         email=t.email,
         is_active=t.is_active,
-        last_sent_at=t.last_sent_at.isoformat() if t.last_sent_at else None,
-        created_at=t.created_at.isoformat() if t.created_at else None,
+        last_sent_at=iso_utc(t.last_sent_at),
+        created_at=iso_utc(t.created_at),
     )
 
 
@@ -53,8 +54,7 @@ async def update_task(
     ctx: MerchantCtx = Depends(require_merchant()),
     db: AsyncSession = Depends(get_db),
 ):
-    t = await report_task_service.list_for_merchant(db, ctx.owner_id)
-    task = next((x for x in t if x.id == task_id), None)
+    task = await report_task_service.get_task(db, task_id, ctx.owner_id)
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
     task = await report_task_service.update_task(
@@ -69,8 +69,7 @@ async def delete_task(
     ctx: MerchantCtx = Depends(require_merchant()),
     db: AsyncSession = Depends(get_db),
 ):
-    rows = await report_task_service.list_for_merchant(db, ctx.owner_id)
-    task = next((x for x in rows if x.id == task_id), None)
+    task = await report_task_service.get_task(db, task_id, ctx.owner_id)
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
     await report_task_service.delete_task(db, task)

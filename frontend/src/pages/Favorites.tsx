@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
 import type { AxiosError } from "axios";
 import { useNavigate } from "react-router-dom";
-import { Card, Button, Spin, Tag, Popconfirm, message } from "antd";
+import { Card, Button, Tag, Popconfirm, message } from "antd";
 import { HeartFilled, ShoppingCartOutlined } from "@ant-design/icons";
-import EmptyState from "../components/EmptyState";
+import AsyncBoundary from "../components/AsyncBoundary";
+import { useAsync } from "../hooks/useAsync";
 import { listFavorites, removeFavorite, addCartItem, ProductOut } from "../api";
 import { useCart } from "../store/cart";
 import ProductPrice from "../components/ProductPrice";
@@ -14,27 +14,16 @@ export default function Favorites() {
   const navigate = useNavigate();
   const add = useCart((s) => s.add);
   const { t } = useI18n();
-  const [items, setItems] = useState<ProductOut[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const load = async () => {
-    setLoading(true);
-    try {
-      setItems(await listFavorites());
-    } catch {
-      /* 忽略 */
-    } finally {
-      setLoading(false);
-    }
-  };
-  useEffect(() => {
-    load();
-  }, []);
+  const { data, loading, error, retry, setData } = useAsync<ProductOut[]>(
+    () => listFavorites(),
+    []
+  );
+  const items = data ?? [];
 
   const onRemove = async (id: string) => {
     try {
       await removeFavorite(id);
-      setItems((s) => s.filter((p) => p.id !== id));
+      setData((s) => (s ?? []).filter((p) => p.id !== id));
       message.success(t("favorites.removed"));
     } catch (e) {
       const err = e as AxiosError<ApiError>;
@@ -66,17 +55,19 @@ export default function Favorites() {
         <h2>{t("page.favorites.title")}</h2>
         <span className="sh-action">{t("fav.total").replace("{n}", String(items.length))}</span>
       </div>
-      {loading ? (
-        <div className="flex justify-center py-20">
-          <Spin />
-        </div>
-      ) : items.length === 0 ? (
-        <EmptyState
-          title={t("empty.favorites")}
-          description={t("empty.favoritesDesc")}
-          action={<Button type="primary" onClick={() => navigate("/")}>{t("favorites.browse")}</Button>}
-        />
-      ) : (
+      <AsyncBoundary
+        loading={loading}
+        error={error}
+        retry={retry}
+        isEmpty={items.length === 0}
+        emptyTitle={t("empty.favorites")}
+        emptyDescription={t("empty.favoritesDesc")}
+        emptyAction={
+          <Button type="primary" onClick={() => navigate("/market")}>
+            {t("favorites.browse")}
+          </Button>
+        }
+      >
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
           {items.map((p) => (
             <Card
@@ -127,7 +118,7 @@ export default function Favorites() {
             </Card>
           ))}
         </div>
-      )}
+      </AsyncBoundary>
     </div>
   );
 }

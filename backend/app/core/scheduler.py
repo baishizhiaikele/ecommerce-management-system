@@ -68,7 +68,8 @@ async def scheduler_loop(interval_seconds: int = 60) -> None:
         except Exception as e:  # noqa: BLE001
             logger.warning("支付超时扫描异常: %s", e)
         try:
-            m = await report_task_service.send_due_reports()
+            async with SessionLocal() as db:
+                m = await report_task_service.send_due_reports(db)
             if m:
                 logger.info("已生成并发送 %d 封定时报表邮件", m)
         except Exception as e:  # noqa: BLE001

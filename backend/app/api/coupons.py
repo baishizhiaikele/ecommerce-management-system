@@ -7,6 +7,7 @@ from app.models.coupon import Coupon
 from app.models.user import Role, User
 from app.schemas.coupon import CouponCreate, CouponOut, CouponUpdate, UserCouponOut
 from app.services import coupon_service
+from app.utils.time import iso_utc
 
 router = APIRouter(prefix="/coupons", tags=["coupons"])
 
@@ -54,9 +55,9 @@ async def my_coupons(
             type=uc.coupon.type,
             threshold=uc.coupon.threshold,
             value=uc.coupon.value,
-            expire_at=uc.coupon.expire_at or uc.coupon.end_at,
+            expire_at=iso_utc(uc.coupon.expire_at or uc.coupon.end_at),
             is_used=uc.is_used,
-            claimed_at=uc.claimed_at,
+            claimed_at=iso_utc(uc.claimed_at),
             merchant_id=uc.coupon.merchant_id,
             applicable_category=uc.coupon.applicable_category,
         )

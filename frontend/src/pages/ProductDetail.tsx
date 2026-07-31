@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useParams, useNavigate, useLocation, Link } from "react-router-dom";
 import {
   Row,
   Col,
@@ -25,7 +25,7 @@ import {
   MessageOutlined,
   CameraOutlined,
 } from "@ant-design/icons";
-import { getProduct, listProductReviews, listVariants, addCartItem, logView, proxyImg, listProducts, addFavorite, removeFavorite, isFavorited, type ProductOut, type ReviewOut, type VariantOut } from "../api";
+import { getProduct, listProductReviews, listVariants, addCartItem, logView, proxyImg, listProducts, addFavorite, removeFavorite, isFavorited, getErrorMessage, type ProductOut, type ReviewOut, type VariantOut } from "../api";
 import { money, productStatusMeta } from "../utils/format";
 import { useFlashPrice } from "../context/FlashPriceContext";
 import { useAuth } from "../store/auth";
@@ -38,10 +38,10 @@ import ProductChat from "../components/ProductChat";
 import ProductQA from "../components/ProductQA";
 import ProductCard from "../components/ProductCard";
 import Reveal from "../components/Reveal";
-import { CheckCircle2, RotateCcw, ShieldCheck, Zap, PackageCheck } from "lucide-react";
+import { CheckCircle2, RotateCcw, ShieldCheck, Zap, PackageCheck, type LucideIcon } from "lucide-react";
 
 // 详情页服务承诺条（对标淘宝/京东信任背书）
-const SERVICES: { key: string; Icon: ComponentType<{ size?: number; className?: string }> }[] = [
+const SERVICES: { key: string; Icon: LucideIcon }[] = [
   { key: "pd.svcAuth", Icon: CheckCircle2 },
   { key: "pd.svcReturn", Icon: RotateCcw },
   { key: "pd.svcShip", Icon: Zap },
@@ -61,6 +61,7 @@ interface BrowseHistoryItem {
 export default function ProductDetail() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const user = useAuth((s) => s.user);
   const { t } = useI18n();
   const [p, setP] = useState<ProductOut | null>(null);
@@ -214,14 +215,14 @@ export default function ProductDetail() {
   useEffect(() => {
     if (!p?.category_id) return;
     listProducts({ category_id: p.category_id, page_size: 12 })
-      .then((r) => setRelated(r.items.filter((x) => x.id !== p.id).slice(0, 10)))
+      .then((r) => setRelated(r.filter((x) => x.id !== p.id).slice(0, 10)))
       .catch(() => {});
   }, [p?.category_id, p?.id]);
 
   const toggleFav = async () => {
     if (!user) {
       message.info(t("common.loginFirst"));
-      navigate("/login");
+      navigate("/login", { state: { from: location.pathname } });
       return;
     }
     if (!p) return;
@@ -229,11 +230,11 @@ export default function ProductDetail() {
       if (faved) {
         await removeFavorite(p.id);
         setFaved(false);
-        message.success(t("pd.fav"));
+        message.success(t("pd.favRemoved"));
       } else {
         await addFavorite(p.id);
         setFaved(true);
-        message.success(t("pd.unfav"));
+        message.success(t("pd.favAdded"));
       }
     } catch {
       message.error(t("common.submitFail"));
@@ -246,7 +247,7 @@ export default function ProductDetail() {
   const addToCart = async () => {
     if (!user) {
       message.warning(t("common.loginFirst"));
-      navigate("/login");
+      navigate("/login", { state: { from: location.pathname } });
       return;
     }
     if (variants.length && !matchedVariant) {
@@ -263,15 +264,15 @@ export default function ProductDetail() {
         image_url: matchedVariant?.image_url || p.image_url || undefined,
       });
       message.success(t("pd.addedCart"));
-    } catch (e: any) {
-      message.error(e?.response?.data?.detail || t("pd.addCartFail"));
+    } catch (e) {
+      message.error(getErrorMessage(e));
     }
   };
 
   const buyNow = async () => {
     if (!user) {
       message.warning(t("common.loginFirst"));
-      navigate("/login");
+      navigate("/login", { state: { from: location.pathname } });
       return;
     }
     if (variants.length && !matchedVariant) {
@@ -287,9 +288,11 @@ export default function ProductDetail() {
         quantity: qty,
         image_url: matchedVariant?.image_url || p.image_url || undefined,
       });
-      navigate("/cart");
-    } catch (e: any) {
-      message.error(e?.response?.data?.detail || t("pd.orderFail"));
+      // 本项目结算在购物车页完成：跳过去时带上本次商品，购物车只勾选它，
+      // 避免"立即购买"把之前遗留的商品一起结算掉
+      navigate("/cart", { state: { buyNowProductId: p.id } });
+    } catch (e) {
+      message.error(getErrorMessage(e));
     }
   };
 
@@ -351,10 +354,18 @@ export default function ProductDetail() {
           </div>
 
           <div className="mt-4 px-4 py-3 rounded-xl bg-[#4F46E5]/5 border border-[#4F46E5]/10">
-            <span className="text-slate-400 line-through mr-2">¥{money(Number(p.price))}</span>
+            {/* 只有真的比原价便宜时才显示划线价，否则就是虚假原价 */}
+            {displayPrice < Number(p.price) && (
+              <span className="text-slate-400 line-through mr-2">¥{money(Number(p.price))}</span>
+            )}
             <span className="text-3xl font-extrabold brand-gradient-text">
               ¥{money(displayPrice)}
             </span>
+            {displayPrice < Number(p.price) && (
+              <Tag color="volcano" className="ml-2">
+                {t("cart.saved").replace("{x}", money(Number(p.price) - displayPrice))}
+              </Tag>
+            )}
             {matchedVariant && Number(matchedVariant.price_delta) !== 0 && (
               <Tag color={Number(matchedVariant.price_delta) > 0 ? "red" : "green"} className="ml-2">
                 {Number(matchedVariant.price_delta) > 0 ? "+" : ""}¥{money(Number(matchedVariant.price_delta))}
@@ -409,7 +420,7 @@ export default function ProductDetail() {
             <div className="mt-4">
               <div className="text-sm font-medium text-slate-700 mb-2">{t("pd.sellingPoints")}</div>
               <ul className="space-y-1.5">
-                {Object.entries(p.attributes)
+                {Object.entries(p.attributes || {})
                   .slice(0, 5)
                   .map(([k, v]) => (
                     <li key={k} className="flex items-start gap-1.5 text-sm text-slate-600">
@@ -452,7 +463,7 @@ export default function ProductDetail() {
             <Button size="large" onClick={buyNow} disabled={stock <= 0}>
               {t("pd.buyNow")}
             </Button>
-            <Tooltip title={t("pd.fav")}>
+            <Tooltip title={faved ? t("pd.favRemoved") : t("pd.fav")}>
               <Button
                 size="large"
                 danger={faved}

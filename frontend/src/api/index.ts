@@ -1,6 +1,7 @@
-import type { AxiosError } from "axios";
 import { api, API_BASE } from "./client";
 export { API_BASE };
+// getErrorMessage 统一从 ./client 导出（单一实现，兼容 1/2 参数调用）。
+export { getErrorMessage } from "./client";
 
 // ---------- 通用类型 ----------
 export type Decimal = string;
@@ -31,16 +32,7 @@ export interface ApiError {
   errors?: Record<string, string[]>;
 }
 
-/** 统一从抛出的异常中提取可读错误信息（兼容 axios 错误与本地 Error）。 */
-export function getErrorMessage(e: unknown): string {
-  const err = e as AxiosError<ApiError>;
-  return (
-    err?.response?.data?.detail ||
-    err?.response?.data?.message ||
-    err?.message ||
-    "请求失败，请稍后重试"
-  );
-}
+// getErrorMessage 统一从 ./client 导出（单一实现，兼容 1/2 参数调用）。
 
 // 以下为原 api/index.ts 中 any 返回类型收敛后的具体结构（L3）。
 export interface LowStockOut {
@@ -92,6 +84,7 @@ export interface ProductOut {
   ai_title?: string | null;
   ai_copy?: string | null;
   ai_price_suggestion?: string | null;
+  attributes?: Record<string, any>;
   created_at: string;
   reject_reason?: string | null;
 }
@@ -630,6 +623,7 @@ export const toggleNoteLike = (id: string) =>
     .post<{ note_id: string; liked: boolean; likes_count: number }>(`/notes/${id}/like`)
     .then((r) => r.data);
 export const deleteNote = (id: string) => api.delete(`/notes/${id}`).then(() => undefined);
+export const getNote = (id: string) => api.get<NoteOut>(`/notes/${id}`).then((r) => r.data);
 
 // ---------- PLUS 付费会员（P3-H） ----------
 export interface PlusPlan {
@@ -785,6 +779,12 @@ export const uploadImage = (file: File) => {
   return api.post<{ url: string; filename: string }>("/upload/image", fd).then((r) => r.data);
 };
 
+export const uploadVideo = (file: File) => {
+  const fd = new FormData();
+  fd.append("file", file);
+  return api.post<{ url: string; filename: string }>("/upload/video", fd).then((r) => r.data);
+};
+
 // ---------- 报表导出 ----------
 function downloadBlob(data: Blob, filename: string) {
   const url = window.URL.createObjectURL(data);
@@ -865,6 +865,7 @@ export interface SupportMessageOut {
   sender_role: "buyer" | "merchant" | "ai";
   content: string;
   is_internal: boolean;
+  is_revoked: boolean;
   attachments: SupportAttachmentOut[];
   created_at: string;
 }
@@ -927,6 +928,10 @@ export const getTicket = (id: string) =>
   api.get<SupportTicketOut>(`/support/tickets/${id}`).then((r) => r.data);
 export const replyTicket = (id: string, data: ReplyRequest) =>
   api.post<SupportTicketOut>(`/support/tickets/${id}/messages`, data).then((r) => r.data);
+export const revokeMessage = (id: string, messageId: string) =>
+  api
+    .post<SupportTicketOut>(`/support/tickets/${id}/messages/${messageId}/revoke`)
+    .then((r) => r.data);
 export const closeTicket = (id: string) =>
   api.post<SupportTicketOut>(`/support/tickets/${id}/close`).then((r) => r.data);
 export const rateTicket = (id: string, rating: number, comment?: string) =>

@@ -10,13 +10,13 @@ import { getPromotions, type ProductOut, type PromotionOut } from "../api";
 
 type FlashState = {
   list: PromotionOut[];
-  map: Map<number, PromotionOut>;
+  map: Map<string, PromotionOut>;
 };
 
-const FlashCtx = createContext<FlashState>({ list: [], map: new Map() });
+const FlashCtx = createContext<FlashState>({ list: [], map: new Map<string, PromotionOut>() });
 
 // 模块级缓存，供非 React（事件回调）场景下同步取价。
-let _flashMap: Map<number, PromotionOut> = new Map();
+let _flashMap: Map<string, PromotionOut> = new Map();
 
 function isActive(p: PromotionOut): boolean {
   const now = Date.now();
@@ -67,7 +67,7 @@ export function FlashPriceProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<FlashState>(() => {
-    const map = new Map<number, PromotionOut>();
+    const map = new Map<string, PromotionOut>();
     for (const p of list) {
       if (p.product_id != null && isActive(p)) map.set(p.product_id, p);
     }

@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.notification import Notification, NotificationType
+from app.utils.time import iso_utc
 
 
 async def notify(
@@ -29,7 +30,7 @@ async def notify(
                 "title": n.title,
                 "content": n.content,
                 "ref_id": n.ref_id,
-                "created_at": n.created_at.isoformat() if n.created_at else None,
+                "created_at": iso_utc(n.created_at),
             },
         )
     except Exception:  # noqa: BLE001

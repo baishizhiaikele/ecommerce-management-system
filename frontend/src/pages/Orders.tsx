@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Table, Tag, Button, Spin, Card } from "antd";
-import EmptyState from "../components/EmptyState";
+import { Table, Tag, Button, Card } from "antd";
+import AsyncBoundary from "../components/AsyncBoundary";
+import { useAsync } from "../hooks/useAsync";
 import { listOrders, OrderOut, OrderStatus } from "../api";
 import { money, orderStatusMeta, formatDateTime } from "../utils/format";
 import { useI18n } from "../i18n";
@@ -9,22 +9,26 @@ import { useI18n } from "../i18n";
 export default function Orders() {
   const navigate = useNavigate();
   const { t } = useI18n();
-  const [items, setItems] = useState<OrderOut[]>([]);
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    listOrders()
-      .then(setItems)
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-  if (loading) return <div className="text-center py-20"><Spin /></div>;
-  if (items.length === 0)
-    return <EmptyState title={t("empty.orders")} description={t("empty.ordersDesc")} />;
+  const { data, loading, error, retry } = useAsync<OrderOut[]>(() => listOrders(), []);
+  const items = data ?? [];
   return (
     <div>
       <div className="section-title">
         <h2>{t("page.orders.title")}</h2>
       </div>
+      <AsyncBoundary
+        loading={loading}
+        error={error}
+        retry={retry}
+        isEmpty={items.length === 0}
+        emptyTitle={t("empty.orders")}
+        emptyDescription={t("empty.ordersDesc")}
+        emptyAction={
+          <Button type="primary" onClick={() => navigate("/market")}>
+            {t("favorites.browse")}
+          </Button>
+        }
+      >
       <Card className="soft-card">
         <Table
           dataSource={items}
@@ -79,6 +83,7 @@ export default function Orders() {
         ]}
       />
       </Card>
+      </AsyncBoundary>
     </div>
   );
 }

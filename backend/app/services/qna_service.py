@@ -7,6 +7,7 @@ from app.models.qna import ProductAnswer, ProductQuestion
 from app.models.user import User
 from app.schemas.qna import AnswerOut, QuestionOut
 from app.services.audit_service import record
+from app.utils.time import iso_utc
 
 _Q_OPTIONS = [selectinload(ProductQuestion.answers)]
 
@@ -31,7 +32,7 @@ def _to_out(q: ProductQuestion) -> QuestionOut:
         user_id=q.user_id,
         username=getattr(q, "username", None),
         content=q.content,
-        created_at=q.created_at,
+        created_at=iso_utc(q.created_at),
         answers=[
             AnswerOut(
                 id=a.id,

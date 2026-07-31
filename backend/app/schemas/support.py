@@ -18,6 +18,7 @@ class SupportMessageOut(BaseModel):
     sender_role: SenderRole
     content: str
     is_internal: bool = False
+    is_revoked: bool = False
     attachments: list[SupportAttachmentOut] = []
     created_at: datetime
 

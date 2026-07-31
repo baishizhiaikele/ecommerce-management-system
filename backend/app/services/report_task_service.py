@@ -32,6 +32,17 @@ async def list_for_merchant(db: AsyncSession, merchant_id: str) -> list[ReportTa
     return list(rows)
 
 
+async def get_task(db: AsyncSession, task_id: str, merchant_id: str) -> ReportTask | None:
+    """按 (id, merchant_id) 直接取单个任务，避免全表拉取后在内存过滤。"""
+    return (
+        await db.scalars(
+            select(ReportTask).where(
+                ReportTask.id == task_id, ReportTask.merchant_id == merchant_id
+            )
+        )
+    ).first()
+
+
 async def update_task(
     db: AsyncSession,
     task: ReportTask,

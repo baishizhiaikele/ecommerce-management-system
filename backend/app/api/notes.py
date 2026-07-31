@@ -11,6 +11,7 @@ from app.db.session import get_db
 from app.models.note import NoteLike, ShoppingNote
 from app.models.product import Product, ProductStatus
 from app.models.user import Role, User
+from app.utils.time import iso_utc
 
 router = APIRouter(prefix="/notes", tags=["notes"])
 
@@ -44,15 +45,24 @@ async def _product_cards(db: AsyncSession, ids: list[str]) -> list[dict]:
     ]
 
 
-async def _serialize(db: AsyncSession, note: ShoppingNote, user_id: str | None = None) -> dict:
-    author = await db.get(User, note.author_id)
-    liked = False
-    if user_id:
+async def _serialize(
+    db: AsyncSession,
+    note: ShoppingNote,
+    user_id: str | None = None,
+    author_map: dict | None = None,
+    liked_ids: set | None = None,
+) -> dict:
+    author = author_map.get(note.author_id) if author_map is not None else await db.get(User, note.author_id)
+    if liked_ids is not None:
+        liked = note.id in liked_ids
+    elif user_id:
         liked = bool(
             await db.scalar(
                 select(NoteLike.id).where(NoteLike.note_id == note.id, NoteLike.user_id == user_id)
             )
         )
+    else:
+        liked = False
     return {
         "id": note.id,
         "author_id": note.author_id,
@@ -63,7 +73,7 @@ async def _serialize(db: AsyncSession, note: ShoppingNote, user_id: str | None =
         "products": await _product_cards(db, json.loads(note.product_ids or "[]")),
         "likes_count": note.likes_count,
         "liked": liked,
-        "created_at": note.created_at.isoformat() if note.created_at else None,
+        "created_at": iso_utc(note.created_at),
     }
 
 
@@ -108,7 +118,23 @@ async def list_notes(
         kw = f"%{keyword}%"
         stmt = stmt.where(ShoppingNote.title.like(kw) | ShoppingNote.content.like(kw))
     notes = list(await db.scalars(stmt.limit(min(limit, 50)).offset(offset)))
-    return [await _serialize(db, n, user.id) for n in notes]
+    # 批量预取作者与当前用户点赞状态，避免每条笔记各查 2 次（N+1 → 批量）
+    author_ids = [n.author_id for n in notes]
+    author_map = (
+        {u.id: u for u in await db.scalars(select(User).where(User.id.in_(author_ids)))}
+        if author_ids
+        else {}
+    )
+    liked_ids: set = set()
+    if user and notes:
+        liked_ids = set(
+            await db.scalars(
+                select(NoteLike.note_id).where(
+                    NoteLike.note_id.in_([n.id for n in notes]), NoteLike.user_id == user.id
+                )
+            )
+        )
+    return [await _serialize(db, n, user.id, author_map, liked_ids) for n in notes]
 
 
 @router.get("/{note_id}")

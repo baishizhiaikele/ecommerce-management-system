@@ -11,6 +11,7 @@ import {
   Select,
   Spin,
   Tag,
+  Upload,
 } from "antd";
 import { BookOpen, Heart, PenLine, Trash2 } from "lucide-react";
 import {
@@ -21,6 +22,7 @@ import {
   NoteOut,
   ProductOut,
   toggleNoteLike,
+  uploadImage,
 } from "../api";
 import ProductImage from "../components/ProductImage";
 import ProductPrice from "../components/ProductPrice";
@@ -88,6 +90,11 @@ export default function Discover() {
       message.warning(t("note.requireTitleContent"));
       return;
     }
+    const url = imageUrl.trim();
+    if (url && !/^(\/uploads\/|https?:\/\/)/i.test(url)) {
+      message.warning(t("note.imageUrlInvalid"));
+      return;
+    }
     setSubmitting(true);
     try {
       const note = await createNote({
@@ -136,7 +143,12 @@ export default function Discover() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {notes.map((n) => (
-            <Card key={n.id} className="soft-card" styles={{ body: { padding: 18 } }}>
+            <Card
+              key={n.id}
+              className="soft-card cursor-pointer hover:shadow-md transition-shadow"
+              styles={{ body: { padding: 18 } }}
+              onClick={() => navigate(`/discover/${n.id}`)}
+            >
               <div className="flex items-center gap-2 mb-2">
                 <span className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-sm font-medium">
                   {n.author_name.slice(0, 1).toUpperCase()}
@@ -153,12 +165,16 @@ export default function Discover() {
               {n.images.length > 0 && (
                 <div className="flex gap-2 mt-3 overflow-x-auto">
                   {n.images.map((img, i) => (
-                    <img
-                      key={i}
-                      src={img}
-                      alt=""
-                      className="h-28 w-28 rounded-xl object-cover bg-slate-100 shrink-0"
-                    />
+                    <div key={i} className="h-28 w-28 rounded-xl overflow-hidden bg-slate-100 shrink-0">
+                      <ProductImage
+                        src={img}
+                        name={n.title}
+                        alt={n.title}
+                        height={112}
+                        rounded={12}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
                   ))}
                 </div>
               )}
@@ -171,11 +187,18 @@ export default function Discover() {
                       onClick={() => navigate(`/products/${p.id}`)}
                     >
                       <div className="w-12 h-12 rounded-lg overflow-hidden bg-slate-100 shrink-0">
-                        <ProductImage src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
+                        <ProductImage
+                          src={p.image_url}
+                          name={p.name}
+                          alt={p.name}
+                          height={48}
+                          rounded={12}
+                          className="w-full h-full object-cover"
+                        />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm line-clamp-1">{p.name}</div>
-                        <ProductPrice p={p} className="text-[#F97316] font-bold text-sm" />
+                        <ProductPrice p={p as unknown as ProductOut} className="text-[#F97316] font-bold text-sm" />
                       </div>
                       <Tag color="orange">{t("note.buyNow")}</Tag>
                     </div>
@@ -185,14 +208,20 @@ export default function Discover() {
               <div className="flex items-center gap-3 mt-3">
                 <button
                   className={`flex items-center gap-1 text-sm ${n.liked ? "text-rose-500" : "text-slate-400"}`}
-                  onClick={() => onLike(n)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onLike(n);
+                  }}
                 >
                   <Heart size={16} fill={n.liked ? "currentColor" : "none"} />
                   {n.likes_count}
                 </button>
                 {(user?.id === n.author_id || user?.role === "admin") && (
                   <Popconfirm title={t("note.deleteConfirm")} onConfirm={() => onDelete(n)}>
-                    <button className="flex items-center gap-1 text-sm text-slate-400 hover:text-rose-500 ml-auto">
+                    <button
+                      className="flex items-center gap-1 text-sm text-slate-400 hover:text-rose-500 ml-auto"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <Trash2 size={15} />
                     </button>
                   </Popconfirm>
@@ -225,18 +254,44 @@ export default function Discover() {
             onChange={(e) => setContent(e.target.value)}
             maxLength={5000}
           />
-          <Input
-            placeholder={t("note.imagePlaceholder")}
-            value={imageUrl}
-            onChange={(e) => setImageUrl(e.target.value)}
-            maxLength={500}
-          />
+          <div className="flex gap-2">
+            <Input
+              placeholder={t("note.imagePlaceholder")}
+              value={imageUrl}
+              onChange={(e) => setImageUrl(e.target.value)}
+              maxLength={500}
+            />
+            <Upload
+              showUploadList={false}
+              beforeUpload={async (file) => {
+                const isImg = /(image\/jpeg|image\/png|image\/gif|image\/webp)/.test(file.type);
+                if (!isImg) {
+                  message.error(t("note.uploadImageType"));
+                  return Upload.LIST_IGNORE;
+                }
+                try {
+                  const res = await uploadImage(file as unknown as File);
+                  setImageUrl(res.url);
+                  message.success(t("note.uploadImageOk"));
+                } catch {
+                  message.error(t("note.uploadImageFail"));
+                }
+                return Upload.LIST_IGNORE;
+              }}
+            >
+              <Button icon={<PenLine size={14} />}>{t("note.uploadImage")}</Button>
+            </Upload>
+          </div>
           <Select
             mode="multiple"
             className="w-full"
             placeholder={t("note.productsPlaceholder")}
             value={productIds}
             onChange={setProductIds}
+            onSelect={() => {
+              // 选中后立即收起下拉，避免"添加完下拉列表还在"
+              setTimeout(() => (document.activeElement as HTMLElement | null)?.blur(), 0);
+            }}
             optionFilterProp="label"
             options={products.map((p) => ({ value: p.id, label: p.name }))}
             maxTagCount={4}

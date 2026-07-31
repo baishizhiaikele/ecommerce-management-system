@@ -7,6 +7,7 @@ from app.models.product import Product, ProductStatus
 from app.models.review import Review
 from app.models.user import Role, User
 from app.schemas.product import ProductOut
+from app.utils.time import iso_utc
 
 router = APIRouter(prefix="/shops", tags=["shops"])
 
@@ -88,6 +89,6 @@ async def shop_detail(merchant_id: str, db: AsyncSession = Depends(get_db)) -> d
         "rating": round(float(rating or 0), 1),
         "sales_total": int(sales_total or 0),
         "product_count": int(cnt or 0),
-        "joined_at": m.created_at.isoformat() if m.created_at else None,
+        "joined_at": iso_utc(m.created_at),
         "products": [ProductOut.model_validate(p) for p in products],
     }

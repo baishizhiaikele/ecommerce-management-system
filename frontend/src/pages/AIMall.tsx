@@ -158,18 +158,18 @@ function FloorBody({ floor }: { floor: FloorOut }) {
           break;
         }
         case "top_sales": {
-          const res = (await listProducts({ sort: "sales", page_size: 4 })) as any;
-          setProducts(res?.items ?? []);
+          const res = await listProducts({ sort: "sales", page_size: 4 });
+          setProducts(res ?? []);
           break;
         }
         case "top_rating": {
-          const res = (await listProducts({ sort: "rating", page_size: 4 })) as any;
-          setProducts(res?.items ?? []);
+          const res = await listProducts({ sort: "rating", page_size: 4 });
+          setProducts(res ?? []);
           break;
         }
         case "recent": {
-          const res = (await listProducts({ sort: "new", page_size: 4 })) as any;
-          setProducts(res?.items ?? []);
+          const res = await listProducts({ sort: "new", page_size: 4 });
+          setProducts(res ?? []);
           break;
         }
         case "recommend": {

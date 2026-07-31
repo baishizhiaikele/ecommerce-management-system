@@ -79,6 +79,9 @@ class SupportMessage(Base):
     content = Column(Text, nullable=False)
     # 内部备注：仅商家可见，不展示给买家，且不计入买家未读
     is_internal = Column(Boolean, default=False, nullable=False, server_default="0")
+    # 撤回：仅发送者本人可在 2 分钟内撤回，撤回后内容置为占位提示并保留记录
+    is_revoked = Column(Boolean, default=False, nullable=False, server_default="0")
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     ticket = relationship("SupportTicket", back_populates="messages")

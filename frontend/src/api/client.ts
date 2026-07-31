@@ -10,13 +10,21 @@ export const api = axios.create({
   withCredentials: true,
 });
 
+// 注意：原先的 GET 同帧去重适配器依赖 axios.defaults.adapter，
+// 但本项目的 axios 版本中该值为 undefined，会导致 api 请求抛出
+// "_defaultAdapter is not a function" 而使所有请求失败。已移除该适配器，改用 axios 默认适配器。
+
 /** 从 axios 错误中提取可展示给用户的提示文案（后端 detail 优先）。 */
 export function getErrorMessage(error: unknown, fallback = "请求失败，请稍后重试"): string {
   if (axios.isAxiosError(error)) {
-    const detail = error.response?.data?.detail;
+    const data = error.response?.data as Record<string, unknown> | undefined;
+    const detail = data?.detail;
     if (typeof detail === "string" && detail) return detail;
     // FastAPI 422 校验错误为数组结构
-    if (Array.isArray(detail) && detail.length && detail[0]?.msg) return detail[0].msg;
+    if (Array.isArray(detail) && detail.length && (detail[0] as { msg?: string })?.msg)
+      return (detail[0] as { msg: string }).msg;
+    // SlowAPI 限流返回 { error: "..." } 而非 { detail: "..." }
+    if (typeof data?.error === "string" && data.error) return "操作过于频繁，请稍后再试";
     if (error.code === "ECONNABORTED") return "请求超时，请检查网络后重试";
     if (!error.response) return "网络异常，无法连接服务器";
   }
@@ -58,7 +66,9 @@ api.interceptors.response.use(
         const path = window.location.pathname;
         const publicPaths = ["/login", "/", "/register", "/about"];
         if (!publicPaths.some((p) => path === p || path.startsWith(p + "/"))) {
-          window.location.href = "/login";
+          // 带上来源页，登录后原路返回，避免用户重新找一遍刚才的页面
+          const redirect = encodeURIComponent(path + window.location.search);
+          window.location.href = `/login?redirect=${redirect}`;
         }
         return Promise.reject(e);
       } finally {

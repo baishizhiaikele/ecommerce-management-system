@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Col, Empty, Row, Spin, Typography } from "antd";
+import { Button, Col, Empty, Result, Row, Spin, Typography } from "antd";
+import { ReloadOutlined } from "@ant-design/icons";
 import {
   listHistory,
   listRecentlyBought,
+  getErrorMessage,
   type BoughtOut,
   type ViewLogOut,
 } from "../api";
@@ -50,21 +52,40 @@ export default function History() {
   const [history, setHistory] = useState<ViewLogOut[]>([]);
   const [bought, setBought] = useState<BoughtOut[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     if (!user) return;
     setLoading(true);
+    setError(null);
     Promise.all([listHistory(), listRecentlyBought()])
       .then(([h, b]) => {
         setHistory(h);
         setBought(b);
       })
-      .catch(() => {})
+      .catch((e) => setError(getErrorMessage(e)))
       .finally(() => setLoading(false));
   }, [user]);
 
+  useEffect(load, [load]);
+
   if (!user) {
     return <Empty description={t("common.loginFirst")} />;
+  }
+
+  if (error) {
+    return (
+      <Result
+        status="warning"
+        title={t("state.errorTitle")}
+        subTitle={error}
+        extra={
+          <Button type="primary" icon={<ReloadOutlined />} onClick={load}>
+            {t("common.retry")}
+          </Button>
+        }
+      />
+    );
   }
 
   return (

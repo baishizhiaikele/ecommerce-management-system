@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Card, Button, Spin, Result, Typography, Descriptions, message } from "antd";
-import { getOrder, confirmPayment, OrderOut } from "../api";
+import { Card, Button, Skeleton, Result, Typography, Descriptions, message } from "antd";
+import { ReloadOutlined } from "@ant-design/icons";
+import { getOrder, confirmPayment, OrderOut, getErrorMessage } from "../api";
+import { useAsync } from "../hooks/useAsync";
 import { money, formatDateTime } from "../utils/format";
 import { useI18n } from "../i18n";
 
@@ -11,34 +13,47 @@ export default function Pay() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t } = useI18n();
-  const [order, setOrder] = useState<OrderOut | null>(null);
-  const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState(false);
   const [done, setDone] = useState(false);
-
-  useEffect(() => {
-    if (!id) return;
-    getOrder(id)
-      .then(setOrder)
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [id]);
+  const { data: order, loading, error, retry } = useAsync<OrderOut | null>(
+    async () => (id ? await getOrder(id) : null),
+    [id]
+  );
 
   const onPay = async () => {
-    if (!id) return;
+    if (!id || paying) return;
     setPaying(true);
     try {
       await confirmPayment(id);
       setDone(true);
       message.success(t("pay.success"));
     } catch (e: unknown) {
-      message.error((e as { message?: string })?.message || t("common.operationFailed"));
+      message.error(getErrorMessage(e));
     } finally {
       setPaying(false);
     }
   };
 
-  if (loading) return <div className="text-center py-20"><Spin /></div>;
+  if (loading) return <Skeleton active paragraph={{ rows: 6 }} className="max-w-md mx-auto py-10" />;
+
+  // 加载失败 ≠ 订单不存在：给出真实原因并允许重试，避免用户误以为订单丢了
+  if (error) {
+    return (
+      <Result
+        status="warning"
+        title={t("state.errorTitle")}
+        subTitle={error}
+        extra={[
+          <Button type="primary" key="retry" icon={<ReloadOutlined />} onClick={retry}>
+            {t("common.retry")}
+          </Button>,
+          <Button key="orders" onClick={() => navigate("/orders")}>
+            {t("common.back")}
+          </Button>,
+        ]}
+      />
+    );
+  }
 
   if (done) {
     return (

@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
+import type { ReactNode } from "react";
 import type { AxiosError } from "axios";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Carousel, Card, Button, Input, Row, Col, Empty, Spin, Tag, message, Select, Switch, InputNumber, Rate, Space, AutoComplete } from "antd";
+import { Carousel, Card, Button, Row, Col, Empty, Result, Tag, message, Select, Switch, InputNumber, Rate, Space, AutoComplete } from "antd";
+import { ReloadOutlined } from "@ant-design/icons";
 import { Search, Sparkles, Flame, Zap, ShoppingBag, Clock, Store, Gift, TrendingUp, Tag as TagIcon } from "lucide-react";
 import {
   listProducts,
@@ -21,9 +23,10 @@ import {
   PromotionOut,
   CouponOut,
   Facets,
+  getErrorMessage,
 } from "../api";
 import { useI18n, translate } from "../i18n";
-import { money } from "../utils/format";
+import { money, parseTime } from "../utils/format";
 import ProductImage from "../components/ProductImage";
 import ProductCard from "../components/ProductCard";
 import ProductGrid from "../components/ProductGrid";
@@ -37,7 +40,7 @@ function FlashCountdown({ endAt }: { endAt?: string | null }) {
   useEffect(() => {
     if (!endAt) return;
     const tick = () => {
-      const diff = new Date(endAt).getTime() - Date.now();
+      const diff = (parseTime(endAt)?.getTime() ?? 0) - Date.now();
       if (diff <= 0) {
         setLeft(t("market.ended"));
         return;
@@ -57,6 +60,137 @@ function FlashCountdown({ endAt }: { endAt?: string | null }) {
     </span>
   );
 }
+
+/* ---------- 抽取的可复用 / 可记忆子组件（v6：模块化 + 缩小重渲染范围） ---------- */
+
+const QuickEntry = memo(function QuickEntry({ labelKey, icon, onGo }: { labelKey: string; icon: ReactNode; onGo: () => void }) {
+  const { t } = useI18n();
+  return (
+    <button
+      onClick={onGo}
+      className="card-soft card-lift flex items-center gap-4 p-5 min-h-[92px] hover:border-[#4F46E5]"
+    >
+      <span className="glow-icon shrink-0" style={{ width: 50, height: 50, fontSize: 24 }}>
+        {icon}
+      </span>
+      <span className="font-semibold text-slate-800 text-[15px] leading-tight">{t(labelKey)}</span>
+    </button>
+  );
+});
+
+const CouponCard = memo(function CouponCard({ c, onClaim }: { c: CouponOut; onClaim: (c: CouponOut) => void }) {
+  const { t } = useI18n();
+  const isDiscount = c.type === "discount";
+  const bigText = isDiscount
+    ? `${(Number(c.value) * 10).toFixed(1)}${t("membership.zhe")}`
+    : `¥${c.value}`;
+  const subText = isDiscount
+    ? translate("coupon.noThresholdDiscount")
+    : translate("coupon.thresholdHint").replace("{threshold}", c.threshold);
+  return (
+    <div className="w-64 shrink-0 flex rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-white">
+      <div
+        className="w-28 px-2 py-3 flex flex-col items-center justify-center text-white shrink-0"
+        style={{ background: "#4F46E5" }}
+      >
+        <div className="text-xl font-bold leading-tight whitespace-nowrap">{bigText}</div>
+        <div className="text-[10px] opacity-90 mt-1 text-center leading-tight px-1">{subText}</div>
+      </div>
+      <div className="flex-1 min-w-0 px-3 py-3 flex flex-col justify-between">
+        <div className="text-sm font-semibold text-slate-800 truncate" title={c.name}>
+          {c.name}
+        </div>
+        <div className="flex items-center justify-between mt-2">
+          <Tag color="blue" className="!m-0">
+            {isDiscount ? translate("coupon.type.discount") : translate("coupon.type.full_reduce")}
+          </Tag>
+          <Button type="primary" size="small" onClick={() => onClaim(c)}>
+            {t("coupon.receive")}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+const ProductLeaderboard = memo(function ProductLeaderboard({
+  titleKey,
+  icon,
+  data,
+  boardKey,
+  onOpen,
+}: {
+  titleKey: string;
+  icon: ReactNode;
+  data: ProductOut[];
+  boardKey: string;
+  onOpen: (id: string) => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="card-soft p-4">
+      <div className="flex items-center gap-2 mb-3">
+        {icon}
+        <span className="font-bold">{t(titleKey)}</span>
+        <span className="ml-auto text-xs text-slate-400">{t("market.topPrefix")} {data.length}</span>
+      </div>
+      <div className="space-y-2">
+        {data.map((p, i) => (
+          <div
+            key={p.id}
+            onClick={() => onOpen(p.id)}
+            className="flex items-center gap-3 cursor-pointer hover:bg-slate-50 rounded-lg p-1.5"
+          >
+            <span
+              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                i < 3 ? "bg-rose-500 text-white" : "bg-slate-100 text-slate-500"
+              }`}
+            >
+              {i + 1}
+            </span>
+            <ProductImage name={p.name} image_url={p.image_url} height={44} rounded={8} />
+            <div className="min-w-0 flex-1">
+              <div className="text-sm truncate">{p.name}</div>
+              <ProductPrice p={p} showTag={false} className="text-[#4F46E5] font-bold text-sm" />
+            </div>
+            {boardKey === "sales" ? (
+              <span className="text-xs text-slate-400">{t("market.sold")} {p.sales_count}</span>
+            ) : boardKey === "rating" ? (
+              <Rate disabled value={5} style={{ fontSize: 12 }} />
+            ) : boardKey === "new" ? (
+              <Tag color="magenta" className="ml-1">{t("market.newArrival")}</Tag>
+            ) : (
+              <Tag color="green" className="ml-1">{t("market.greatValue")}</Tag>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+});
+
+const ShopCard = memo(function ShopCard({
+  s,
+  onOpen,
+}: {
+  s: { id: string; name: string; product_count: number };
+  onOpen: (id: string) => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <Card hoverable className="soft-card" onClick={() => onOpen(s.id)}>
+      <div className="flex items-center gap-2">
+        <div className="w-10 h-10 rounded-full bg-[#4F46E5] flex items-center justify-center text-white">
+          <Store />
+        </div>
+        <div className="min-w-0">
+          <div className="font-semibold truncate">{s.name}</div>
+          <Tag color="cyan">{s.product_count} {t("market.itemsOnSale")}</Tag>
+        </div>
+      </div>
+    </Card>
+  );
+});
 
 export default function Market() {
   const navigate = useNavigate();
@@ -85,6 +219,8 @@ export default function Market() {
   const [maxPrice, setMaxPrice] = useState<number | null>(null);
   const [inStock, setInStock] = useState(false);
   const [loading, setLoading] = useState(false);
+  // 列表加载失败必须区别于"没有搜到商品"：错误态给出原因 + 重试，避免用户误以为无货
+  const [listError, setListError] = useState<string | null>(null);
   const [recs, setRecs] = useState<ProductOut[]>([]);
   const [hot, setHot] = useState<string[]>([]);
   const [history, setHistory] = useState<string[]>([]);
@@ -93,6 +229,40 @@ export default function Market() {
   const [rating, setRating] = useState<number | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [facets, setFacets] = useState<Facets | null>(null);
+  // 模块化 / 重渲染优化（v6）：固化稳定引用，使上方 memo 子组件仅在自身 props 变化时才重渲染
+  const openProduct = useCallback((id: string) => navigate(`/products/${id}`), [navigate]);
+  const openShop = useCallback((id: string) => navigate(`/shops/${id}`), [navigate]);
+  const handleClaim = useCallback(
+    async (c: CouponOut) => {
+      try {
+        await claimCoupon(c.id);
+        message.success(t("coupon.claimSuccess"));
+        setCoupons((s) => s.filter((x) => x.id !== c.id));
+      } catch (e) {
+        const err = e as AxiosError<ApiError>;
+        message.error(err.response?.data?.detail || t("coupon.claimFail"));
+      }
+    },
+    [t],
+  );
+  const quickEntries = useMemo(
+    () => [
+      { labelKey: "market.quick.coupon", icon: <Gift size={22} />, go: () => navigate("/coupons") },
+      { labelKey: "market.quick.shop", icon: <Store size={22} />, go: () => navigate("/shops") },
+      { labelKey: "market.quick.points", icon: <Sparkles size={22} />, go: () => navigate("/points") },
+      { labelKey: "market.quick.fav", icon: <ShoppingBag size={22} />, go: () => navigate("/favorites") },
+    ],
+    [navigate],
+  );
+  const boards = useMemo(
+    () => [
+      { titleKey: "market.topSales", icon: <Flame size={16} className="text-rose-500" />, data: topSales, key: "sales" },
+      { titleKey: "market.topRating", icon: <TrendingUp size={16} className="text-[#4F46E5]" />, data: topRating, key: "rating" },
+      { titleKey: "market.topNew", icon: <Sparkles size={16} className="text-fuchsia-500" />, data: topNew, key: "new" },
+      { titleKey: "market.topPrice", icon: <TagIcon size={16} className="text-emerald-500" />, data: topPrice, key: "price" },
+    ],
+    [topSales, topRating, topNew, topPrice],
+  );
   // 商品列表区锚点，点击分类时平滑滚动到此以便用户看到筛选结果（UX 修复）
   const productSectionRef = useRef<HTMLElement | null>(null);
   // 以 ref 持有最新筛选条件，保证 setX + setTimeout(load, 0) 读取到最新值（P1-6 分面检索）
@@ -153,6 +323,7 @@ export default function Market() {
   const load = async () => {
     const f = filterRef.current;
     setLoading(true);
+    setListError(null);
     try {
       const data = await listProducts({
         keyword: f.kw || undefined,
@@ -166,8 +337,8 @@ export default function Market() {
         page_size: 20,
       });
       setItems(data);
-    } catch {
-      /* 忽略 */
+    } catch (e) {
+      setListError(getErrorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -217,17 +388,6 @@ export default function Market() {
       /* 忽略 */
     }
   }, []);
-
-  const onClaim = async (c: CouponOut) => {
-    try {
-      await claimCoupon(c.id);
-      message.success(t("coupon.claimSuccess"));
-      setCoupons((s) => s.filter((x) => x.id !== c.id));
-    } catch (e) {
-      const err = e as AxiosError<ApiError>;
-      message.error(err.response?.data?.detail || t("coupon.claimFail"));
-    }
-  };
 
   const pickCat = (id?: string) => {
     setCat(id);
@@ -280,22 +440,8 @@ export default function Market() {
 
       {/* 快捷入口 */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-5">
-        {[
-          { labelKey: "market.quick.coupon", icon: <Gift size={22} />, go: () => navigate("/coupons") },
-          { labelKey: "market.quick.shop", icon: <Store size={22} />, go: () => navigate("/shops") },
-          { labelKey: "market.quick.points", icon: <Sparkles size={22} />, go: () => navigate("/points") },
-          { labelKey: "market.quick.fav", icon: <ShoppingBag size={22} />, go: () => navigate("/favorites") },
-        ].map((q) => (
-          <button
-            key={q.labelKey}
-            onClick={q.go}
-            className="card-soft card-lift flex items-center gap-4 p-5 min-h-[92px] hover:border-[#4F46E5]"
-          >
-            <span className="glow-icon shrink-0" style={{ width: 50, height: 50, fontSize: 24 }}>
-              {q.icon}
-            </span>
-            <span className="font-semibold text-slate-800 text-[15px] leading-tight">{t(q.labelKey)}</span>
-          </button>
+        {quickEntries.map((q) => (
+          <QuickEntry key={q.labelKey} labelKey={q.labelKey} icon={q.icon} onGo={q.go} />
         ))}
       </section>
 
@@ -310,48 +456,9 @@ export default function Market() {
             </Button>
           </div>
           <div className="rail-scroll">
-            {coupons.map((c) => {
-              const isDiscount = c.type === "discount";
-              const bigText = isDiscount
-                ? `${(Number(c.value) * 10).toFixed(1)}${t("membership.zhe")}`
-                : `¥${c.value}`;
-              const subText = isDiscount
-                ? translate("coupon.noThresholdDiscount")
-                : translate("coupon.thresholdHint").replace("{threshold}", c.threshold);
-              return (
-                <div
-                  key={c.id}
-                  className="w-64 shrink-0 flex rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-white"
-                >
-                  {/* 左侧金额区 */}
-                  <div
-                    className="w-28 px-2 py-3 flex flex-col items-center justify-center text-white shrink-0"
-                    style={{ background: "#4F46E5" }}
-                  >
-                    <div className="text-xl font-bold leading-tight whitespace-nowrap">
-                      {bigText}
-                    </div>
-                    <div className="text-[10px] opacity-90 mt-1 text-center leading-tight px-1">
-                      {subText}
-                    </div>
-                  </div>
-                  {/* 右侧信息区 */}
-                  <div className="flex-1 min-w-0 px-3 py-3 flex flex-col justify-between">
-                    <div className="text-sm font-semibold text-slate-800 truncate" title={c.name}>
-                      {c.name}
-                    </div>
-                    <div className="flex items-center justify-between mt-2">
-                      <Tag color="blue" className="!m-0">
-                        {isDiscount ? translate("coupon.type.discount") : translate("coupon.type.full_reduce")}
-                      </Tag>
-                      <Button type="primary" size="small" onClick={() => onClaim(c)}>
-                        {t("coupon.receive")}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            {coupons.map((c) => (
+              <CouponCard key={c.id} c={c} onClaim={handleClaim} />
+            ))}
           </div>
         </section>
       )}
@@ -392,50 +499,15 @@ export default function Market() {
 
       {/* 多榜单：热销榜 / 好评榜 / 新品榜 / 低价好物榜 */}
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {[
-          { titleKey: "market.topSales", icon: <Flame size={16} className="text-rose-500" />, data: topSales, key: "sales" },
-          { titleKey: "market.topRating", icon: <TrendingUp size={16} className="text-[#4F46E5]" />, data: topRating, key: "rating" },
-          { titleKey: "market.topNew", icon: <Sparkles size={16} className="text-fuchsia-500" />, data: topNew, key: "new" },
-          { titleKey: "market.topPrice", icon: <TagIcon size={16} className="text-emerald-500" />, data: topPrice, key: "price" },
-        ].map((board) => (
-          <div key={board.key} className="card-soft p-4">
-            <div className="flex items-center gap-2 mb-3">
-              {board.icon}
-              <span className="font-bold">{t(board.titleKey)}</span>
-              <span className="ml-auto text-xs text-slate-400">{t("market.topPrefix")} {board.data.length}</span>
-            </div>
-            <div className="space-y-2">
-              {board.data.map((p, i) => (
-                <div
-                  key={p.id}
-                  onClick={() => navigate(`/products/${p.id}`)}
-                  className="flex items-center gap-3 cursor-pointer hover:bg-slate-50 rounded-lg p-1.5"
-                >
-                  <span
-                    className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                      i < 3 ? "bg-rose-500 text-white" : "bg-slate-100 text-slate-500"
-                    }`}
-                  >
-                    {i + 1}
-                  </span>
-                  <ProductImage name={p.name} image_url={p.image_url} height={44} rounded={8} />
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm truncate">{p.name}</div>
-                    <ProductPrice p={p} showTag={false} className="text-[#4F46E5] font-bold text-sm" />
-                  </div>
-                  {board.key === "sales" ? (
-                    <span className="text-xs text-slate-400">{t("market.sold")} {p.sales_count}</span>
-                  ) : board.key === "rating" ? (
-                    <Rate disabled value={5} style={{ fontSize: 12 }} />
-                  ) : board.key === "new" ? (
-                    <Tag color="magenta" className="ml-1">{t("market.newArrival")}</Tag>
-                  ) : (
-                    <Tag color="green" className="ml-1">{t("market.greatValue")}</Tag>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
+        {boards.map((board) => (
+          <ProductLeaderboard
+            key={board.key}
+            titleKey={board.titleKey}
+            icon={board.icon}
+            data={board.data}
+            boardKey={board.key}
+            onOpen={openProduct}
+          />
         ))}
       </section>
 
@@ -451,22 +523,7 @@ export default function Market() {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {shops.map((s) => (
-              <Card
-                key={s.id}
-                hoverable
-                className="soft-card"
-                onClick={() => navigate(`/shops/${s.id}`)}
-              >
-                <div className="flex items-center gap-2">
-                  <div className="w-10 h-10 rounded-full bg-[#4F46E5] flex items-center justify-center text-white">
-                    <Store />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="font-semibold truncate">{s.name}</div>
-                    <Tag color="cyan">{s.product_count} {t("market.itemsOnSale")}</Tag>
-                  </div>
-                </div>
-              </Card>
+              <ShopCard key={s.id} s={s} onOpen={openShop} />
             ))}
           </div>
         </section>
@@ -749,6 +806,17 @@ export default function Market() {
               </Col>
             ))}
           </Row>
+        ) : listError ? (
+          <Result
+            status="warning"
+            title={t("state.errorTitle")}
+            subTitle={listError}
+            extra={
+              <Button type="primary" icon={<ReloadOutlined />} onClick={load}>
+                {t("common.retry")}
+              </Button>
+            }
+          />
         ) : items.length === 0 ? (
           <div className="py-16 text-center">
             <Empty description={t("market.noResult")} />

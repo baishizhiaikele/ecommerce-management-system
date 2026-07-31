@@ -45,6 +45,12 @@ class Review(Base):
     __table_args__ = (Index("ix_review_product", "product_id"),)
 
     @property
+    def username(self) -> str | None:
+        # ReviewOut 需要 username；仅在 user 关系已加载时可取，否则返回 None
+        # （调用方需 selectinload(Review.user) 以保证渲染时有值且避免 lazyload）
+        return self.user.username if self.user is not None else None
+
+    @property
     def images(self) -> list:
         if not self._images:
             return []

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { AxiosError } from "axios";
-import { useNavigate } from "react-router-dom";
-import { Button, Form, Input, Segmented, message } from "antd";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { Button, Form, Input, Segmented, Tag, Modal, message } from "antd";
 import { LockOutlined, UserOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import { api, getErrorMessage } from "../../api/client";
 import { useAuth } from "../../store/auth";
@@ -17,13 +17,58 @@ interface LoginValues {
   role?: string;
 }
 
+// 演示账号：仅用于本地/演示环境体验，不含任何真实个人信息
+const DEMO_ACCOUNTS = [
+  { labelKey: "role.buyer", username: "buyer", password: "buyer123" },
+  { labelKey: "role.merchant", username: "merchant", password: "merchant123" },
+  { labelKey: "role.admin", username: "admin", password: "admin123" },
+];
+
+// 注册时实时展示密码强度，引导用户设置更安全的密码
+function PasswordStrength({ password }: { password: string }) {
+  const { t } = useI18n();
+  if (!password) return null;
+  const checks = [
+    password.length >= 8,
+    /[a-z]/.test(password) && /[A-Z]/.test(password),
+    /\d/.test(password),
+    /[^A-Za-z0-9]/.test(password),
+  ];
+  const score = checks.filter(Boolean).length;
+  const colors = ["#ef4444", "#f59e0b", "#3b82f6", "#22c55e"];
+  const labels = [t("auth.pwdWeak"), t("auth.pwdFair"), t("auth.pwdGood"), t("auth.pwdStrong")];
+  const idx = Math.max(0, Math.min(score - 1, 3));
+  return (
+    <div className="mt-1">
+      <div className="flex gap-1">
+        {[0, 1, 2, 3].map((i) => (
+          <div
+            key={i}
+            className="h-1 flex-1 rounded-full"
+            style={{ background: i <= idx ? colors[idx] : "#E5E7EB" }}
+          />
+        ))}
+      </div>
+      <div className="text-xs mt-1" style={{ color: colors[idx] }}>
+        {t("auth.strength")}：{labels[idx]}
+      </div>
+    </div>
+  );
+}
+
 export default function Login() {
   const [mode, setMode] = useState<Mode>("login");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { setUser } = useAuth();
   const { t } = useI18n();
   const [form] = Form.useForm();
+
+  // 被拦截跳转过来的来源页：登录成功后原路返回，别把用户丢回首页重新找一遍
+  const from =
+    (location.state as { from?: string } | null)?.from || searchParams.get("redirect") || null;
 
   const onFinish = async (values: LoginValues) => {
     setLoading(true);
@@ -42,7 +87,7 @@ export default function Login() {
       if (mode === "login") {
         const me = await api.get("/auth/me");
         setUser(me.data);
-        navigate(homeForRole(me.data.role));
+        navigate(from || homeForRole(me.data.role), { replace: true });
       } else {
         message.success(t("register.success"));
         setMode("login");
@@ -54,6 +99,15 @@ export default function Login() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // 演示环境无密码找回后端，点击后给出说明而非静默无反应
+  const onForgot = () => {
+    Modal.info({
+      title: t("login.forgotTitle"),
+      content: t("login.forgotDesc"),
+      okText: t("common.ok"),
+    });
   };
 
   return (
@@ -103,9 +157,49 @@ export default function Login() {
                   <Input placeholder={t("auth.email")} />
                 </Form.Item>
               )}
-              <Form.Item name="password" rules={[{ required: true, message: t("auth.reqPwd") }]}>
+              <Form.Item
+                name="password"
+                rules={[
+                  { required: true, message: t("auth.reqPwd") },
+                  // 与后端对齐，前置提示避免提交后才报错
+                  ...(mode === "register"
+                    ? [
+                        { min: 8, message: t("auth.pwdTooShort") },
+                        {
+                          // 至少同时包含字母和数字，挡住纯数字/纯字母的弱密码
+                          pattern: /^(?=.*[A-Za-z])(?=.*\d).+$/,
+                          message: t("auth.pwdRule"),
+                        },
+                      ]
+                    : []),
+                ]}
+              >
                 <Input.Password prefix={<LockOutlined />} placeholder={t("common.password")} />
               </Form.Item>
+              {mode === "register" && (
+                <Form.Item noStyle shouldUpdate>
+                  {({ getFieldValue }) => (
+                    <PasswordStrength password={(getFieldValue("password") as string) || ""} />
+                  )}
+                </Form.Item>
+              )}
+              {mode === "register" && (
+                <Form.Item
+                  name="confirmPassword"
+                  dependencies={["password"]}
+                  rules={[
+                    { required: true, message: t("auth.reqConfirmPwd") },
+                    ({ getFieldValue }) => ({
+                      validator(_, value) {
+                        if (!value || getFieldValue("password") === value) return Promise.resolve();
+                        return Promise.reject(new Error(t("auth.pwdMismatch")));
+                      },
+                    }),
+                  ]}
+                >
+                  <Input.Password prefix={<LockOutlined />} placeholder={t("auth.confirmPwd")} />
+                </Form.Item>
+              )}
               {mode === "register" && (
                 <Form.Item name="role" initialValue="buyer">
                   <Segmented
@@ -117,15 +211,38 @@ export default function Login() {
                   />
                 </Form.Item>
               )}
+              {mode === "login" && (
+                <div className="flex justify-end -mt-2 mb-3">
+                  <a className="text-xs text-[#4F46E5] cursor-pointer" onClick={onForgot}>
+                    {t("login.forgot")}
+                  </a>
+                </div>
+              )}
               <Button type="primary" htmlType="submit" block loading={loading}>
                 {mode === "login" ? t("login.signIn") : t("auth.registerSubmit")}
               </Button>
             </Form>
 
-            <div className="mt-6 text-xs text-slate-400 leading-relaxed">
-              {t("login.demoHint")}<br />
-              买家 buyer / buyer123 ｜ 商家 merchant / merchant123 ｜ 管理员 admin / admin123
-            </div>
+            {mode === "login" && (
+              <div className="mt-6 text-xs text-slate-400 leading-relaxed">
+                {t("login.demoHint")}
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {DEMO_ACCOUNTS.map((a) => (
+                    <Tag.CheckableTag
+                      key={a.username}
+                      checked={false}
+                      onChange={() => {
+                        // 一键填入，省去手输演示账号；仍需用户主动点击登录
+                        form.setFieldsValue({ username: a.username, password: a.password });
+                      }}
+                      className="!border !border-slate-200 !text-slate-500 cursor-pointer"
+                    >
+                      {t(a.labelKey)} · {t("login.demoFill")}
+                    </Tag.CheckableTag>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

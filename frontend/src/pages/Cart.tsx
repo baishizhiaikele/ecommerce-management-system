@@ -1,6 +1,6 @@
-import { useEffect, useState, type Key } from "react";
+import { useEffect, useRef, useState, type Key } from "react";
 import type { AxiosError } from "axios";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   Table,
   Button,
@@ -11,8 +11,10 @@ import {
   Input,
   Popconfirm,
   Empty,
+  Result,
   Spin,
 } from "antd";
+import { ReloadOutlined } from "@ant-design/icons";
 import {
   getCart,
   updateCartItem,
@@ -21,6 +23,7 @@ import {
   myCoupons,
   listCategories,
   listAddresses,
+  getErrorMessage,
   CartItemOut,
   UserCouponOut,
   CategoryOut,
@@ -35,6 +38,7 @@ import { Checkbox, Select } from "antd";
 
 export default function Cart() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useI18n();
   const clear = useCart((s) => s.clear);
   const points = useAuth((s) => s.user?.points ?? 0);
@@ -49,13 +53,20 @@ export default function Cart() {
   const [pickupStore, setPickupStore] = useState("");
   const [categories, setCategories] = useState<CategoryOut[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const selectionInitedRef = useRef(false);
+  // 防抖：记录每个条目的在途定时器与目标数量，避免连续点击重复发请求
+  const pendingRef = useRef<Map<string, { timer: number; qty: number }>>(new Map());
+  // 最近一次与服务端一致的数量，失败回滚用
+  const lastOkQtyRef = useRef<Record<string, number>>({});
   const [addresses, setAddresses] = useState<AddressOut[]>([]);
   const [selAddrId, setSelAddrId] = useState<string>();
   const formatAddr = (a: AddressOut) =>
     `${a.receiver} ${a.phone} ${a.province}${a.city}${a.district}${a.detail}`;
 
+  const [loadError, setLoadError] = useState<string | null>(null);
   const load = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [cart, mine, cats, addrs] = await Promise.all([
         getCart(),
@@ -64,7 +75,25 @@ export default function Cart() {
         listAddresses(),
       ]);
       setItems(cart);
-      setSelectedIds((prev) => prev.filter((id) => cart.some((it) => it.id === id)));
+      lastOkQtyRef.current = Object.fromEntries(cart.map((it) => [it.id, it.quantity]));
+      // 从商品详情「立即购买」进来时只勾选该商品；否则首次进入默认全选，
+      // 避免用户点结算才发现"未选择商品"。之后只剔除已不存在的条目，不覆盖手动取消
+      const buyNowProductId = (location.state as { buyNowProductId?: string } | null)
+        ?.buyNowProductId;
+      setSelectedIds((prev) => {
+        if (buyNowProductId) {
+          const hit = cart.filter((it) => it.product_id === buyNowProductId).map((it) => it.id);
+          if (hit.length) {
+            selectionInitedRef.current = true;
+            return hit;
+          }
+        }
+        if (!selectionInitedRef.current) {
+          selectionInitedRef.current = true;
+          return cart.map((it) => it.id);
+        }
+        return prev.filter((id) => cart.some((it) => it.id === id));
+      });
       setCoupons(mine.filter((c) => !c.is_used));
       setCategories(cats);
       setAddresses(addrs);
@@ -73,8 +102,8 @@ export default function Cart() {
         setSelAddrId(def.id);
         setAddress(formatAddr(def));
       }
-    } catch {
-      /* 忽略 */
+    } catch (e) {
+      setLoadError(getErrorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -106,23 +135,58 @@ export default function Cart() {
     selectedItems.map((it) => it.merchant_id).filter(Boolean) as string[],
   );
 
-  const couponApplicable = (c: UserCouponOut): boolean => {
-    if (c.applicable_category && !cartCategorySlugs.has(c.applicable_category)) return false;
-    if (c.merchant_id && !cartMerchantIds.has(c.merchant_id)) return false;
-    return true;
+  // 与后端 compute_discount 对齐：同时校验适用范围（品类/商家）与满减门槛，
+  // 返回 { ok, reason }，reason 用于向用户说明为何不可用。
+  const couponCheck = (
+    c: UserCouponOut,
+  ): { ok: boolean; reason: string } => {
+    if (c.applicable_category && !cartCategorySlugs.has(c.applicable_category))
+      return { ok: false, reason: t("cart.couponMismatchCategory") };
+    if (c.merchant_id && !cartMerchantIds.has(c.merchant_id))
+      return { ok: false, reason: t("cart.couponMismatchMerchant") };
+    if (Number(c.threshold) > 0 && subtotal < Number(c.threshold))
+      return { ok: false, reason: t("cart.couponNotEnough") };
+    return { ok: true, reason: "" };
   };
+  const couponApplicable = (c: UserCouponOut): boolean => couponCheck(c).ok;
+  // 每次进入购物车路由时重新拉取最新数据（加购后切换回来能看到）
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
+
+  // 卸载前把最后一次（尚未防抖发出的）数量尽力同步给后端，避免丢失
+  useEffect(() => {
+    return () => {
+      pendingRef.current.forEach((entry, id) => {
+        if (entry.timer) clearTimeout(entry.timer);
+        updateCartItem(id, entry.qty).catch(() => {});
+      });
+      pendingRef.current.clear();
+    };
   }, []);
 
-  const changeQty = async (id: string, q: number) => {
-    try {
-      await updateCartItem(id, q);
-      load();
-    } catch (e) {
-      const err = e as AxiosError<ApiError>;
-      message.error(err.response?.data?.detail || t("cart.updateFail"));
-    }
+  // 改数量：本地乐观更新（金额立刻跟着变），300ms 防抖后只发一次后端请求；
+  // 按住步进器 1→10 也只同步最终值，不再触发 10 次请求 + 全屏 Spinner 闪烁。
+  // 失败则回滚到"上次与服务端一致"的数量并提示。
+  const changeQty = (id: string, q: number) => {
+    setItems((s) => s.map((it) => (it.id === id ? { ...it, quantity: q } : it)));
+    const pending = pendingRef.current;
+    const entry = pending.get(id) ?? { timer: 0, qty: 0 };
+    entry.qty = q;
+    if (entry.timer) clearTimeout(entry.timer);
+    entry.timer = window.setTimeout(async () => {
+      pending.delete(id);
+      try {
+        await updateCartItem(id, entry.qty);
+        lastOkQtyRef.current[id] = entry.qty;
+      } catch (e) {
+        setItems((s) => s.map((it) => (it.id === id ? { ...it, quantity: lastOkQtyRef.current[id] ?? it.quantity } : it)));
+        const err = e as AxiosError<ApiError>;
+        message.error(err.response?.data?.detail || t("cart.updateFail"));
+      }
+    }, 300);
+    pending.set(id, entry);
   };
   const remove = async (id: string) => {
     try {
@@ -160,6 +224,16 @@ export default function Cart() {
     }
     setSubmitting(true);
     try {
+      const selAddr =
+        addresses.find((a) => a.id === selAddrId) ||
+        (addresses[0] && address.trim() ? addresses[0] : undefined);
+      const receiver = selAddr?.receiver ?? "";
+      const phone = selAddr?.phone ?? "";
+      if (!receiver || !phone) {
+        message.warning(t("cart.receiverRequired"));
+        setSubmitting(false);
+        return;
+      }
       const order = await checkout(address.trim(), {
         receiver: receiver.trim(),
         contact: phone.trim(),
@@ -173,8 +247,7 @@ export default function Cart() {
       message.success(t("cart.orderSuccess"));
       navigate(`/orders/${order.id}`);
     } catch (e) {
-      const err = e as AxiosError<ApiError>;
-      message.error(err.response?.data?.detail || t("cart.orderFail"));
+      message.error(getErrorMessage(e) || t("cart.orderFail"));
     } finally {
       setSubmitting(false);
     }
@@ -193,9 +266,9 @@ export default function Cart() {
   const assembleGap = (() => {
     const cands = coupons
       .filter(couponApplicable)
-      .filter((c) => c.type === "discount" && c.threshold && subtotal < c.threshold);
+      .filter((c) => c.type === "discount" && c.threshold && subtotal < Number(c.threshold));
     if (cands.length === 0) return null;
-    return Math.min(...cands.map((c) => (c.threshold ?? 0) - subtotal));
+    return Math.min(...cands.map((c) => (Number(c.threshold) || 0) - subtotal));
   })();
   // 前端计算最优券（后端暂无 best 接口），取可适用且优惠力度最大者
   const applyBest = () => {
@@ -222,7 +295,28 @@ export default function Cart() {
   };
 
   if (loading) return <div className="text-center py-20"><Spin /></div>;
-  if (items.length === 0) return <Empty description={t("cart.empty")} className="py-20" />;
+  // 加载失败必须与"购物车是空的"区分开
+  if (loadError)
+    return (
+      <Result
+        status="warning"
+        title={t("state.errorTitle")}
+        subTitle={loadError}
+        extra={
+          <Button type="primary" icon={<ReloadOutlined />} onClick={load}>
+            {t("common.retry")}
+          </Button>
+        }
+      />
+    );
+  if (items.length === 0)
+    return (
+      <Empty description={t("cart.empty")} className="py-20">
+        <Button type="primary" onClick={() => navigate("/market")}>
+          {t("favorites.browse")}
+        </Button>
+      </Empty>
+    );
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
@@ -348,7 +442,7 @@ export default function Cart() {
                   value={couponId}
                   onChange={(v) => setCouponId(v)}
                   options={coupons.map((c) => {
-                    const ok = couponApplicable(c);
+                    const chk = couponCheck(c);
                     const hint =
                       c.type === "discount"
                         ? t("coupon.type.discount")
@@ -357,10 +451,10 @@ export default function Cart() {
                             .replace("{value}", c.value);
                     return {
                       value: c.id,
-                      label: ok
+                      label: chk.ok
                         ? `${c.name}（${hint}）`
-                        : `${c.name}（${hint} · ${t("cart.couponNotApplicable")}）`,
-                      disabled: !ok,
+                        : `${c.name}（${hint} · ${chk.reason}）`,
+                      disabled: !chk.ok,
                     };
                   })}
                 />
@@ -389,7 +483,30 @@ export default function Cart() {
         </Card>
 
         <Card className="card-soft">
-          <div className="flex items-center justify-between">
+          {/* 金额构成逐项列出：用户付款前能自己算清每一分钱从哪来 */}
+          <div className="space-y-1.5 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">{t("cart.itemsSubtotal")}</span>
+              <span className="text-slate-700">¥{money(subtotal)}</span>
+            </div>
+            {cDisc > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500">{t("cart.couponDiscount")}</span>
+                <span className="text-emerald-600">-¥{money(cDisc)}</span>
+              </div>
+            )}
+            {pDisc > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500">{t("cart.pointsDiscount")}</span>
+                <span className="text-emerald-600">-¥{money(pDisc)}</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">{t("cart.shipping")}</span>
+              <span className="text-emerald-600">{t("cart.freeShipping")}</span>
+            </div>
+          </div>
+          <div className="flex items-center justify-between border-t border-slate-100 mt-3 pt-3">
             <span className="text-slate-500">{t("cart.finalPrice")}</span>
             <div className="flex items-center gap-2">
               {cDisc + pDisc > 0 && (

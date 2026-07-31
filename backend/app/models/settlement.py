@@ -27,7 +27,7 @@ def _utcnow() -> datetime:
 
 class Settlement(Base):
     __tablename__ = "settlements"
-    __table_args__ = (UniqueConstraint("order_id", name="uq_settlement_order"),)
+    __table_args__ = (UniqueConstraint("order_id", "merchant_id", name="uq_settlement_order_merchant"),)
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     order_id = Column(
@@ -43,4 +43,4 @@ class Settlement(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
     settled_at = Column(DateTime(timezone=True), nullable=True)
 
-    order = relationship("Order", back_populates="settlement", uselist=False)
+    order = relationship("Order", back_populates="settlement")

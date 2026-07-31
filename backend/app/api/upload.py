@@ -24,6 +24,17 @@ _MAGIC_BYTES = {
 }
 MAX_SIZE = 5 * 1024 * 1024  # 5MB
 
+# 视频上传（工单附件支持视频）
+VIDEO_CONTENT_TYPES = {
+    "video/mp4",
+    "video/webm",
+    "video/quicktime",
+    "video/x-msvideo",
+    "video/x-matroska",
+}
+VIDEO_EXT = {"mp4", "webm", "mov", "avi", "mkv"}
+MAX_VIDEO_SIZE = 50 * 1024 * 1024  # 50MB
+
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
@@ -93,4 +104,50 @@ async def upload_image(
     await asyncio.to_thread(_write_file, save_path, data)
     # P1-13：写入后压缩（同样放到线程池，避免阻塞）
     await asyncio.to_thread(_optimize, save_path, ext)
+    return UploadOut(url=f"/uploads/{filename}", filename=filename)
+
+
+def _validate_video_magic(data: bytes) -> str | None:
+    """根据文件头魔数识别真实视频类型，规避仅靠扩展名/Content-Type 的伪造（P7）。"""
+    # MP4 / MOV：偏移 4 处为 "ftyp"
+    if len(data) > 12 and data[4:8] == b"ftyp":
+        return "mov" if data[8:12] == b"qt  " else "mp4"
+    # WebM / MKV：EBML 头
+    if data.startswith(b"\x1a\x45\xdf\xa3"):
+        return "webm"
+    # AVI：RIFF....AVI
+    if data.startswith(b"RIFF") and len(data) > 12 and data[8:12] == b"AVI ":
+        return "avi"
+    return None
+
+
+@router.post("/video", response_model=UploadOut)
+async def upload_video(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> UploadOut:
+    content_type = (file.content_type or "").lower()
+    if content_type not in VIDEO_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="仅支持 mp4/webm/mov/avi/mkv 视频",
+        )
+    data = await file.read()
+    if len(data) > MAX_VIDEO_SIZE:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="视频大小不能超过 50MB")
+
+    # P7：校验真实文件类型（魔数），防止上传伪装成视频的可执行文件
+    real_ext = _validate_video_magic(data)
+    if real_ext is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="文件内容并非合法视频",
+        )
+    ext = real_ext if real_ext in VIDEO_EXT else "mp4"
+
+    filename = f"{uuid.uuid4().hex}.{ext}"
+    save_path = os.path.join(UPLOAD_DIR, filename)
+    # P4：文件写入放到线程池，避免阻塞事件循环
+    await asyncio.to_thread(_write_file, save_path, data)
     return UploadOut(url=f"/uploads/{filename}", filename=filename)

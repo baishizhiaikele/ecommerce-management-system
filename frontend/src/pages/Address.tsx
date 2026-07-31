@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import type { AxiosError } from "axios";
-import { Card, Button, Modal, Form, Input, Switch, Popconfirm, message, Empty, Tag } from "antd";
+import { Card, Button, Modal, Form, Input, Switch, Popconfirm, message, Empty, Tag, Cascader } from "antd";
 import { Plus, Edit, Delete, MapPin } from "lucide-react";
-import { listAddresses, createAddress, updateAddress, deleteAddress, AddressOut } from "../api";
+import { listAddresses, createAddress, updateAddress, deleteAddress, getErrorMessage, AddressOut } from "../api";
+import { REGION_OPTIONS } from "../data/regions";
 import { useI18n } from "../i18n";
 
 export default function AddressBook() {
@@ -15,8 +16,9 @@ export default function AddressBook() {
   const load = async () => {
     try {
       setList(await listAddresses());
-    } catch {
-      /* 忽略 */
+    } catch (e) {
+      // 地址列表加载失败不能静默：否则用户会以为自己没存过地址，重复新建
+      message.error(getErrorMessage(e));
     }
   };
   useEffect(() => {
@@ -30,14 +32,30 @@ export default function AddressBook() {
   };
   const openEdit = (a: AddressOut) => {
     setEditing(a);
-    form.setFieldsValue(a);
+    // 后端按省/市/区三字段存储，回填时拼成级联选择器的 [省,市,区] 数组
+    form.setFieldsValue({ ...a, region: [a.province, a.city, a.district] });
     setOpen(true);
   };
   const submit = async () => {
-    const v = await form.validateFields();
+    // 校验失败时 validateFields 会 reject，不拦住会变成未捕获异常
+    let v: Record<string, unknown>;
     try {
-      if (editing) await updateAddress(editing.id, v);
-      else await createAddress(v);
+      v = await form.validateFields();
+    } catch {
+      return;
+    }
+    try {
+      // 级联选择器的值是 [省,市,区] 数组，拆回后端期望的三字段
+      const region = (v.region as string[] | undefined) ?? [];
+      const { region: _omit, ...rest } = v;
+      const payload = {
+        ...rest,
+        province: region[0] ?? "",
+        city: region[1] ?? "",
+        district: region[2] ?? "",
+      } as Omit<AddressOut, "id" | "user_id">;
+      if (editing) await updateAddress(editing.id, payload);
+      else await createAddress(payload);
       message.success(t("address.saved"));
       setOpen(false);
       load();
@@ -114,22 +132,41 @@ export default function AddressBook() {
           <Form.Item name="receiver" label={t("address.name")} rules={[{ required: true, message: t("address.reqReceiver") }]}>
             <Input placeholder={t("address.phReceiver")} />
           </Form.Item>
-          <Form.Item name="phone" label={t("address.phone")} rules={[{ required: true, message: t("address.reqPhone") }]}>
-            <Input placeholder={t("address.phPhone")} />
+          <Form.Item
+            name="phone"
+            label={t("address.phone")}
+            normalize={(v?: string) => (v ?? "").replace(/\s/g, "")}
+            rules={[
+              { required: true, message: t("address.reqPhone") },
+              {
+                // 11 位手机号或带区号固话，格式错了会直接导致配送联系不上
+                pattern: /^(1[3-9]\d{9}|0\d{2,3}-?\d{7,8})$/,
+                message: t("address.invalidPhone"),
+              },
+            ]}
+          >
+            <Input placeholder={t("address.phPhone")} maxLength={13} inputMode="tel" />
           </Form.Item>
-          <div className="grid grid-cols-3 gap-2">
-            <Form.Item name="province" label={t("address.province")} rules={[{ required: true, message: t("address.reqProvince") }]}>
-              <Input placeholder={t("address.province")} />
-            </Form.Item>
-            <Form.Item name="city" label={t("address.city")} rules={[{ required: true, message: t("address.reqCity") }]}>
-              <Input placeholder={t("address.city")} />
-            </Form.Item>
-            <Form.Item name="district" label={t("address.district")} rules={[{ required: true, message: t("address.reqDistrict") }]}>
-              <Input placeholder={t("address.district")} />
-            </Form.Item>
-          </div>
-          <Form.Item name="detail" label={t("address.detail")} rules={[{ required: true, message: t("address.reqDetail") }]}>
-            <Input.TextArea rows={2} placeholder={t("address.phDetail")} />
+          <Form.Item
+            name="region"
+            label={t("address.region")}
+            rules={[{ required: true, message: t("address.reqRegion") }]}
+          >
+            <Cascader
+              options={REGION_OPTIONS}
+              placeholder={t("address.phRegion")}
+              expandTrigger="hover"
+            />
+          </Form.Item>
+          <Form.Item
+            name="detail"
+            label={t("address.detail")}
+            rules={[
+              { required: true, message: t("address.reqDetail") },
+              { min: 5, message: t("address.detailTooShort") },
+            ]}
+          >
+            <Input.TextArea rows={2} placeholder={t("address.phDetail")} maxLength={120} showCount />
           </Form.Item>
           <Form.Item name="is_default" label={t("address.setDefault")} valuePropName="checked">
             <Switch />

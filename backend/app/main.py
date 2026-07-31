@@ -1,5 +1,6 @@
 import asyncio
 import importlib
+import logging
 import os
 from pathlib import Path
 
@@ -75,6 +76,8 @@ importlib.import_module("app.models")
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
+logger = logging.getLogger(__name__)
+
 
 def _run_alembic_upgrade() -> None:
     """在独立线程中同步执行 Alembic 升级，避免与运行中的事件循环冲突。"""
@@ -82,69 +85,118 @@ def _run_alembic_upgrade() -> None:
     command.upgrade(cfg, "head")
 
 
+# ---- 演进式 schema 补充列定义（幂等；生产环境应改用 Alembic migration）----
+_DEMO_COLUMN_DEFS = [
+    ("reviews", "reply", "ALTER TABLE reviews ADD COLUMN reply TEXT"),
+    ("reviews", "is_pinned", "ALTER TABLE reviews ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0"),
+    ("order_items", "variant_info", "ALTER TABLE order_items ADD COLUMN variant_info TEXT"),
+    ("order_items", "variant_id", "ALTER TABLE order_items ADD COLUMN variant_id TEXT"),
+    ("coupons", "applicable_category", "ALTER TABLE coupons ADD COLUMN applicable_category VARCHAR(80)"),
+    ("orders", "refund_amount", "ALTER TABLE orders ADD COLUMN refund_amount NUMERIC NOT NULL DEFAULT 0"),
+    ("orders", "refund_rejections", "ALTER TABLE orders ADD COLUMN refund_rejections INTEGER NOT NULL DEFAULT 0"),
+    ("cart_items", "variant_id", "ALTER TABLE cart_items ADD COLUMN variant_id TEXT"),
+    ("reviews", "helpful_count", "ALTER TABLE reviews ADD COLUMN helpful_count INTEGER NOT NULL DEFAULT 0"),
+    ("reviews", "report_count", "ALTER TABLE reviews ADD COLUMN report_count INTEGER NOT NULL DEFAULT 0"),
+    ("products", "warning_threshold", "ALTER TABLE products ADD COLUMN warning_threshold INTEGER NOT NULL DEFAULT 10"),
+    ("orders", "return_tracking_no", "ALTER TABLE orders ADD COLUMN return_tracking_no VARCHAR(60)"),
+    ("orders", "return_carrier", "ALTER TABLE orders ADD COLUMN return_carrier VARCHAR(60)"),
+    ("orders", "dispute_reason", "ALTER TABLE orders ADD COLUMN dispute_reason TEXT"),
+    ("orders", "return_requested_at", "ALTER TABLE orders ADD COLUMN return_requested_at TIMESTAMP"),
+    ("orders", "return_shipped_at", "ALTER TABLE orders ADD COLUMN return_shipped_at TIMESTAMP"),
+    ("orders", "return_received_at", "ALTER TABLE orders ADD COLUMN return_received_at TIMESTAMP"),
+    ("orders", "exchange_at", "ALTER TABLE orders ADD COLUMN exchange_at TIMESTAMP"),
+    ("payments", "escrow_status", "ALTER TABLE payments ADD COLUMN escrow_status VARCHAR(20) NOT NULL DEFAULT 'none'"),
+    ("payments", "released_at", "ALTER TABLE payments ADD COLUMN released_at TIMESTAMP"),
+    ("promotions", "stock_limit", "ALTER TABLE promotions ADD COLUMN stock_limit INTEGER"),
+    ("promotions", "stock_sold", "ALTER TABLE promotions ADD COLUMN stock_sold INTEGER NOT NULL DEFAULT 0"),
+    ("orders", "delivery_type", "ALTER TABLE orders ADD COLUMN delivery_type VARCHAR(20) NOT NULL DEFAULT 'express'"),
+    ("orders", "pickup_store", "ALTER TABLE orders ADD COLUMN pickup_store VARCHAR(200)"),
+    ("orders", "pickup_code", "ALTER TABLE orders ADD COLUMN pickup_code VARCHAR(12)"),
+    ("orders", "picked_up_at", "ALTER TABLE orders ADD COLUMN picked_up_at TIMESTAMP"),
+    ("reviews", "images", "ALTER TABLE reviews ADD COLUMN images TEXT"),
+    ("reviews", "video", "ALTER TABLE reviews ADD COLUMN video VARCHAR(512)"),
+    ("reviews", "append_content", "ALTER TABLE reviews ADD COLUMN append_content TEXT"),
+    ("reviews", "append_at", "ALTER TABLE reviews ADD COLUMN append_at TIMESTAMP"),
+    ("reviews", "append_images", "ALTER TABLE reviews ADD COLUMN append_images TEXT"),
+    ("reviews", "report_reason", "ALTER TABLE reviews ADD COLUMN report_reason TEXT"),
+    ("promotions", "threshold_amount", "ALTER TABLE promotions ADD COLUMN threshold_amount NUMERIC"),
+    ("promotions", "gift_product_id", "ALTER TABLE promotions ADD COLUMN gift_product_id VARCHAR(36)"),
+    ("promotions", "bundle_count", "ALTER TABLE promotions ADD COLUMN bundle_count INTEGER"),
+    ("promotions", "bundle_price", "ALTER TABLE promotions ADD COLUMN bundle_price NUMERIC"),
+    ("invoices", "pdf_url", "ALTER TABLE invoices ADD COLUMN pdf_url VARCHAR(512)"),
+    ("support_tickets", "order_id", "ALTER TABLE support_tickets ADD COLUMN order_id VARCHAR(36)"),
+    ("support_tickets", "priority", "ALTER TABLE support_tickets ADD COLUMN priority VARCHAR(20) NOT NULL DEFAULT 'normal'"),
+    ("support_tickets", "category", "ALTER TABLE support_tickets ADD COLUMN category VARCHAR(20) NOT NULL DEFAULT 'other'"),
+    ("support_tickets", "satisfaction_rating", "ALTER TABLE support_tickets ADD COLUMN satisfaction_rating INTEGER"),
+    ("support_tickets", "satisfaction_comment", "ALTER TABLE support_tickets ADD COLUMN satisfaction_comment TEXT"),
+    ("support_tickets", "unread_for_buyer", "ALTER TABLE support_tickets ADD COLUMN unread_for_buyer INTEGER NOT NULL DEFAULT 0"),
+    ("support_tickets", "unread_for_merchant", "ALTER TABLE support_tickets ADD COLUMN unread_for_merchant INTEGER NOT NULL DEFAULT 0"),
+    ("support_messages", "is_internal", "ALTER TABLE support_messages ADD COLUMN is_internal INTEGER NOT NULL DEFAULT 0"),
+]
+_DEMO_ENUM_UPDATES = [
+    "UPDATE support_tickets SET status = LOWER(status) WHERE status IN ('OPEN','ANSWERED','CLOSED')",
+    "UPDATE support_tickets SET priority = LOWER(priority) WHERE priority IN ('LOW','NORMAL','HIGH','URGENT')",
+    "UPDATE support_tickets SET category = LOWER(category) WHERE category IN ('INQUIRY','AFTERSALE','LOGISTICS','OTHER')",
+    "UPDATE support_messages SET sender_role = LOWER(sender_role) WHERE sender_role IN ('BUYER','MERCHANT','AI')",
+]
+
+
 async def _ensure_demo_columns() -> None:
-    """演示项目演进式补充列（幂等，重复执行安全）；生产环境应改用 Alembic migration。"""
-    from sqlalchemy import text
+    """演示项目演进式补充列（幂等，重复执行安全）；生产环境应改用 Alembic migration。
 
-    from app.db.session import engine
+    使用**同步引擎**执行，规避 aiosqlite 异步连接上 run_sync 在 uvicorn 事件循环下的死锁。
+    """
+    from sqlalchemy import create_engine, inspect, text
+    from sqlalchemy.pool import NullPool
 
-    statements = [
-        "ALTER TABLE reviews ADD COLUMN reply TEXT",
-        "ALTER TABLE reviews ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0",
-        "ALTER TABLE order_items ADD COLUMN variant_info TEXT",
-        "ALTER TABLE order_items ADD COLUMN variant_id TEXT",
-        "ALTER TABLE coupons ADD COLUMN applicable_category VARCHAR(80)",
-        "ALTER TABLE orders ADD COLUMN refund_amount NUMERIC NOT NULL DEFAULT 0",
-        "ALTER TABLE cart_items ADD COLUMN variant_id TEXT",
-        "ALTER TABLE reviews ADD COLUMN helpful_count INTEGER NOT NULL DEFAULT 0",
-        "ALTER TABLE reviews ADD COLUMN report_count INTEGER NOT NULL DEFAULT 0",
-        "ALTER TABLE products ADD COLUMN warning_threshold INTEGER NOT NULL DEFAULT 10",
-        "ALTER TABLE orders ADD COLUMN return_tracking_no VARCHAR(60)",
-        "ALTER TABLE orders ADD COLUMN return_carrier VARCHAR(60)",
-        "ALTER TABLE orders ADD COLUMN dispute_reason TEXT",
-        "ALTER TABLE orders ADD COLUMN return_requested_at TIMESTAMP",
-        "ALTER TABLE orders ADD COLUMN return_shipped_at TIMESTAMP",
-        "ALTER TABLE orders ADD COLUMN return_received_at TIMESTAMP",
-        "ALTER TABLE orders ADD COLUMN exchange_at TIMESTAMP",
-        "ALTER TABLE payments ADD COLUMN escrow_status VARCHAR(20) NOT NULL DEFAULT 'none'",
-        "ALTER TABLE payments ADD COLUMN released_at TIMESTAMP",
-        "ALTER TABLE promotions ADD COLUMN stock_limit INTEGER",
-        "ALTER TABLE promotions ADD COLUMN stock_sold INTEGER NOT NULL DEFAULT 0",
-        "ALTER TABLE orders ADD COLUMN delivery_type VARCHAR(20) NOT NULL DEFAULT 'express'",
-        "ALTER TABLE orders ADD COLUMN pickup_store VARCHAR(200)",
-        "ALTER TABLE orders ADD COLUMN pickup_code VARCHAR(12)",
-        "ALTER TABLE orders ADD COLUMN picked_up_at TIMESTAMP",
-        "ALTER TABLE reviews ADD COLUMN images TEXT",
-        "ALTER TABLE reviews ADD COLUMN video VARCHAR(512)",
-        "ALTER TABLE reviews ADD COLUMN append_content TEXT",
-        "ALTER TABLE reviews ADD COLUMN append_at TIMESTAMP",
-        "ALTER TABLE reviews ADD COLUMN append_images TEXT",
-        "ALTER TABLE promotions ADD COLUMN threshold_amount NUMERIC",
-        "ALTER TABLE promotions ADD COLUMN gift_product_id VARCHAR(36)",
-        "ALTER TABLE promotions ADD COLUMN bundle_count INTEGER",
-        "ALTER TABLE promotions ADD COLUMN bundle_price NUMERIC",
-        "ALTER TABLE invoices ADD COLUMN pdf_url VARCHAR(512)",
-        # 客服工单增强：优先级/分类/订单关联/满意度/未读计数/内部备注
-        "ALTER TABLE support_tickets ADD COLUMN order_id VARCHAR(36)",
-        "ALTER TABLE support_tickets ADD COLUMN priority VARCHAR(20) NOT NULL DEFAULT 'normal'",
-        "ALTER TABLE support_tickets ADD COLUMN category VARCHAR(20) NOT NULL DEFAULT 'other'",
-        "ALTER TABLE support_tickets ADD COLUMN satisfaction_rating INTEGER",
-        "ALTER TABLE support_tickets ADD COLUMN satisfaction_comment TEXT",
-        "ALTER TABLE support_tickets ADD COLUMN unread_for_buyer INTEGER NOT NULL DEFAULT 0",
-        "ALTER TABLE support_tickets ADD COLUMN unread_for_merchant INTEGER NOT NULL DEFAULT 0",
-        "ALTER TABLE support_messages ADD COLUMN is_internal INTEGER NOT NULL DEFAULT 0",
-        # 客服工单枚举值归一：统一存储为枚举 value（小写），与新增列 DEFAULT 及 API/前端一致
-        "UPDATE support_tickets SET status = LOWER(status) WHERE status IN ('OPEN','ANSWERED','CLOSED')",
-        "UPDATE support_tickets SET priority = LOWER(priority) WHERE priority IN ('LOW','NORMAL','HIGH','URGENT')",
-        "UPDATE support_tickets SET category = LOWER(category) WHERE category IN ('INQUIRY','AFTERSALE','LOGISTICS','OTHER')",
-        "UPDATE support_messages SET sender_role = LOWER(sender_role) WHERE sender_role IN ('BUYER','MERCHANT','AI')",
-    ]
-    async with engine.begin() as conn:
-        for stmt in statements:
-            try:
-                await conn.execute(text(stmt))
-            except Exception:  # noqa: BLE001
-                pass
+    _url = settings.async_database_url
+    _sync_url = _url.replace("sqlite+aiosqlite", "sqlite") if _url.startswith("sqlite") else _url
+    engine = create_engine(_sync_url, poolclass=NullPool)
+    try:
+        insp = inspect(engine)
+        tables = set(insp.get_table_names())
+        existing_cols = {
+            tbl: {c["name"] for c in insp.get_columns(tbl)} for tbl in tables
+        }
+        pending_ddl = [
+            sql for (tbl, col, sql) in _DEMO_COLUMN_DEFS
+            if tbl not in tables or col not in existing_cols.get(tbl, set())
+        ]
+        with engine.begin() as conn:
+            for stmt in pending_ddl + _DEMO_ENUM_UPDATES:
+                try:
+                    conn.execute(text(stmt))
+                except Exception as e:  # noqa: BLE001
+                    logger.warning("ensure_demo_columns skip (已存在或类型不兼容): %s | %s", stmt, e)
+    finally:
+        engine.dispose()
+
+
+async def _reconcile_settlement_index() -> None:
+    """兼容旧库：结算唯一约束由 (order_id) 升级为 (order_id, merchant_id)。
+
+    旧库仅存在 uq_settlement_order，多商家订单无法分别结算；此处幂等删除旧索引
+    并创建新索引（仅 SQLite 需要，其他数据库由 Alembic migration 负责）。
+    """
+    _url = settings.async_database_url
+    if not _url.startswith("sqlite"):
+        return
+    from sqlalchemy import create_engine, text
+    from sqlalchemy.pool import NullPool
+
+    _sync_url = _url.replace("sqlite+aiosqlite", "sqlite")
+    engine = create_engine(_sync_url, poolclass=NullPool)
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("DROP INDEX IF EXISTS uq_settlement_order"))
+            conn.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_settlement_order_merchant "
+                    "ON settlements(order_id, merchant_id)"
+                )
+            )
+    finally:
+        engine.dispose()
 
 
 async def _ensure_demo_indexes() -> None:
@@ -178,9 +230,20 @@ async def run_migrations() -> None:
     from app.db.base import Base
     from app.db.session import engine
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # 建表兜底：用同步引擎执行，规避 aiosqlite 异步连接 run_sync 死锁
+    from sqlalchemy import create_engine
+    from sqlalchemy.pool import NullPool
+
+    _url = settings.async_database_url
+    _sync_url = _url.replace("sqlite+aiosqlite", "sqlite") if _url.startswith("sqlite") else _url
+    _sync_engine = create_engine(_sync_url, poolclass=NullPool)
+    try:
+        Base.metadata.create_all(_sync_engine)
+    finally:
+        _sync_engine.dispose()
     await _ensure_demo_columns()
+    # 兼容旧库：结算唯一约束升级为 (order_id, merchant_id)，支持多商家分别结算
+    await _reconcile_settlement_index()
 
 
 @asynccontextmanager

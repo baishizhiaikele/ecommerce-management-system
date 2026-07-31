@@ -63,6 +63,10 @@ def _in_valid_window(coupon: Coupon, now: datetime | None = None) -> bool:
         return False
     if coupon.end_at and now > _aware(coupon.end_at):
         return False
+    # 个人券可能有独立过期时间，必须一并校验（否则 end_at 为空时券永久有效）
+    expire_at = getattr(coupon, "expire_at", None)
+    if expire_at and now > _aware(expire_at):
+        return False
     return True
 
 
@@ -74,7 +78,8 @@ async def list_active_coupons(db: AsyncSession) -> list[Coupon]:
 
 
 async def claim_coupon(db: AsyncSession, user_id: str, coupon_id: str) -> UserCoupon:
-    coupon = await db.get(Coupon, coupon_id)
+    # 行锁：防止高并发下限量券被超发（与 order_service 锁买家行思路一致）
+    coupon = (await db.scalars(select(Coupon).where(Coupon.id == coupon_id).with_for_update())).first()
     if not coupon or not coupon.is_active:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="优惠券不存在或已下架")
     if not _in_valid_window(coupon):

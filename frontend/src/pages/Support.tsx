@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import type { AxiosError } from "axios";
 import {
   Badge,
@@ -6,8 +7,10 @@ import {
   Checkbox,
   Divider,
   Drawer,
+  Dropdown,
   Form,
   Empty,
+  Image,
   Input,
   List,
   Modal,
@@ -32,12 +35,15 @@ import {
   listTickets,
   rateTicket,
   replyTicket,
+  revokeMessage,
   closeTicket,
   deleteTicket,
   deleteTickets,
   supportUnread,
   uploadImage,
+  uploadVideo,
   type OrderOut,
+  type SupportMessageOut,
   type SupportTicketOut,
   type TicketCategory,
   type TicketPriority,
@@ -45,6 +51,7 @@ import {
 import { useAuth } from "../store/auth";
 import { useI18n } from "../i18n";
 import { getErrorMessage } from "../api/client";
+import { parseTime } from "../utils/format";
 
 interface ApiError {
   detail?: string;
@@ -72,17 +79,58 @@ function isImage(url: string): boolean {
   return /\.(jpg|jpeg|png|gif|webp|bmp)(\?.*)?$/i.test(url);
 }
 
-function AttachmentList({ urls }: { urls: string[] }) {
+function isVideo(url: string): boolean {
+  return /\.(mp4|webm|mov|avi|mkv|ogg)(\?.*)?$/i.test(url);
+}
+
+// 撤回窗口：发送后 2 分钟内可撤回
+const REVOKE_WINDOW_MS = 2 * 60 * 1000;
+
+function canRecall(m: SupportMessageOut, role: "buyer" | "merchant" | "ai"): boolean {
+  if (m.is_revoked) return false;
+  if (m.sender_role !== role) return false;
+  const created = parseTime(m.created_at)?.getTime();
+  if (!created) return false;
+  return Date.now() - created <= REVOKE_WINDOW_MS;
+}
+
+function AttachmentList({ urls, topMargin = true }: { urls: string[]; topMargin?: boolean }) {
+  const { t } = useI18n();
   if (!urls || urls.length === 0) return null;
   return (
-    <Space wrap size={6} style={{ marginTop: 6 }}>
+    <Space wrap size={6} style={{ marginTop: topMargin ? 6 : 0 }}>
       {urls.map((u, i) =>
         isImage(u) ? (
-          <img
+          <Image
             key={i}
             src={u}
-            alt=""
-            style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 6, border: "1px solid #eee" }}
+            width={72}
+            height={72}
+            style={{ objectFit: "cover", borderRadius: 6, border: "1px solid #eee" }}
+            preview={{ mask: t("support.preview") }}
+          />
+        ) : isVideo(u) ? (
+          <video
+            key={i}
+            src={u}
+            controls
+            title={t("support.videoFullscreenHint")}
+            onClick={(e) => {
+              const el = e.currentTarget;
+              if (document.fullscreenElement) {
+                document.exitFullscreen?.();
+              } else {
+                el.requestFullscreen?.().catch(() => {});
+              }
+            }}
+            style={{
+              width: 140,
+              maxHeight: 140,
+              borderRadius: 6,
+              border: "1px solid #eee",
+              background: "#000",
+              cursor: "pointer",
+            }}
           />
         ) : (
           <a key={i} href={u} target="_blank" rel="noreferrer">
@@ -112,14 +160,18 @@ function AttachmentUploader({
     }))
   );
 
-  const sync = (files: UploadFile[]) => {
-    setItems(files);
-    onChange(
-      files
-        .filter((f) => f.status === "done")
-        .map((f) => (f.response as { url?: string })?.url ?? f.url)
-        .filter(Boolean) as string[]
-    );
+  const sync = (updater: UploadFile[] | ((prev: UploadFile[]) => UploadFile[])) => {
+    // 用函数式更新，避免批量选择多文件时闭包里的 items 过期导致部分文件丢失
+    setItems((prev) => {
+      const next = typeof updater === "function" ? (updater as (p: UploadFile[]) => UploadFile[])(prev) : updater;
+      onChange(
+        next
+          .filter((f) => f.status === "done")
+          .map((f) => (f.response as { url?: string })?.url ?? f.url)
+          .filter(Boolean) as string[]
+      );
+      return next;
+    });
   };
 
   // 父组件清空附件（如发送成功后）时，同步清空本地预览列表
@@ -127,31 +179,43 @@ function AttachmentUploader({
     if (!value || value.length === 0) setItems([]);
   }, [value]);
 
+  const appendFile = (file: UploadFile) => {
+    sync((prev) => [...prev, file]);
+  };
+
   return (
     <Upload
       multiple
       listType="picture"
+      accept="image/*,video/*"
       fileList={items}
+      beforeUpload={(file) => {
+        const ok = file.type.startsWith("image/") || file.type.startsWith("video/");
+        if (!ok) {
+          message.error(t("support.onlyMedia"));
+          return Upload.LIST_IGNORE;
+        }
+        return true;
+      }}
       customRequest={async (options) => {
+        const file = options.file as File;
+        const isVideoFile = file.type.startsWith("video/");
         try {
-          const res = await uploadImage(options.file as File);
+          const res = isVideoFile ? await uploadVideo(file) : await uploadImage(file);
           options.onSuccess?.(res);
-          sync([
-            ...items,
-            {
-              uid: `${Date.now()}-${Math.random()}`,
-              name: (options.file as File).name,
-              status: "done",
-              url: res.url,
-              response: res,
-            } as UploadFile,
-          ]);
+          appendFile({
+            uid: `${Date.now()}-${Math.random()}`,
+            name: file.name,
+            status: "done",
+            url: res.url,
+            response: res,
+          } as UploadFile);
         } catch (err) {
           options.onError?.(err as Error);
           message.error(`${t("support.uploadFail")}：${getErrorMessage(err)}`);
         }
       }}
-      onRemove={(f) => sync(items.filter((x) => x.uid !== f.uid))}
+      onRemove={(f) => sync((prev) => prev.filter((x) => x.uid !== f.uid))}
     >
       <Button icon={<UploadOutlined />}>{t("support.addAttachment")}</Button>
     </Upload>
@@ -266,6 +330,17 @@ export default function Support() {
       message.error(
         `${t("support.replyFail")}${status ? `（${status}）` : ""}：${typeof detail === "string" ? detail : getErrorMessage(err)}`
       );
+    }
+  };
+
+  // 撤回消息（发送者本人，2 分钟内）
+  const onRevoke = async (messageId: string) => {
+    if (!active) return;
+    try {
+      const t = await revokeMessage(active.id, messageId);
+      setActive(t);
+    } catch (err) {
+      message.error(`${t("support.recallFail")}：${getErrorMessage(err)}`);
     }
   };
 
@@ -638,6 +713,12 @@ export default function Support() {
                 <Input.TextArea
                   value={reply}
                   onChange={(e) => setReply(e.target.value)}
+                  onPressEnter={(e) => {
+                    if (!e.shiftKey) {
+                      e.preventDefault();
+                      onReply();
+                    }
+                  }}
                   placeholder={isInternal ? t("support.notePlaceholder") : t("support.replyPlaceholder")}
                   autoSize={{ minRows: 1, maxRows: 4 }}
                 />
@@ -686,43 +767,76 @@ export default function Support() {
             <Divider style={{ margin: "12px 0" }} />
 
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {visibleMsgs.map((m) =>
-                m.sender_role === "buyer" ? (
-                  <div key={m.id} style={{ alignSelf: "flex-end", maxWidth: "80%" }}>
+              {visibleMsgs.map((m) => {
+                if (m.is_revoked) {
+                  return (
+                    <div key={m.id} style={{ alignSelf: "center", maxWidth: "80%", color: "#999", fontSize: 12 }}>
+                      {t("support.recalled")}
+                    </div>
+                  );
+                }
+                const align = m.sender_role === "buyer" ? "flex-end" : "flex-start";
+                const hasAttach = m.attachments.length > 0;
+                const hasText = !!m.content;
+                let bubble: ReactNode;
+                if (m.sender_role === "buyer") {
+                  bubble = (
                     <div style={{ background: "#f0f0f0", padding: "8px 12px", borderRadius: 10 }}>
-                      {m.content}
-                      <AttachmentList urls={m.attachments.map((a) => a.url)} />
+                      {hasAttach && <AttachmentList urls={m.attachments.map((a) => a.url)} topMargin={false} />}
+                      {hasText && <div style={{ marginTop: hasAttach ? 6 : 0 }}>{m.content}</div>}
                     </div>
-                  </div>
-                ) : m.is_internal ? (
-                  <div key={m.id} style={{ alignSelf: "flex-start", maxWidth: "80%" }}>
-                    <Tag color="gold">{t("support.internalNote")}</Tag>
-                    <div style={{ background: "#fff7e6", border: "1px solid #ffe7ba", padding: "8px 12px", borderRadius: 10 }}>
-                      {m.content}
-                      <AttachmentList urls={m.attachments.map((a) => a.url)} />
-                    </div>
-                  </div>
-                ) : (
-                  <div key={m.id} style={{ alignSelf: "flex-start", maxWidth: "80%" }}>
-                    {m.sender_role === "ai" && (
-                      <Tag color="green" icon={<RobotOutlined />}>
-                        {t("support.aiFirstAnswer")}
-                      </Tag>
-                    )}
-                    <div
-                      style={{
-                        background: m.sender_role === "ai" ? "#f6ffed" : "#e6f4ff",
-                        border: m.sender_role === "ai" ? "1px solid #b7eb8f" : "1px solid #91caff",
-                        padding: "8px 12px",
-                        borderRadius: 10,
-                      }}
-                    >
-                      {m.content}
-                      <AttachmentList urls={m.attachments.map((a) => a.url)} />
-                    </div>
-                  </div>
-                )
-              )}
+                  );
+                } else if (m.is_internal) {
+                  bubble = (
+                    <>
+                      <Tag color="gold">{t("support.internalNote")}</Tag>
+                      <div style={{ background: "#fff7e6", border: "1px solid #ffe7ba", padding: "8px 12px", borderRadius: 10 }}>
+                        {hasAttach && <AttachmentList urls={m.attachments.map((a) => a.url)} topMargin={false} />}
+                        {hasText && <div style={{ marginTop: hasAttach ? 6 : 0 }}>{m.content}</div>}
+                      </div>
+                    </>
+                  );
+                } else {
+                  bubble = (
+                    <>
+                      {m.sender_role === "ai" && (
+                        <Tag color="green" icon={<RobotOutlined />}>
+                          {t("support.aiFirstAnswer")}
+                        </Tag>
+                      )}
+                      <div
+                        style={{
+                          background: m.sender_role === "ai" ? "#f6ffed" : "#e6f4ff",
+                          border: m.sender_role === "ai" ? "1px solid #b7eb8f" : "1px solid #91caff",
+                          padding: "8px 12px",
+                          borderRadius: 10,
+                        }}
+                      >
+                        {hasAttach && <AttachmentList urls={m.attachments.map((a) => a.url)} topMargin={false} />}
+                        {hasText && <div style={{ marginTop: hasAttach ? 6 : 0 }}>{m.content}</div>}
+                      </div>
+                    </>
+                  );
+                }
+
+                const row = <div style={{ alignSelf: align, maxWidth: "80%" }}>{bubble}</div>;
+                const recallable = role ? canRecall(m, role) : false;
+                if (!recallable) return row;
+                return (
+                  <Dropdown
+                    key={m.id}
+                    trigger={["contextMenu"]}
+                    menu={{
+                      items: [{ key: "recall", label: t("support.recall") }],
+                      onClick: ({ key }) => {
+                        if (key === "recall") onRevoke(m.id);
+                      },
+                    }}
+                  >
+                    {row}
+                  </Dropdown>
+                );
+              })}
             </div>
 
             <div ref={bottomRef} />

@@ -117,6 +117,8 @@ async def _build_order_items(
                 product_id=product.id,
                 quantity=item.quantity,
                 price=unit_price,
+                name=product.name,
+                image_url=product.image_url,
                 variant_info=variant_info,
             )
         )
@@ -175,10 +177,14 @@ async def _apply_promotions_and_discounts(
         await use_coupon(db, uc)
     # 积分抵扣（100 积分抵 1 元）
     if use_points and buyer.points:
-        points_used = min(buyer.points, int(subtotal * 100))
+        # 积分抵扣上限按“扣完其他优惠后的剩余应付”换算，防止 discount 超过 subtotal 导致多扣积分
+        remaining = max(0.0, subtotal - discount)
+        points_used = min(buyer.points, int(remaining * 100))
         if points_used:
             discount += points_used / POINTS_REDEEM_RATE
             await add_points(db, buyer.id, PointAction.REDEEM, -points_used, "下单积分抵扣")
+    # 兜底：任何优惠之和不得超过商品小计
+    discount = min(discount, subtotal)
     return discount
 
 
@@ -389,11 +395,25 @@ async def transition_status(
     db: AsyncSession, *, order: Order, target: OrderStatus, actor_id: str, role: str
 ) -> Order:
     prev = order.status
+    # 防御：确保 items 关系已加载，避免调用方未 eager-load 时在异步上下文触发
+    # lazyload 抛出 MissingGreenlet（如 payment webhook 用 db.get 加载 order 的情况）
+    await db.refresh(order, ["items"])
     if not can_transition(prev, target, role):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
         detail=f"不允许从 {order.status.value} 流转到 {target.value}",
     )
+    # 退款驳回次数上限：超过后必须发起平台仲裁，避免无限“驳回-重提”循环（薅羊毛/流程空转）
+    MAX_REFUND_REATTEMPTS = 3
+    if target == OrderStatus.REFUND_REJECTED:
+        order.refund_rejections = (order.refund_rejections or 0) + 1
+    if prev == OrderStatus.REFUND_REJECTED and target == OrderStatus.REFUND_REQUESTED:
+        if (order.refund_rejections or 0) >= MAX_REFUND_REATTEMPTS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"退款已被驳回 {MAX_REFUND_REATTEMPTS} 次，请发起平台仲裁",
+            )
+
     now = await _db_now(db)
     # P2-M5：批量预取订单内商品，避免各状态分支逐 item 查库的 N+1
     _pids = [it.product_id for it in order.items]

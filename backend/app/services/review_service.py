@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.events import bus
 from app.models.order import Order, OrderItem, OrderStatus
@@ -76,7 +77,7 @@ async def create_review(
     db.add(review)
     await record(db, user_id, "review.create", "review", review.id, f"评分{data.rating}")
     await db.commit()
-    await db.refresh(review)
+    await db.refresh(review, ["user"])
     # 异步触发情感分析，不阻塞响应
     await bus.publish("review.created", review_id=review.id)
     return review
@@ -86,20 +87,11 @@ async def list_product_reviews(db: AsyncSession, product_id: str) -> list[Review
     rows = list(
         await db.scalars(
             select(Review)
+            .options(selectinload(Review.user))
             .where(Review.product_id == product_id)
             .order_by(Review.is_pinned.desc(), Review.created_at.desc())
         )
     )
-    # 附带评论者用户名（ReviewOut.username）
-    user_ids = {r.user_id for r in rows}
-    if user_ids:
-        from app.models.user import User
-
-        names = dict(
-            (await db.execute(select(User.id, User.username).where(User.id.in_(user_ids)))).all()
-        )
-        for r in rows:
-            r.username = names.get(r.user_id)  # type: ignore[attr-defined]
     return rows
 
 
@@ -119,6 +111,7 @@ async def list_merchant_reviews(
 ) -> tuple[list[Review], int]:
     stmt = (
         select(Review)
+        .options(selectinload(Review.user))
         .join(Product, Product.id == Review.product_id)
         .where(Product.merchant_id == merchant_id)
     )
@@ -141,7 +134,7 @@ async def reply_review(db: AsyncSession, *, review_id: str, merchant_id: str, co
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权操作")
     review.reply = content
     await db.commit()
-    await db.refresh(review)
+    await db.refresh(review, ["user"])
     return review
 
 
@@ -154,7 +147,7 @@ async def pin_review(db: AsyncSession, *, review_id: str, merchant_id: str, pinn
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权操作")
     review.is_pinned = 1 if pinned else 0
     await db.commit()
-    await db.refresh(review)
+    await db.refresh(review, ["user"])
     return review
 
 
@@ -208,7 +201,7 @@ async def mark_helpful(db: AsyncSession, *, review_id: str, user_id: str) -> Rev
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="评价不存在")
     review.helpful_count = (review.helpful_count or 0) + 1
     await db.commit()
-    await db.refresh(review)
+    await db.refresh(review, ["user"])
     return review
 
 
@@ -223,7 +216,7 @@ async def report_review(
     if reason:
         review.report_reason = reason
     await db.commit()
-    await db.refresh(review)
+    await db.refresh(review, ["user"])
     return review
 
 
@@ -251,5 +244,5 @@ async def append_review(
     if video:
         review.video = video
     await db.commit()
-    await db.refresh(review)
+    await db.refresh(review, ["user"])
     return review

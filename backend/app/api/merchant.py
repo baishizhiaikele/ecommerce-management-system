@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -72,14 +72,24 @@ async def export_orders_pdf(
     if not merchant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="商家不存在")
 
-    orders = list(
+    order_ids = list(
         await db.scalars(
-            select(Order)
-            .where(Order.merchant_id == merchant.id)
-            .order_by(Order.created_at.desc())
-            .limit(500)
+            select(OrderItem.order_id)
+            .join(Product, Product.id == OrderItem.product_id)
+            .where(Product.merchant_id == user.id)
+            .distinct()
         )
     )
+    orders = []
+    if order_ids:
+        orders = list(
+            await db.scalars(
+                select(Order)
+                .where(Order.id.in_(order_ids))
+                .order_by(Order.created_at.desc())
+                .limit(500)
+            )
+        )
 
     try:
         from reportlab.lib import colors

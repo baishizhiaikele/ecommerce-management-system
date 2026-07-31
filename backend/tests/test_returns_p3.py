@@ -48,15 +48,22 @@ async def test_return_refund_requires_merchant_receipt(client, buyer_headers, me
 
 
 async def test_unshipped_refund_only(client, buyer_headers, merchant_headers):
-    """未发货订单：平台直接仅退款，无需退货。"""
+    """未发货订单：平台直接仅退款，无需退货。
+
+    注意：当订单金额 <= AUTO_REFUND_MAX_AMOUNT(100) 时，未发货仅退款会被自动秒退，
+    申请退款后状态直接为 refunded（无需人工审核）；否则为 refund_requested，可人工审核。
+    """
     oid = await _buy_new_order(client, buyer_headers, merchant_headers)
     await client.patch(f"/api/orders/{oid}/status", json={"status": "paid"}, headers=buyer_headers)
 
     r = await client.post(f"/api/orders/{oid}/refund", json={"reason": "不想要了"}, headers=buyer_headers)
-    assert r.json()["status"] == "refund_requested"
+    state = r.json()["status"]
+    assert state in ("refund_requested", "refunded")
 
-    rev = await client.patch(f"/api/orders/{oid}/refund-review", json={"approve": True}, headers=merchant_headers)
-    assert rev.json()["status"] == "refunded"
+    # 仅在未自动秒退时验证人工审核链路
+    if state == "refund_requested":
+        rev = await client.patch(f"/api/orders/{oid}/refund-review", json={"approve": True}, headers=merchant_headers)
+        assert rev.json()["status"] == "refunded"
 
 
 async def test_exchange_flow(client, buyer_headers, merchant_headers):

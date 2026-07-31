@@ -65,7 +65,7 @@ async def register(
 
 
 @router.post("/login", response_model=Token)
-@limiter.limit("10/minute")  # S2：限制登录频率，防暴力破解
+@limiter.limit("30/minute")  # S2：限制登录频率，防暴力破解（本地演示放宽至 30/分钟，避免调试时误触）
 async def login(
     request: Request,
     data: UserLogin,

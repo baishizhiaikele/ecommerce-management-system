@@ -5,7 +5,7 @@ import type { AxiosError } from "axios";
 import { Flame, Zap, Gift, PackagePlus, Percent, Boxes, ShoppingCart } from "lucide-react";
 import { getPromotions, addCartItem, ApiError, type PromotionOut, type PromotionType } from "../api";
 import { useCart } from "../store/cart";
-import { money } from "../utils/format";
+import { money, parseTime } from "../utils/format";
 import { useI18n, translate } from "../i18n";
 import ProductImage from "../components/ProductImage";
 import Reveal from "../components/Reveal";
@@ -44,7 +44,7 @@ function Countdown({ endAt }: { endAt?: string | null }) {
   useEffect(() => {
     if (!endAt) return;
     const tick = () => {
-      const diff = new Date(endAt).getTime() - Date.now();
+      const diff = (parseTime(endAt)?.getTime() ?? 0) - Date.now();
       if (diff <= 0) return setLeft(translate("market.ended"));
       const d = Math.floor(diff / 8.64e7);
       const h = Math.floor((diff % 8.64e7) / 3.6e6);
@@ -75,7 +75,7 @@ export default function Promotions() {
         name: p.product_name || p.title,
         price: finalPrice(p) ?? Number(p.original_price) ?? 0,
         quantity: 1,
-        image_url: p.product_image,
+        image_url: p.product_image ?? undefined,
       });
       message.success(t("pd.addedCart"));
     } catch (e) {

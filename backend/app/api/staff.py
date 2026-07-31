@@ -8,6 +8,7 @@ from app.models.staff import STAFF_PERMISSIONS
 from app.models.user import User
 from app.schemas.staff import StaffCreate, StaffOut, StaffUpdate
 from app.services import subaccount_service
+from app.utils.time import iso_utc
 
 router = APIRouter(prefix="/subaccounts", tags=["staff"])
 
@@ -20,7 +21,7 @@ def _to_out(sub) -> StaffOut:
         username=sub.staff.username,
         permissions=sub.permissions.split(",") if sub.permissions else [],
         is_active=sub.is_active,
-        created_at=sub.created_at.isoformat() if sub.created_at else None,
+        created_at=iso_utc(sub.created_at),
     )
 
 

@@ -5,6 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.favorite import Favorite
 from app.models.product import Product
 
+from app.core.cache import cache_delete
+
 
 async def add_favorite(db: AsyncSession, user_id: str, product_id: str) -> Favorite:
     product = await db.get(Product, product_id)
@@ -21,6 +23,8 @@ async def add_favorite(db: AsyncSession, user_id: str, product_id: str) -> Favor
     db.add(fav)
     await db.commit()
     await db.refresh(fav)
+    # 收藏会改变用户行为序列 → 立即使其推荐缓存失效，下次请求即按新行为重算
+    await cache_delete(f"recommend:{user_id}")
     return fav
 
 
@@ -33,6 +37,8 @@ async def remove_favorite(db: AsyncSession, user_id: str, product_id: str) -> No
     if fav:
         await db.delete(fav)
         await db.commit()
+        # 取消收藏同样改变行为序列 → 失效推荐缓存
+        await cache_delete(f"recommend:{user_id}")
 
 
 async def list_favorites(db: AsyncSession, user_id: str) -> list[Product]:
