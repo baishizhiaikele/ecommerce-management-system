@@ -25,7 +25,8 @@ import {
   MessageOutlined,
   CameraOutlined,
 } from "@ant-design/icons";
-import { getProduct, listProductReviews, listVariants, addCartItem, logView, proxyImg, listProducts, addFavorite, removeFavorite, isFavorited, getErrorMessage, type ProductOut, type ReviewOut, type VariantOut } from "../api";
+import { Heart } from "lucide-react";
+import { getProduct, listProductReviews, listVariants, addCartItem, logView, proxyImg, listProducts, addFavorite, removeFavorite, isFavorited, getPriceHistory, getNotesForProduct, trackAffiliateClick, getErrorMessage, type ProductOut, type ReviewOut, type VariantOut, type PriceHistoryOut, type NoteOut } from "../api";
 import { money, productStatusMeta } from "../utils/format";
 import { useFlashPrice } from "../context/FlashPriceContext";
 import { useAuth } from "../store/auth";
@@ -38,6 +39,7 @@ import ProductChat from "../components/ProductChat";
 import ProductQA from "../components/ProductQA";
 import ProductCard from "../components/ProductCard";
 import Reveal from "../components/Reveal";
+import ARTryOn from "../components/ARTryOn";
 import { CheckCircle2, RotateCcw, ShieldCheck, Zap, PackageCheck, type LucideIcon } from "lucide-react";
 
 // 详情页服务承诺条（对标淘宝/京东信任背书）
@@ -181,6 +183,7 @@ export default function ProductDetail() {
   const [activeImg, setActiveImg] = useState(0);
   const [faved, setFaved] = useState(false);
   const [related, setRelated] = useState<ProductOut[]>([]);
+  const [seedingNotes, setSeedingNotes] = useState<NoteOut[]>([]); // P3-G 种草社交背书
 
   const gallery = useMemo(() => {
     const extra: string[] = [];
@@ -212,10 +215,27 @@ export default function ProductDetail() {
     };
   }, [p?.id, user]);
 
+  // P1-3 历史价格曲线
+  const [priceHistory, setPriceHistory] = useState<PriceHistoryOut | null>(null);
+  useEffect(() => {
+    if (!p?.id) return;
+    let alive = true;
+    getPriceHistory(p.id)
+      .then((r) => alive && setPriceHistory(r))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [p?.id]);
+
   useEffect(() => {
     if (!p?.category_id) return;
     listProducts({ category_id: p.category_id, page_size: 12 })
       .then((r) => setRelated(r.filter((x) => x.id !== p.id).slice(0, 10)))
+      .catch(() => {});
+    // P3-G 种草社交背书：该商品被哪些已审核笔记种草
+    getNotesForProduct(p.id, 12)
+      .then(setSeedingNotes)
       .catch(() => {});
   }, [p?.category_id, p?.id]);
 
@@ -514,6 +534,27 @@ export default function ProductDetail() {
             label: t("qna.title"),
             children: <ProductQA productId={p.id} merchantId={p.merchant_id} />,
           },
+          {
+            key: "price",
+            label: t("pd.priceTrend"),
+            children: <PriceTrendCard data={priceHistory} currentPrice={Number(p.price)} />,
+          },
+          {
+            key: "seed",
+            label: `${t("pd.seeding")} (${seedingNotes.length})`,
+            children: <SeedingNotes notes={seedingNotes} />,
+          },
+          ...(p?.ar_enabled
+            ? [
+                {
+                  key: "ar",
+                  label: t("pd.ar"),
+                  children: (
+                    <ARTryOn productImage={gallery[0]} overlayImage={p?.ar_overlay_url} />
+                  ),
+                },
+              ]
+            : []),
         ]}
       />
 
@@ -566,6 +607,93 @@ export default function ProductDetail() {
       >
         <ProductChat product={p} />
       </Drawer>
+    </div>
+  );
+}
+
+// P3-G 种草社交背书：商品详情页「种草」标签页
+function SeedingNotes({ notes }: { notes: NoteOut[] }) {
+  const { t } = useI18n();
+  const navigate = useNavigate();
+  if (notes.length === 0) {
+    return <Empty className="py-10" description={t("pd.noSeeding")} />;
+  }
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
+      {notes.map((n) => (
+        <div
+          key={n.id}
+          className="flex gap-3 p-3 rounded-xl border border-slate-100 hover:border-indigo-200 cursor-pointer transition-colors"
+          onClick={() => {
+            // 从种草笔记点入，若已挂推广码则归因到作者
+            if (n.affiliate_code) trackAffiliateClick(n.affiliate_code);
+            navigate(`/discover/${n.id}`);
+          }}
+        >
+          {n.images[0] && (
+            <div className="w-16 h-16 rounded-lg overflow-hidden bg-slate-100 shrink-0">
+              <ProductImage src={n.images[0]} name={n.title} height={64} rounded={12} className="w-full h-full object-cover" />
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium truncate">{n.author_name}</span>
+              {n.affiliate_code && <Tag color="green" className="text-xs">{t("note.promoting")}</Tag>}
+            </div>
+            <div className="text-sm font-medium line-clamp-1 mt-0.5">{n.title}</div>
+            <div className="text-xs text-slate-500 line-clamp-2 mt-0.5">{n.content}</div>
+            <div className="text-xs text-rose-500 mt-1 flex items-center gap-1">
+              <Heart size={12} /> {n.likes_count}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// P1-3 历史价格曲线卡片（轻量 SVG 折线，无重图表依赖）
+function PriceTrendCard({ data, currentPrice }: { data: PriceHistoryOut | null; currentPrice: number }) {
+  const { t } = useI18n();
+  if (!data) return <Spin className="block py-6" />;
+  const series = data.series || [];
+  if (series.length === 0) {
+    return <Empty className="py-8" description={t("pd.noPriceHistory")} />;
+  }
+  const prices = series.map((s) => s.price);
+  const min = Math.min(...prices, currentPrice);
+  const max = Math.max(...prices, currentPrice);
+  const W = 320, H = 120, pad = 16;
+  const x = (i: number) => pad + (i * (W - pad * 2)) / Math.max(series.length - 1, 1);
+  const y = (v: number) => H - pad - ((v - min) / (max - min || 1)) * (H - pad * 2);
+  const path = series.map((s, i) => `${i === 0 ? "M" : "L"} ${x(i)} ${y(s.price)}`).join(" ");
+  const cmp = data.compare;
+  return (
+    <div className="py-2">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-md">
+        <polyline fill="none" stroke="#2563eb" strokeWidth={2} points={`${x(0)},${y(prices[0])} ` + series.map((s, i) => `${x(i)},${y(s.price)}`).join(" ")} />
+        <path d={path} fill="none" stroke="#2563eb" strokeWidth={2} />
+        {series.map((s, i) => (
+          <circle key={i} cx={x(i)} cy={y(s.price)} r={3} fill="#2563eb" />
+        ))}
+      </svg>
+      <div className="text-xs text-slate-500 mt-2">
+        {t("pd.priceLow")} {money(min)} · {t("pd.priceHigh")} {money(max)} · {t("pd.currentPrice")} {money(currentPrice)}
+      </div>
+      {cmp && (
+        <div className="text-xs text-slate-500 mt-1">
+          {t("pd.compareAvg")} {money(cmp.avg_price)} · {cmp.our_price > cmp.avg_price ? t("pd.priceHighThanAvg") : cmp.our_price < cmp.avg_price ? t("pd.priceLowThanAvg") : t("pd.priceAvg")}
+        </div>
+      )}
+      <div className="mt-3 space-y-1">
+        {series.map((s, i) => (
+          <div key={i} className="flex justify-between text-xs text-slate-500">
+            <span>{s.time ? new Date(s.time).toLocaleDateString() : "-"}</span>
+            <span>{money(s.price)}</span>
+            <span className="text-slate-400">{s.source}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

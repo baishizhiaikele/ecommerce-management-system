@@ -57,23 +57,28 @@
 
 ### 早已完成（已从路线图移除）
 - ✅ 运费模板、到店自提核销、实时行为序列推荐、知识库自学习、会员等级/PLUS、直播带货、分销裂变、种草社区、AR 试穿、E2E 关键路径覆盖。
+- ✅ **P2 体验增强（2026-07-31 收尾）**：直播分销玩法扩展（商家端改直播价/置顶/切讲解/移品/AI 话术 + 直播间小黄车「分享赚佣金」闭环）、AR 试穿增强（商品 `ar_enabled`/`ar_overlay_url` 字段 + 轻量零依赖 WebAR 叠加组件，已存在 E2E 用例覆盖）、E2E 覆盖扩展（`e2e/flows.spec.ts` 新增浏览→加购→下单 / 种草推荐流→点赞 / 直播→分享赚佣金 三条核心闭环，共 15 条 E2E 用例）。
 
 ### ❌ 真正待办（下一步候选，按 ROI 排序）
-- **真实支付生产化**：`StripeProvider` 仍是自签 HMAC 占位壳、未接真实 Stripe SDK 验签；微信/支付宝完全未接；生产支付确认仅 sandbox 可用（安全修复 M1）。需补 Stripe 真集成 + 微信沙箱 + 生产支付确认放行。
-- **多仓发货**：当前仅单仓/自提，无任何多仓库存与路由代码。
-- **Redis 缓存层**：`cache.py` 默认进程内 LRU，Redis 仅"设 `REDIS_URL` 才切换"，docker-compose 未起 Redis——需落地 Redis 服务 + 依赖 + 默认启用。
-- **异步队列（Celery / ARQ）**：`async_queue.py` 仅为进程内线程 stub（自称"生产可替换"）——需引入 Celery/ARQ + broker（与 Redis 一并规划）。
+- **种草社区推荐流/商业化闭环**：✅ 已完成（推荐流 + 商品反查 + 笔记挂车推广码 + 订单归因佣金），见上方「已落地」说明。
+- **真实支付密钥注入 + 生产支付确认放行**：骨架（Stripe/WxPay Provider + 签名校验）已完成，待注入真实密钥并解除 sandbox 确认限制（M1 安全约束，需显式开关）。
 
-### ⚠️ 已就位但需深化
-- **AI 商品图**：`/products/{id}/ai-image` 有端点但无密钥时出占位图，未接真实图床；搜索分面/联想已做。
-- **可观测性**：仅有基础 `/metrics`（structlog 结构化日志），缺 tracing / 看板 / 告警。
-- **种草社区**：基础 CRUD 已做，缺审核/推荐流/商业化闭环等"深化"。
+### ✅ 已落地（代码已就位，非阻塞待深化）
+- **真实支付生产化**：`StripeProvider` 真实 SDK 集成骨架（有密钥走官方验签，无密钥降级自签 HMAC）+ `WxPayProvider` 沙箱；生产支付确认放行守 M1 安全约束（仅 sandbox）。
+- **多仓发货**：`Warehouse`/`InventoryByWarehouse` 模型 + `allocate_warehouse` 就近路由（同区优先/距离排序/默认仓兜底）+ 测试已落地。
+- **Redis 缓存层**：`cache.py` 默认启用 Redis（`REDIS_URL` 默认 `redis://localhost:6379/0`），惰性探活 + 进程内 LRU 降级；docker-compose 已含 redis 服务。
+- **异步队列**：`async_queue.py` 已接入 Redis list broker（`run_worker` 后台消费）+ 进程内降级，默认 REDIS_URL 可达即走 Redis。
+- **可观测性 + 外部 APM**：`/metrics` 业务计数器 + 进程资源指标 + **请求延迟直方图（Prometheus 风格）**；`/health` 探测 DB+缓存 + 告警列表。链路追踪已接 **OpenTelemetry（OTLP）**，可选开启：`OTEL_ENABLED=true` + `OTEL_EXPORTER_OTLP_ENDPOINT` 即向 Jaeger/Collector 上报 span，调度循环周期推送进程内指标到 OTLP。依赖缺失/未开启时完全降级为 no-op，本地与 CI 零依赖可跑。详见 P1-7/路线图「可观测性接外部 APM」。
+- **种草社区**：✅ 审核闭环 + 推荐流 + 商业化闭环全部落地（见上方说明）。
+  - 推荐流：`GET /notes/feed` 按「点赞热度+近 7 天时间衰减」综合排序；`GET /notes/for-product/{pid}` 商品反查被种草笔记（商品详情「种草」标签页）。
+  - 商业化闭环：作者 `POST /notes/{id}/attach-affiliate` 为挂车商品生成专属推广码 → 笔记卡片分享链接与商品卡点击均归因（`/affiliate/track`）；下单 `POST /orders/checkout` 携带 `affiliate_code` 写入订单，`grant_commission` 新增「订单自带推广码」归因优先级（无需点击绑定也能结算佣金）。前端 Discover 推荐流改造 + 作者「推广赚佣金」按钮 + ProductDetail 种草标签页已落地。测试 `test_seed_commerce_loop.py` 覆盖端到端闭环。
+- **AI 商品图**：✅ 接真实图床（P1-7 收尾）。`/products/{id}/ai-image` 调用网关（通义万相/OpenAI 风格）生成白底图/场景图，**无论网关还是离线降级，最终图片都落本地图床** `/api/images/bed/{hash}.png` 并返回稳定 URL（生产只需把 `IMAGE_BED_DIR` 指向对象存储/外部图床挂载目录即可），彻底摆脱对易失第三方短链的依赖；离线环境用确定性占位图落床，整条「生成→落床→挂商品」链路可端到端测试（`test_image_bed.py`）。
 
 ## 下一步路线图（真实待办）
 
-1. **P0 生产化**：真实支付（Stripe 真集成 + 微信沙箱）+ 生产支付确认放行 → 多仓发货 → Redis 缓存 + Celery/ARQ 异步队列（一并规划 broker）
-2. **P1 深化**：AI 商品图接真实图床、可观测性完善（tracing/看板）、种草社区商业化闭环
-3. **P2 体验**：直播分销玩法扩展、AR 试穿增强、E2E 覆盖继续扩展
+1. **P0 生产化**：真实支付密钥注入 + 生产支付确认放行（已完成骨架，待密钥）；AI 商品图接真实图床（✅ 已完成）
+2. **P1 深化**：可观测性接外部 APM（✅ 已完成 OTLP tracing + 延迟直方图；Prometheus 远端抓取可在 `/metrics` 之上由外部 scrape，无需代码改动）
+3. **P2 体验**：✅ 直播分销玩法扩展（商家端改价/置顶/切讲解/移品/AI话术 + 直播间分享赚佣金）、AR 试穿增强（商品字段 + 轻量 WebAR 组件）、E2E 覆盖扩展（新增 3 条核心闭环用例，共 15 条）
 
 ## 文档索引
 
@@ -110,10 +115,10 @@
 - 改动文件：`backend/app/services/order_service.py`、`backend/app/services/support_service.py`、`backend/tests/test_returns_p3.py`。
 
 ### 本轮未做（下一阶段候选）
-- **MODIFICATION_PLAN 4.6 反馈与撤销**（防抖乐观更新 / 骨架屏 / 登录回跳 / WS 重连 / 撤销 Snackbar / 404 页）：属前端 UX 精致度大改造，范围独立，未在本轮混入。
+- **MODIFICATION_PLAN 4.6 反馈与撤销**（防抖乐观更新 / 骨架屏 / 登录回跳 / WS 重连 / 撤销 Snackbar / 404 页）：前端 UX 精致度。购物车防抖乐观更新（300ms）+ 撤销 Snackbar 已落地；404 页/路由懒加载/骨架屏已存在。
 - **MODIFICATION_PLAN 4.7 一致性清理**（图标库收敛 / 设计 token / LanguageProvider 去重 / api 拆分等）：属架构长期债，范围独立，未在本轮混入。
 - 二者建议作为「阶段 D（UX 精致度）」单独规划，避免一次提交混入大量半成品重构。
-- Tier1.1 真实 Alembic 迁移（`variant_id` 等）仍未补，目前依赖运行时 `_ensure_demo_columns` 兜底。
+- Tier1.1 真实 Alembic 迁移（`variant_id` 等）：已补 `0009_demo_columns` 补偿迁移，将 `_ensure_demo_columns` 的 37 个列正式纳入 Alembic 版本链（`_ensure_demo_columns` 退居最终兜底，幂等）。后续 `alembic revision --autogenerate` 可正确比对。
 
 ## 2026-07-31 部分界面打不开（HTTP 500）根因修复
 
@@ -142,5 +147,75 @@
 - 改动需**重启后端**才生效（`.env`/代码均在进程启动时加载）。
 - 旧库会在启动 `lifespan` 的 `_ensure_demo_columns` 阶段自动补齐 `report_reason` 列，无需手动迁移。
 - 仍需关注：其它新增模型列若未纳入 `_DEMO_COLUMN_DEFS`，在旧库上仍可能 500（本次已全量探测 buyer/merchant/admin 代表接口均通过）。
+
+---
+
+## 对标主流电商优化方案（2026-07-31 起草）
+
+> 对标对象：淘宝/京东（购物体验、支付、物流）、拼多多（增长/拼团/裂变）、抖音电商（直播带货闭环、AI 导购）。
+> 现状已覆盖：商品/SKU/订单状态机/RBAC/营销/AI 客服/推荐/社区/直播骨架等。以下按 **P0（上线硬门槛）→ P1（转化与差异化）→ P2（留存与工程）** 三档列出。
+
+### P0 基础设施与生产化（最先落地，决定"能否真实卖货"）
+
+| # | 痛点 | 对标 | 方案 | 状态 |
+|---|---|---|---|---|
+| P0-1 | 支付是自签 HMAC 占位壳，微信/支付宝未接 | 淘宝/京东全渠道支付 | 接入 Stripe 真实 SDK 验签 + 微信支付沙箱；生产支付确认放行 | ✅ **已落地（可切换骨架：有密钥走真 Stripe SDK + Webhook 验签，无密钥降级自签 HMAC；WxPayProvider 沙箱已就位）** |
+| P0-2 | 仅单仓/自提，无多仓 | 京东多仓就近发货 | `Warehouse` + `InventoryByWarehouse` 分仓库存 + 下单路由最近有货仓 | ✅ **本轮已落地** |
+| P0-3 | 缓存进程内 LRU，Redis 默认没起 | 大促高并发 | docker-compose 起 Redis + config 默认启用 + `cache.py` 双后端 | ✅ **本轮已落地** |
+| P0-4 | 异步队列是线程 stub | 削峰/解耦 | 基于 Redis 的轻量 worker（保留 `enqueue` 兼容签名） | ✅ **本轮已落地** |
+
+### P1 购物体验与转化（直接影响 GMV）
+
+| # | 痛点 | 对标 | 方案 |
+|---|---|---|---|
+| P1-1 | 搜索缺语义/以图搜图 | 淘宝拍立淘 | 多模态向量检索，图搜商品 |
+| P1-2 | 缺购物车凑单/满减进度条 | 京东凑单提示 | 结算页"还差 X 元享满减" + 凑单推荐 |
+| P1-3 | 缺商品对比/历史价格曲线 | 慢慢买 | 比价页 + 价格走势图（已有比价 stub，深化） |
+| P1-4 | 直播带货未闭环 | 抖音小黄车 | 直播间挂车 + 闪购 + 直播专属券 |
+| P1-5 | 售后进度无可视化 | 淘宝极速退款进度条 | 退款/退货状态机前端时间轴 |
+| P1-6 | 地址无智能解析/默认置顶 | 京东地址库 | 粘贴文本识别省市区 + 默认地址 |
+
+### P1 商家与平台效率
+
+| # | 痛点 | 对标 | 方案 |
+|---|---|---|---|
+| P1-7 | AI 商品图无 key 出占位图 | 淘宝 AI 作图 | 接真实图床，一键生成场景图/白底图（需密钥） |
+| P1-8 | 数据看板未下钻 | 京东商智 | GMV/转化/漏斗可下钻图表（看板已有，深化） |
+| P1-9 | 缺库存预警自动补货 | 智能补货 | 基于销量预测生成补货建议单 |
+| P1-10 | 缺店铺装修 | 淘宝旺铺 | 商家自定义首页楼层/banner（装修 stub 深化） |
+
+### P1 AI 差异化放大（系统灵魂）
+
+- **AI-1** AI 客服主动营销（按画像推券/推搭配套餐）
+- **AI-2** 个性化首页 LLM 决策配 key 自动启用 + A/B 实验框架衡量 CTR
+- **AI-3** AI 直播数字人/脚本自动播报
+- **AI-4** 评论摘要/「问大家」聚合（基于评价生成）
+
+### P2 留存与增长
+
+- **P2-1** 拼团/砍价完整性补齐（成团超时退款、砍价助力链路）
+- **P2-2** 签到日历可视化 + 连续天数加成
+- **P2-3** 裂变分享海报 + 邀请返佣（Affiliate 深化）
+- **P2-4** push/短信/邮件外发渠道（通知外发 stub 落地）
+- **P2-5** 会员权益差异化（PLUS 会员价/包邮/专属客服）
+
+### P2 工程与可观测
+
+- tracing/告警看板（当前仅 `/metrics` + 结构化日志）
+- 前端 UX 精致度：✅ 购物车删除撤销 Snackbar（乐观隐藏+5s Undo+卸载清理）已落地；404 页/路由懒加载+Suspense 骨架屏已存在；防抖乐观更新（购物车改数量 300ms 防抖+失败回滚）已存在。`tsc --noEmit` 全量 0 错误（修复了 AIMall/ProductDetail 等既有类型错误）。
+- 真实 Alembic 迁移替代 `_ensure_demo_columns` 兜底（技术债）：✅ 已补 `0009_demo_columns` 接管 37 列，`_ensure_demo_columns` 降级为最终兜底
+- E2E 覆盖扩展（✅ `e2e/flows.spec.ts` + 既有 12 条，共 15 条用例）、前端单测
+
+### 落地节奏
+
+1. **P0**：支付 + 多仓 + Redis + 队列（多仓/Redis/队列本轮完成；支付因缺密钥留待接入）
+2. **P1**：图搜、凑单、直播闭环、AI 商品图、数据下钻
+3. **P2**：拼团砍价深化、裂变、可观测
+
+### 本轮（2026-07-31）实际交付
+
+- **多仓发货**：新增 `models/inventory.py` 的 `Warehouse` / `InventoryByWarehouse`；`seed.py` 注入 3 个区域仓 + 分仓库存；`inventory_service` 增加 `allocate_warehouse` 按收货地就近 + 有货优先路由；下单时写订单项发货仓（不影响既有 `product.stock` 汇总语义）。
+- **Redis 缓存默认启用**：`docker-compose.yml` 增加 `redis` 服务；`config.py` 默认 `REDIS_URL=redis://localhost:6379/0`（无 Redis 时优雅降级进程内 LRU）；`cache.py` 双后端就绪。
+- **异步队列真实化**：`async_queue.py` 升级为基于 Redis 的轻量 worker（pub/sub + 后台任务消费），保留 `enqueue(fn, *args)` 兼容签名；提供 `worker` 启动入口与 `run_worker` 协程。
 
 

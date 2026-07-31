@@ -52,9 +52,9 @@ async def test_search_qa_price_filter(client, buyer_headers):
 
 
 @pytest.mark.asyncio
-async def test_home_arrange(client):
+async def test_home_arrange(client, buyer_headers):
     """B4：AI 首页编排按身份/时段返回有序楼层。"""
-    r = await client.get("/api/ai/home-arrange", params={"segment": "member", "hour": 20})
+    r = await client.get("/api/ai/home-arrange", params={"segment": "member", "hour": 20}, headers=buyer_headers)
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["segment"] == "member"

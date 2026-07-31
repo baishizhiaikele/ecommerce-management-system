@@ -1,5 +1,6 @@
 """直播带货接口。"""
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,11 +12,13 @@ from app.models.user import Role, User
 from app.schemas.live import (
     LiveMessageCreate,
     LiveMessageOut,
+    LiveProductOut,
     LiveRoomCreate,
     LiveRoomDetail,
     LiveRoomOut,
 )
 from app.services import live_service
+from app.services.ai_service import ai_service
 
 router = APIRouter(prefix="/live", tags=["live"])
 
@@ -47,6 +50,52 @@ async def my_rooms(
 @router.get("/{room_id}", response_model=LiveRoomDetail)
 async def room_detail(room_id: str, db: AsyncSession = Depends(get_db)):
     return await live_service.room_detail(db, room_id)
+
+
+# ---------------------------------------------------------------------------
+# P1-4 直播下单闭环：挂车商品管理（商家端）
+# ---------------------------------------------------------------------------
+class LiveProductUpsert(BaseModel):
+    live_price: float | None = None
+    explaining: bool = False
+    pinned: bool = False
+
+
+@router.post("/{room_id}/products", response_model=LiveProductOut)
+async def upsert_room_product(
+    room_id: str,
+    product_id: str,
+    body: LiveProductUpsert,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(Role.MERCHANT)),
+):
+    return await live_service.upsert_product(
+        db, merchant=user, room_id=room_id, product_id=product_id,
+        live_price=body.live_price, explaining=body.explaining, pinned=body.pinned,
+    )
+
+
+@router.delete("/{room_id}/products/{product_id}", response_model=dict)
+async def remove_room_product(
+    room_id: str,
+    product_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(Role.MERCHANT)),
+):
+    return await live_service.remove_product(db, merchant=user, room_id=room_id, product_id=product_id)
+
+
+@router.post("/{room_id}/products/{product_id}/explain", response_model=dict)
+async def set_product_explaining(
+    room_id: str,
+    product_id: str,
+    explaining: bool = True,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(Role.MERCHANT)),
+):
+    return await live_service.set_explaining(
+        db, merchant=user, room_id=room_id, product_id=product_id, explaining=explaining
+    )
 
 
 @router.post("/{room_id}/start", response_model=LiveRoomOut)
@@ -91,6 +140,20 @@ async def post_message(
     user: User = Depends(get_current_user),
 ):
     return await live_service.post_message(db, room_id=room_id, user=user, content=body.content)
+
+
+@router.post("/{room_id}/ai-script")
+async def ai_script(
+    room_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(Role.MERCHANT)),
+) -> dict:
+    """AI-3 直播数字人脚本：为直播间挂车商品生成开场/逐品讲解/收尾脚本。"""
+    detail = await live_service.room_detail(db, room_id)
+    if not detail.products:
+        return {"opening": "", "items": [], "ending": ""}
+    brief = [{"name": p.name, "price": p.price} for p in detail.products]
+    return await ai_service.generate_live_script(products=brief)
 
 
 @router.websocket("/{room_id}/ws")

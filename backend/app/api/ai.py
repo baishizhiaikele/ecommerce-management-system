@@ -8,6 +8,7 @@ from app.schemas.ai import HomeArrangeOut, TrendInsightOut
 from app.schemas.chat import ChatRequest, ConversationOut
 from app.services import chat_service
 from app.services.ai_features_service import arrange_home, trend_insight
+from app.services.ai_marketing_service import active_marketing
 from app.services.ai_service import ai_service
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -37,15 +38,24 @@ async def conversations(
 
 
 # ---------------------------------------------------------------------------
-# B4：AI 首页编排（按身份/时段动态排布楼层）
+# B4：AI 首页编排（真实用户身份 + 时段动态排布楼层与内容）
 # ---------------------------------------------------------------------------
 @router.get("/home-arrange", response_model=HomeArrangeOut, summary="AI 首页编排")
 async def home_arrange(
-    segment: str = Query("buyer", description="身份分群：buyer|new|returning|member"),
+    segment: str | None = Query(None, description="调试/演示用身份覆盖：buyer|new|returning|member"),
     hour: int | None = Query(None, ge=0, le=23, description="时段(0-23)，缺省取当前小时"),
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    return await arrange_home(db, segment, hour)
+    return await arrange_home(db, segment_override=segment, hour=hour, user=user)
+
+
+@router.get("/active-marketing", summary="AI-1 主动营销建议")
+async def active_marketing_endpoint(
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+) -> dict:
+    """AI-1 客服主动营销：基于用户画像推送优惠券与搭配套餐建议。"""
+    return await active_marketing(db, user)
 
 
 # ---------------------------------------------------------------------------

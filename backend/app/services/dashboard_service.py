@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import cast, func, select
+from sqlalchemy.types import Date
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.audit import AuditLog
@@ -408,3 +409,89 @@ async def merchant_analytics(db: AsyncSession, merchant_id: str) -> MerchantAnal
         sales_trend=await sales_trend(db, merchant_id=merchant_id, days=7),
         top_products=await _merchant_top_products(db, merchant_id),
     )
+
+
+# ---------- P1-8 数据看板下钻 ----------
+
+
+async def gmv_by_period(
+    db: AsyncSession, *, merchant_id: str | None = None, period: str = "day", days: int = 30
+) -> list[dict]:
+    """GMV 按时间维度下钻：period=day|week|month，返回每期 GMV 与订单数。"""
+    today = datetime.now(timezone.utc).date()
+    start = datetime(today.year, today.month, today.day, tzinfo=timezone.utc) - timedelta(days=days - 1)
+
+    # 取近 days 天有效订单（聚合下推到 DB，Python 端按日期归并到 day/week/month）
+    stmt = (
+        select(
+            Order.created_at,
+            func.coalesce(func.sum(Order.total_amount), 0),
+            func.count(Order.id.distinct()),
+        )
+        .join(OrderItem, OrderItem.order_id == Order.id)
+        .join(Product, Product.id == OrderItem.product_id)
+        .where(Order.created_at >= start, Order.status != OrderStatus.REFUNDED)
+    )
+    if merchant_id:
+        stmt = stmt.where(Product.merchant_id == merchant_id)
+    rows = (await db.execute(stmt.group_by(Order.created_at).order_by(Order.created_at))).all()
+
+    def _date(d):
+        return d.date() if hasattr(d, "date") else datetime.fromisoformat(str(d)).date()
+
+    if period == "day":
+        return [
+            {
+                "period": _date(r[0]).strftime("%Y-%m-%d"),
+                "gmv": float(r[1]),
+                "orders": int(r[2]),
+            }
+            for r in rows
+        ]
+
+    # 周/月归并
+    bucket: dict[str, dict] = {}
+    for created_at, gmv, cnt in rows:
+        d = _date(created_at)
+        key = d.strftime("%Y-W%W") if period == "week" else d.strftime("%Y-%m")
+        b = bucket.setdefault(key, {"gmv": 0.0, "orders": 0})
+        b["gmv"] += float(gmv)
+        b["orders"] += int(cnt)
+    return [{"period": k, "gmv": v["gmv"], "orders": v["orders"]} for k, v in sorted(bucket.items())]
+
+
+async def category_detail(
+    db: AsyncSession, *, merchant_id: str | None = None, category_id: str | None = None, limit: int = 10
+) -> list[dict]:
+    """品类下钻：返回该品类（或全部）Top 商品（销量/GMV/占比）。"""
+    stmt = (
+        select(
+            Product.id,
+            Product.name,
+            func.coalesce(func.sum(OrderItem.quantity), 0),
+            func.coalesce(func.sum(OrderItem.quantity * OrderItem.price), 0.0),
+        )
+        .select_from(Product)
+        .join(OrderItem, OrderItem.product_id == Product.id)
+        .join(Order, Order.id == OrderItem.order_id)
+        .where(Order.status != OrderStatus.REFUNDED)
+    )
+    if merchant_id:
+        stmt = stmt.where(Product.merchant_id == merchant_id)
+    if category_id:
+        stmt = stmt.where(Product.category_id == category_id)
+    rows = (
+        await db.execute(stmt.group_by(Product.id, Product.name).order_by(func.sum(OrderItem.quantity).desc()).limit(limit))
+    ).all()
+
+    total_qty = sum(int(r[2]) for r in rows) or 1
+    return [
+        {
+            "product_id": r[0],
+            "name": r[1],
+            "units": int(r[2]),
+            "gmv": float(r[3]),
+            "share": round(int(r[2]) / total_qty, 4),
+        }
+        for r in rows
+    ]

@@ -30,11 +30,13 @@ TASK_CATALOG: list[dict] = [
 async def _gather_facts(db: AsyncSession, user: User) -> dict:
     """统计用户当前各项任务完成事实。"""
     today = date.today().isoformat()
+    # created_at 以 UTC 存储，这里必须用 localtime 折算成服务器本地日期，
+    # 才能与 date.today() 及签到接口 _signed_today 的口径保持一致（否则 UTC+8 凌晨会误判未签到）
     signed_today = await db.scalar(
         select(func.count(PointLog.id)).where(
             PointLog.user_id == user.id,
             PointLog.action == PointAction.SIGNIN,
-            func.date(PointLog.created_at) == today,
+            func.date(PointLog.created_at, "localtime") == today,
         )
     )
     fav_count = await db.scalar(

@@ -95,6 +95,19 @@ export default function Coupons() {
     load();
   }, []);
 
+  // 按过期时间把「我的券」拆成「有效」与「已过期」，已过期券单独归类
+  const { active, expired } = useMemo(() => {
+    const now = dayjs();
+    const a: UserCouponOut[] = [];
+    const e: UserCouponOut[] = [];
+    for (const c of mine) {
+      const expire = c.expire_at ?? null;
+      if (expire && now.isAfter(dayjs(expire))) e.push(c);
+      else a.push(c);
+    }
+    return { active: a, expired: e };
+  }, [mine]);
+
   // 已领取的券（按 coupon_id）不应再出现在「可领取」列表中
   const claimedIds = useMemo(() => new Set(mine.map((c) => c.coupon_id)), [mine]);
   const claimable = useMemo(
@@ -127,13 +140,13 @@ export default function Coupons() {
           items={[
             {
               key: "mine",
-              label: `${t("coupon.myTitle")}（${mine.length}）`,
+              label: `${t("coupon.myTitle")}（${active.length}）`,
               children:
-                mine.length === 0 ? (
+                active.length === 0 ? (
                   <EmptyState title={t("coupon.empty")} description={t("coupon.emptyTip")} />
                 ) : (
                   <div className="grid gap-3">
-                    {mine.map((c) => (
+                    {active.map((c) => (
                       <CouponCard
                         key={c.id}
                         c={c}
@@ -143,6 +156,20 @@ export default function Coupons() {
                           </Tag>
                         }
                       />
+                    ))}
+                  </div>
+                ),
+            },
+            {
+              key: "expired",
+              label: `${t("coupon.expiredTab")}（${expired.length}）`,
+              children:
+                expired.length === 0 ? (
+                  <EmptyState title={t("coupon.noExpired")} description={t("coupon.expiredTip")} />
+                ) : (
+                  <div className="grid gap-3">
+                    {expired.map((c) => (
+                      <CouponCard key={c.id} c={c} footer={<Tag color="default">{t("coupon.expired")}</Tag>} />
                     ))}
                   </div>
                 ),

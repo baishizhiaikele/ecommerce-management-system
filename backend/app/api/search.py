@@ -59,3 +59,35 @@ async def suggest(
 ):
     """搜索联想（P1-7）：热门关键词前缀匹配 + 商品名包含匹配。"""
     return await search_service.suggest(db, q)
+
+
+# ---------------------------------------------------------------------------
+# P1-1 图搜：以图搜商品
+# ---------------------------------------------------------------------------
+from fastapi import UploadFile, File
+from app.schemas.product import ProductOut
+from app.services import vision_service as _vision
+
+
+@router.post("/by-image", response_model=list[ProductOut])
+async def search_by_image(
+    file: UploadFile = File(..., description="上传图片，按相似度召回商品"),
+    limit: int = Query(12, ge=1, le=48),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[ProductOut]:
+    """以图搜图（P1-1）：上传图片 → 计算感知哈希 → 按汉明距离召回相似商品。
+
+    无外部密钥依赖（无 key 降级路径）；配置 VISION_API_KEY 后可升级为向量语义检索。
+    """
+    if not (file.content_type or "").startswith("image/"):
+        from fastapi import HTTPException, status as _st
+
+        raise HTTPException(status_code=_st.HTTP_400_BAD_REQUEST, detail="请上传图片文件")
+    data = await file.read()
+    if len(data) > 8 * 1024 * 1024:
+        from fastapi import HTTPException, status as _st
+
+        raise HTTPException(status_code=_st.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="图片过大（<=8MB）")
+    products = await _vision.search_by_image(db, data, limit=limit)
+    return [ProductOut.model_validate(p) for p in products]

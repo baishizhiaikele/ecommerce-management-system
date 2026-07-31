@@ -213,7 +213,10 @@ export default function Market() {
   const [topNew, setTopNew] = useState<ProductOut[]>([]);
   const [topPrice, setTopPrice] = useState<ProductOut[]>([]);
   const [kw, setKw] = useState(searchParams.get("kw") || "");
-  const [cat, setCat] = useState<string | undefined>();
+  const [cat, setCat] = useState<string | undefined>(searchParams.get("category") || undefined);
+  // 处于"按分类浏览"模式时（从 AI 首页/分类入口进入），隐藏首页式元素（轮播/快捷入口/榜单/推荐），
+  // 只保留筛选与商品列表，让类目页在观感上明显区别于首页，避免用户误以为"还是首页"。
+  const browsingCategory = Boolean(cat);
   const [sort, setSort] = useState<string | undefined>();
   const [minPrice, setMinPrice] = useState<number | null>(null);
   const [maxPrice, setMaxPrice] = useState<number | null>(null);
@@ -270,15 +273,52 @@ export default function Market() {
   useEffect(() => {
     filterRef.current = { kw, cat, sort, minPrice, maxPrice, inStock, rating, page: 1 };
   });
-  // 兼容通过 /market?kw= 进入时预填搜索词（顶部全局搜索现跳转 /search，此处仅作兜底）
+  // 兼容通过 /market?kw= 或 /market?category= 进入时加载对应筛选结果。
+  // 以 searchParams 为唯一驱动：只要 URL 上带了 kw/category，就强制以其值加载，
+  // 不再依赖"是否与当前 state 不同"的判断——避免 state 已同步时漏触发 load。
   useEffect(() => {
     const k = searchParams.get("kw");
-    if (k && k !== kw) {
-      setKw(k);
-      setCat(undefined);
-      setSort(undefined);
-      setTimeout(load, 0);
-    }
+    const c = searchParams.get("category");
+    if (!k && !c) return;
+    // 同步 UI 状态（分类下拉框高亮、搜索框预填）
+    setKw(k ?? "");
+    setCat(c ?? undefined);
+    setSort(undefined);
+    // 同步筛选快照并立即加载，确保拿到对应类目商品
+    const snapshot = {
+      kw: k ?? "",
+      cat: (c ?? undefined) as string | undefined,
+      sort: undefined,
+      minPrice: null,
+      maxPrice: null,
+      inStock: false,
+      rating: null,
+      page: 1,
+    };
+    filterRef.current = snapshot;
+    // 用函数体内固定快照直接加载，避免读取 ref 时序问题
+    (async () => {
+      setLoading(true);
+      setListError(null);
+      try {
+        const data = await listProducts({
+          keyword: snapshot.kw || undefined,
+          category_id: snapshot.cat,
+          sort: snapshot.sort,
+          min_price: undefined,
+          max_price: undefined,
+          min_rating: undefined,
+          in_stock: false,
+          page: 1,
+          page_size: 20,
+        });
+        setItems(data);
+      } catch (e) {
+        setListError(getErrorMessage(e));
+      } finally {
+        setLoading(false);
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
@@ -417,7 +457,7 @@ export default function Market() {
       {/* 轮播 Banner（放大 + 柔和叠层）
           走 ProductImage：可代理外链、加载失败自动回退到 lucide 图标+渐变+标题，
           避免出现“只有 alt 文字 / 空白块”的情况。 */}
-      {banners.length > 0 && (
+      {!browsingCategory && banners.length > 0 && (
         <Carousel autoplay className="hero-shell" dots>
           {banners.map((b) => (
             <div key={b.id} onClick={() => goBanner(b)} className="cursor-pointer">
@@ -439,11 +479,13 @@ export default function Market() {
       )}
 
       {/* 快捷入口 */}
+      {!browsingCategory && (
       <section className="grid grid-cols-2 md:grid-cols-4 gap-5">
         {quickEntries.map((q) => (
           <QuickEntry key={q.labelKey} labelKey={q.labelKey} icon={q.icon} onGo={q.go} />
         ))}
       </section>
+      )}
 
       {/* 领券中心 */}
       {coupons.length > 0 && (
@@ -498,6 +540,7 @@ export default function Market() {
       )}
 
       {/* 多榜单：热销榜 / 好评榜 / 新品榜 / 低价好物榜 */}
+      {!browsingCategory && (
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {boards.map((board) => (
           <ProductLeaderboard
@@ -510,6 +553,7 @@ export default function Market() {
           />
         ))}
       </section>
+      )}
 
       {/* 店铺街 */}
       {shops.length > 0 && (
@@ -530,7 +574,7 @@ export default function Market() {
       )}
 
       {/* 猜你喜欢 */}
-      {recs.length > 0 && (
+      {!browsingCategory && recs.length > 0 && (
         <section>
           <div className="section-title">
             <span className="st-text">{t("market.guessYouLike")}</span>

@@ -159,6 +159,28 @@ async def analytics(
     return await dashboard_service.merchant_analytics(db, user.id)
 
 
+@router.get("/dashboard/gmv-by-period")
+async def gmv_by_period(
+    period: str = Query("day", pattern="^(day|week|month)$"),
+    days: int = Query(30, ge=7, le=365),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(Role.MERCHANT)),
+) -> list[dict]:
+    """P1-8 看板下钻：GMV 按日/周/月维度拆解。"""
+    return await dashboard_service.gmv_by_period(db, merchant_id=user.id, period=period, days=days)
+
+
+@router.get("/dashboard/category-detail")
+async def category_detail(
+    category_id: str | None = None,
+    limit: int = Query(10, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(Role.MERCHANT)),
+) -> list[dict]:
+    """P1-8 看板下钻：品类 Top 商品（销量/GMV/占比）。"""
+    return await dashboard_service.category_detail(db, merchant_id=user.id, category_id=category_id, limit=limit)
+
+
 @router.get("/products", response_model=list[ProductOut])
 async def my_products(
     db: AsyncSession = Depends(get_db), user: User = Depends(require_role(Role.MERCHANT))

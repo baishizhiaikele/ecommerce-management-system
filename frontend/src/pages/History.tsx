@@ -54,20 +54,25 @@ export default function History() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(() => {
+  const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     setError(null);
-    Promise.all([listHistory(), listRecentlyBought()])
-      .then(([h, b]) => {
-        setHistory(h);
-        setBought(b);
-      })
-      .catch((e) => setError(getErrorMessage(e)))
-      .finally(() => setLoading(false));
+    // 两个接口独立请求，互不阻塞：浏览或已购任一失败都不影响另一项展示
+    const [h, b] = await Promise.allSettled([
+      listHistory(),
+      listRecentlyBought(),
+    ]);
+    if (h.status === "fulfilled") setHistory(h.value);
+    else setError(getErrorMessage(h.reason));
+    if (b.status === "fulfilled") setBought(b.value);
+    else setError(getErrorMessage(b.reason));
+    setLoading(false);
   }, [user]);
 
-  useEffect(load, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   if (!user) {
     return <Empty description={t("common.loginFirst")} />;

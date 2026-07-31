@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Spin, Empty, Input } from "antd";
-import { Search } from "lucide-react";
-import { listProducts, ProductOut } from "../api";
+import { Spin, Empty, Input, message, Button } from "antd";
+import { Search, Camera } from "lucide-react";
+import { listProducts, ProductOut, searchByImage } from "../api";
+import { getErrorMessage } from "../api";
 import { useI18n } from "../i18n";
 import ProductCard from "../components/ProductCard";
 import PageHeader from "../components/PageHeader";
@@ -15,6 +16,8 @@ export default function SearchPage() {
   const [list, setList] = useState<ProductOut[]>([]);
   const [loading, setLoading] = useState(true);
   const [kwInput, setKwInput] = useState(keyword);
+  const [imgSearching, setImgSearching] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setKwInput(keyword);
@@ -48,6 +51,21 @@ export default function SearchPage() {
     if (q) nav(`/search?keyword=${encodeURIComponent(q)}`);
   };
 
+  // P1-1 图搜：上传图片按相似度召回商品
+  const onPickImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setImgSearching(true);
+    searchByImage(file)
+      .then((r) => {
+        setList(r);
+        if (r.length === 0) message.info(t("search.imageNoMatch"));
+      })
+      .catch((err) => message.error(getErrorMessage(err)))
+      .finally(() => setImgSearching(false));
+  };
+
   return (
     <div className="max-w-[1180px] mx-auto px-4 py-4">
       <PageHeader title={t("search.title")} subtitle={keyword ? `${t("search.for")}「${keyword}」` : undefined} />
@@ -61,6 +79,15 @@ export default function SearchPage() {
           onChange={(e) => setKwInput(e.target.value)}
           onPressEnter={doSearch}
         />
+        <Button
+          size="large"
+          icon={<Camera size={18} />}
+          loading={imgSearching}
+          onClick={() => fileRef.current?.click()}
+        >
+          {t("search.imageSearch")}
+        </Button>
+        <input ref={fileRef} type="file" accept="image/*" hidden onChange={onPickImage} />
       </div>
 
       {loading ? (

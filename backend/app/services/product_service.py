@@ -2,7 +2,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.product import Product, ProductStatus
+from app.models.product import PriceHistory, Product, ProductStatus
 from app.models.catalog import Category
 from app.models.review import Review
 
@@ -164,9 +164,15 @@ async def create_product(
     )
     db.add(product)
     await db.flush()
+    # P1-3 历史价格曲线：上架即记首条价格快照
+    db.add(PriceHistory(product_id=product.id, price=product.price, source="create"))
     await record(db, merchant_id, "product.create", "product", product.id, data.name)
     await db.commit()
     await db.refresh(product)
+    # P1-1 图搜：为新商品主图构建感知哈希特征
+    from app.services.vision_service import build_image_feature
+
+    await build_image_feature(db, product)
     return product
 
 
@@ -177,6 +183,7 @@ async def update_product(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="只能修改自己的商品")
     raw = data.model_dump(exclude_unset=True)
     old_price = product.price
+    image_changed = "image_url" in raw
     for field, value in raw.items():
         setattr(product, field, value)
     await record(db, merchant_id, "product.update", "product", product.id, product.name)
@@ -193,6 +200,9 @@ async def update_product(
             new_price=product.price,
             commit=False,
         )
+    # P1-3 历史价格曲线：价格变更（含升降）时记录新快照
+    if "price" in raw and product.price != old_price:
+        db.add(PriceHistory(product_id=product.id, price=product.price, source="update"))
     await db.commit()
     await db.refresh(product)
     # 降价提醒：价格下降时发布事件，由事件总线通知收藏该商品的用户
@@ -203,6 +213,11 @@ async def update_product(
             old_price=old_price,
             new_price=product.price,
         )
+    # P1-1 图搜：主图变更时重建感知哈希特征
+    if image_changed:
+        from app.services.vision_service import build_image_feature
+
+        await build_image_feature(db, product)
     return product
 
 

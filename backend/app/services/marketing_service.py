@@ -8,9 +8,9 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import literal, select, update
+from sqlalchemy import func, literal, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.content import Promotion, PromotionType
@@ -25,6 +25,7 @@ from app.models.marketing import (
 from app.models.order import Order, OrderItem, OrderStatus
 from app.models.product import Product
 from app.models.user import User
+from app.core.metrics import inc_counter
 
 
 def _order_no() -> str:
@@ -108,6 +109,7 @@ async def create_group(
     )
     db.add(gb)
     await db.flush()
+    inc_counter("marketing_groups_created")
     db.add(GroupBuyMember(group_id=gb.id, user_id=user.id, address=address))
     await db.commit()
     await db.refresh(gb)
@@ -162,6 +164,7 @@ async def create_bargain(
     db.add(b)
     await db.commit()
     await db.refresh(b)
+    inc_counter("marketing_bargains_created")
     return b
 
 
@@ -171,6 +174,14 @@ async def cut_bargain(db: AsyncSession, bargain_id: str, user: User, address: st
         raise ValueError("砍价活动不存在")
     if b.status != BargainStatus.ACTIVE.value:
         raise ValueError("砍价已结束")
+    # 助力防刷：同一用户对同一砍价最多帮砍 3 刀（鼓励分享裂变，但防止单人刷量）
+    cut_count = await db.scalar(
+        select(func.count(BargainCut.id)).where(
+            (BargainCut.bargain_id == bargain_id) & (BargainCut.user_id == user.id)
+        )
+    )
+    if cut_count and int(cut_count) >= 3:
+        raise ValueError("你已帮砍过该活动（最多 3 刀）")
     if float(b.current_price) <= float(b.floor_price):
         raise ValueError("已砍到底价")
     # 每次砍掉总差价的 25%（保证有限次内触底），且不低于 0.01
@@ -201,3 +212,31 @@ async def buy_bargain(db: AsyncSession, bargain_id: str, user: User, address: st
     await db.commit()
     await db.refresh(order)
     return order
+
+
+GROUP_TTL_HOURS = 24  # 拼团成团时限（小时）
+
+
+async def expire_groups(db: AsyncSession, *, now: datetime | None = None) -> int:
+    """P2-1 拼团成团超时自动退款：扫描已超时（创建超过 TTL）仍未成团的 OPEN 团，
+    将成员订单取消并解散拼团（返回处理数量）。"""
+    now = now or datetime.now(timezone.utc)
+    cutoff = now - timedelta(hours=GROUP_TTL_HOURS)
+    # OPEN 且创建时间早于截止点（视为超时未成团）
+    groups = list(
+        await db.scalars(
+            select(GroupBuy)
+            .where(GroupBuy.status == GroupBuyStatus.OPEN.value)
+            .where(GroupBuy.created_at < cutoff)
+        )
+    )
+    processed = 0
+    for g in groups:
+        # 当前设计为「成团后才生成成员订单」，未成团超时无需退款，
+        # 直接解散拼团即可；若后续改为「参团即下单」，此处可补退款逻辑。
+        g.status = GroupBuyStatus.FAILED.value
+        db.add(g)
+        processed += 1
+    if processed:
+        await db.commit()
+    return processed

@@ -45,7 +45,11 @@ backend/*.txt
 !backend/requirements.txt
 backend/t_*.json
 backend/uploads/
+backend/*.tmp
 *.csv
+
+# ---- 运行时生成的本地图床缓存（由 image_bed 服务按需重建，不纳入版本管理）----
+backend/media/
 
 # ---- 端到端测试输出 ----
 e2e_out.txt

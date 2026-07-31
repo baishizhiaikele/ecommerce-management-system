@@ -574,8 +574,10 @@ export default function Support() {
         />
         <Input.Search
           allowClear
+          value={search}
           placeholder={t("support.searchPlaceholder")}
           style={{ width: 220 }}
+          onChange={(e) => setSearch(e.target.value)}
           onSearch={(v) => {
             setSearch(v);
             setPage(1);

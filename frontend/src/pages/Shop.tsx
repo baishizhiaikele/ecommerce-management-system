@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Card, Spin, Empty, Tag, Button } from "antd";
+import { Card, Spin, Empty, Tag, Button, Popconfirm, message } from "antd";
 import { Star, Package, ChevronRight } from "lucide-react";
+import { getErrorMessage } from "../api/client";
 import {
   listShops,
   getShop,
@@ -89,12 +90,14 @@ export default function Shop() {
       setLoading(true);
       getShop(id)
         .then(setDetail)
+        .catch((e) => message.error(getErrorMessage(e)))
         .finally(() => setLoading(false));
       getShopDecoration(id).then(setDeco).catch(() => setDeco(null));
     } else {
       setLoading(true);
       listShops()
         .then(setList)
+        .catch((e) => message.error(getErrorMessage(e)))
         .finally(() => setLoading(false));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -154,14 +157,27 @@ export default function Shop() {
                   <span>· {detail.product_count} {t("shop.productsCount")}</span>
                   <span>· {t("market.sold")} {detail.sales_total}</span>
                 </div>
-                <Button
-                  size="small"
-                  type={followed ? "default" : "primary"}
-                  className="mt-2"
-                  onClick={toggleFollow}
-                >
-                  {followed ? t("shop.unfollow") : t("shop.follow")} · {followers}
-                </Button>
+                {followed ? (
+                  <Popconfirm
+                    title={t("follow.confirmUnfollow")}
+                    okText={t("common.ok")}
+                    cancelText={t("common.cancel")}
+                    onConfirm={toggleFollow}
+                  >
+                    <Button size="small" type="default" className="mt-2">
+                      {t("shop.unfollow")} · {followers}
+                    </Button>
+                  </Popconfirm>
+                ) : (
+                  <Button
+                    size="small"
+                    type="primary"
+                    className="mt-2"
+                    onClick={toggleFollow}
+                  >
+                    {t("shop.follow")} · {followers}
+                  </Button>
+                )}
                 {detail.description && (
                   <div className="text-xs text-slate-400 mt-2">{detail.description}</div>
                 )}

@@ -21,8 +21,8 @@ async def _make_product(client, mh, name="种草商品"):
 
 
 @pytest.mark.asyncio
-async def test_note_publish_feed_like(client, buyer_headers, merchant_headers):
-    bh, mh = buyer_headers, merchant_headers
+async def test_note_publish_feed_like(client, buyer_headers, merchant_headers, admin_headers):
+    bh, mh, ah = buyer_headers, merchant_headers, admin_headers
     pid = await _make_product(client, mh)
 
     # 发布挂商品笔记
@@ -50,6 +50,13 @@ async def test_note_publish_feed_like(client, buyer_headers, merchant_headers):
     )
     assert r.status_code == 400
 
+    # 发布后默认 pending，需审核通过才进入公开流（审核闭环）
+    r = await client.get("/api/notes", headers=mh)
+    assert r.status_code == 200
+    assert all(n["id"] != nid for n in r.json())  # 待审不可见
+    # 管理员审核通过
+    rv = await client.post(f"/api/notes/{nid}/review", json={"action": "approve"}, headers=ah)
+    assert rv.status_code == 200 and rv.json()["review_status"] == "approved"
     # feed 列表 + 关键词搜索
     r = await client.get("/api/notes", headers=mh)
     assert r.status_code == 200

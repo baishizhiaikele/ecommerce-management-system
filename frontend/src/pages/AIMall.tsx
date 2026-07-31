@@ -23,15 +23,18 @@ import ProductImage from "../components/ProductImage";
 import ProductPrice from "../components/ProductPrice";
 import {
   CategoryOut,
+  CouponOut,
   FloorOut,
   HomeArrangeOut,
   ProductOut,
   PromotionOut,
   ShopSummary,
+  ViewLogOut,
   getPromotions,
   homeArrange,
   listCategories,
   listCoupons,
+  listHistory,
   listProducts,
   listShops,
   recommendations,
@@ -39,15 +42,6 @@ import {
 } from "../api";
 
 const { Title, Paragraph, Text } = Typography;
-
-const SEGMENTS = ["buyer", "new", "returning", "member"] as const;
-const HOUR_PRESETS = [
-  { labelKey: "aim.hour.morning", value: 7 },
-  { labelKey: "aim.hour.noon", value: 12 },
-  { labelKey: "aim.hour.afternoon", value: 15 },
-  { labelKey: "aim.hour.evening", value: 20 },
-  { labelKey: "aim.hour.night", value: 23 },
-];
 
 const imgOf = (img: string | string[] | null | undefined) =>
   Array.isArray(img) ? img[0] : img || "";
@@ -130,12 +124,19 @@ function FloorBody({ floor }: { floor: FloorOut }) {
   const [promos, setPromos] = useState<PromotionOut[]>([]);
   const [shops, setShops] = useState<ShopSummary[]>([]);
   const [cats, setCats] = useState<CategoryOut[]>([]);
+  const [recentItems, setRecentItems] = useState<ViewLogOut[]>([]);
   const [coupons, setCoupons] = useState<any[]>([]);
   const nav = useNavigate();
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      // 优先使用后端编排下发的真实商品（D 方案 B：楼层内容由后端统一编排）
+      if (floor.products && floor.products.length > 0) {
+        setProducts(floor.products);
+        setLoading(false);
+        return;
+      }
       switch (floor.key) {
         case "categories": {
           const c = await listCategories();
@@ -168,8 +169,34 @@ function FloorBody({ floor }: { floor: FloorOut }) {
           break;
         }
         case "recent": {
-          const res = await listProducts({ sort: "new", page_size: 4 });
-          setProducts(res ?? []);
+          // 真实最近浏览：登录用户走 /me/history，未登录回退本地浏览记录
+          try {
+            const logs = await listHistory(8);
+            setRecentItems(logs);
+          } catch {
+            const raw = localStorage.getItem("browse_history") || "[]";
+            try {
+              const arr = JSON.parse(raw) as Array<{
+                product_id: string;
+                name?: string;
+                image_url?: string | null;
+                price?: number | null;
+              }>;
+              setRecentItems(
+                arr.slice(0, 8).map((x, i) => ({
+                  id: `${x.product_id}-${i}`,
+                  product_id: x.product_id,
+                  product_name: x.name ?? null,
+                  image_url: x.image_url ?? null,
+                  price: x.price ?? null,
+                  created_at: new Date().toISOString(),
+                })) as ViewLogOut[],
+              );
+            } catch {
+              setRecentItems([]);
+            }
+          }
+          setProducts([]);
           break;
         }
         case "recommend": {
@@ -177,7 +204,12 @@ function FloorBody({ floor }: { floor: FloorOut }) {
           setProducts(r.slice(0, 4));
           break;
         }
-        case "theme":
+        case "theme": {
+          const c = await listCategories();
+          setCats(c);
+          setProducts([]);
+          break;
+        }
         default:
           setProducts([]);
       }
@@ -216,9 +248,9 @@ function FloorBody({ floor }: { floor: FloorOut }) {
     if (!coupons.length) return <Empty description={t("common.noData")} />;
     return (
       <Space wrap>
-        {coupons.map((c: any) => (
+        {coupons.map((c: CouponOut) => (
           <Tag key={c.id} color="red" style={{ fontSize: 13, padding: "4px 10px" }}>
-            {c.type === "full_reduction"
+            {c.type === "full_reduce"
               ? t("coupon.full").replace("{min}", String(c.threshold)).replace("{val}", String(c.value))
               : t("aim.instantOff").replace("{x}", String(c.value))}
           </Tag>
@@ -247,11 +279,65 @@ function FloorBody({ floor }: { floor: FloorOut }) {
     );
   }
 
-  if (floor.key === "theme") {
+  if (floor.key === "recent") {
+    if (!recentItems.length) return <Empty description={t("common.noData")} />;
     return (
-      <Card size="small" style={{ background: "linear-gradient(90deg,#fff1f0,#f9f0ff)" }}>
-        <Text type="secondary">{t("aim.themeHint")}</Text>
-      </Card>
+      <Row gutter={[12, 12]}>
+        {recentItems.map((h) => (
+          <Col xs={12} sm={6} key={h.product_id}>
+            <Card
+              hoverable
+              size="small"
+              onClick={() => nav(`/products/${h.product_id}`)}
+              cover={
+                <div style={{ height: 120, background: "#f5f5f5", overflow: "hidden" }}>
+                  <ProductImage name={h.product_name || ""} image_url={h.image_url || undefined} height={120} rounded={0} />
+                </div>
+              }
+            >
+              <Card.Meta
+                title={
+                  <Text ellipsis style={{ fontSize: 13 }}>
+                    {h.product_name}
+                  </Text>
+                }
+                description={
+                  h.price != null ? (
+                    <Text strong style={{ color: "#f5222d" }}>
+                      ¥{h.price}
+                    </Text>
+                  ) : undefined
+                }
+              />
+            </Card>
+          </Col>
+        ))}
+      </Row>
+    );
+  }
+
+  if (floor.key === "theme") {
+    if (!cats.length) return <Empty description={t("common.noData")} />;
+    return (
+      <Row gutter={[12, 12]}>
+        {cats.slice(0, 6).map((c) => (
+          <Col xs={12} sm={6} md={4} key={c.id}>
+            <Card
+              size="small"
+              hoverable
+              onClick={() => nav(`/market?category=${c.id}`)}
+              style={{ textAlign: "center", background: "linear-gradient(135deg,#fff1f0,#f9f0ff)" }}
+            >
+              <Text strong>{c.name}</Text>
+              <div>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {t("aim.themeEnter")}
+                </Text>
+              </div>
+            </Card>
+          </Col>
+        ))}
+      </Row>
     );
   }
 
@@ -283,26 +369,28 @@ function FloorBody({ floor }: { floor: FloorOut }) {
 export default function AIMall() {
   const { t } = useI18n();
   const nav = useNavigate();
-  const [segment, setSegment] = useState<string>("buyer");
-  const [hour, setHour] = useState<number>(20);
   const [data, setData] = useState<HomeArrangeOut | null>(null);
   const [loading, setLoading] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [chatReply, setChatReply] = useState<string>("");
   const [chatIntent, setChatIntent] = useState<string>("");
+  const [chatProducts, setChatProducts] = useState<
+    { id: string; name: string; price: number; image_url: string | null; category_id: string | null }[]
+  >([]);
   const [chatLoading, setChatLoading] = useState(false);
 
+  // D 方案 A：身份由后端按登录用户真实推导，前端不再手动选择假身份
   const arrange = useCallback(async () => {
     setLoading(true);
     try {
-      const d = await homeArrange({ segment, hour });
+      const d = await homeArrange();
       setData(d);
     } catch (e: any) {
       message.error(e?.response?.data?.detail || t("common.operationFailed"));
     } finally {
       setLoading(false);
     }
-  }, [segment, hour]);
+  }, []);
 
   useEffect(() => {
     arrange();
@@ -316,7 +404,9 @@ export default function AIMall() {
       const res = await agentChat({ message: msg });
       setChatReply(res.reply);
       setChatIntent(res.intent || "");
+      setChatProducts(res.products || []);
     } catch (e: any) {
+      setChatProducts([]);
       message.error(e?.response?.data?.detail || t("common.operationFailed"));
     } finally {
       setChatLoading(false);
@@ -336,22 +426,10 @@ export default function AIMall() {
       </Paragraph>
 
       <Space wrap style={{ marginBottom: 12 }}>
-        <Text>{t("ai.home.segment")}：</Text>
-        <Segmented
-          value={segment}
-          onChange={(v) => setSegment(v as string)}
-          options={SEGMENTS.map((s) => ({
-            label: t(`ai.home.seg.${s}`),
-            value: s,
-          }))}
-        />
-        <Text>{t("ai.home.hour")}：</Text>
-        <Select
-          value={hour}
-          style={{ width: 140 }}
-          onChange={setHour}
-          options={HOUR_PRESETS.map((h) => ({ label: t(h.labelKey), value: h.value }))}
-        />
+        <Text type="secondary">{t("ai.home.segment")}：</Text>
+        <Tag color="geekblue">
+          {data ? t(`ai.home.seg.${data.segment}`) : t("common.loading")}
+        </Tag>
         <Button icon={<RefreshCw />} onClick={arrange} loading={loading}>
           {t("ai.home.refresh")}
         </Button>
@@ -414,6 +492,32 @@ export default function AIMall() {
               <Tag>{chatIntent || "-"}</Tag>
             </Space>
             <Paragraph style={{ marginTop: 6 }}>{chatReply}</Paragraph>
+            {chatProducts.length > 0 && (
+              <List
+                grid={{ gutter: 12, xs: 1, sm: 2, md: 2, lg: 3 }}
+                dataSource={chatProducts}
+                style={{ marginTop: 8 }}
+                renderItem={(p) => (
+                  <List.Item>
+                    <Card
+                      size="small"
+                      hoverable
+                      onClick={() => nav(`/products/${p.id}`)}
+                      cover={
+                        <div style={{ height: 120, overflow: "hidden" }}>
+                          <ProductImage src={p.image_url} name={p.name} />
+                        </div>
+                      }
+                    >
+                      <Card.Meta
+                        title={<span style={{ fontSize: 13 }}>{p.name}</span>}
+                        description={<ProductPrice p={{ id: p.id, price: p.price }} />}
+                      />
+                    </Card>
+                  </List.Item>
+                )}
+              />
+            )}
           </div>
         )}
       </Card>

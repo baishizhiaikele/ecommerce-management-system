@@ -87,6 +87,8 @@ export interface ProductOut {
   attributes?: Record<string, any>;
   created_at: string;
   reject_reason?: string | null;
+  ar_enabled?: boolean; // P2 体验增强：AR 试穿开关
+  ar_overlay_url?: string | null;
 }
 export interface CategoryOut {
   id: string;
@@ -298,6 +300,21 @@ export interface PromotionOut {
   original_price?: string | null;
   gift_product_name?: string | null;
 }
+
+export interface PromotionCreate {
+  title: string;
+  type: PromotionType;
+  product_id: string;
+  discount_price?: number;
+  discount_rate?: number;
+  start_at?: string;
+  end_at?: string;
+  is_active?: boolean;
+  threshold_amount?: number;
+  gift_product_id?: string;
+  bundle_count?: number;
+  bundle_price?: number;
+}
 export interface AddressOut {
   id: string;
   user_id: string;
@@ -318,20 +335,8 @@ export const getPromotions = (type?: PromotionType) =>
     .then((r) => r.data);
 export const myPromotions = () =>
   api.get<PromotionOut[]>("/promotions/mine").then((r) => r.data);
-export const createPromotion = (p: {
-  title: string;
-  type: PromotionType;
-  product_id: string;
-  discount_price?: number;
-  discount_rate?: number;
-  start_at?: string;
-  end_at?: string;
-  is_active?: boolean;
-  threshold_amount?: number;
-  gift_product_id?: string;
-  bundle_count?: number;
-  bundle_price?: number;
-}) => api.post<PromotionOut>("/promotions", p).then((r) => r.data);
+export const createPromotion = (p: PromotionCreate) =>
+  api.post<PromotionOut>("/promotions", p).then((r) => r.data);
 export const deletePromotion = (id: string) =>
   api.delete(`/promotions/${id}`).then((r) => r.data);
 
@@ -395,6 +400,18 @@ export const listProducts = (params?: {
   page?: number;
   page_size?: number;
 }) => api.get<ProductOut[]>("/products", { params }).then((r) => r.data);
+
+// P1-1 图搜：上传图片按相似度召回商品
+export const searchByImage = (file: File) => {
+  const form = new FormData();
+  form.append("file", file);
+  return api
+    .post<ProductOut[]>("/search/by-image", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    })
+    .then((r) => r.data);
+};
+
 export const getProduct = (id: string) =>
   api.get<ProductOut>(`/products/${id}`).then((r) => r.data);
 export const createProduct = (p: {
@@ -467,6 +484,45 @@ export const updateCartItem = (itemId: string, quantity: number) =>
 export const removeCartItem = (itemId: string) =>
   api.delete(`/cart/items/${itemId}`);
 
+// P1-2 购物车凑单 / 满减进度
+export interface CartPreview {
+  subtotal: number;
+  item_promo_discount: number;
+  item_promo_hits: string[];
+  full_reduce_progress: Array<{
+    product_id: string;
+    title: string;
+    threshold: number;
+    value: number;
+    line_total: number;
+    reached: boolean;
+    gap: number;
+    every: boolean;
+  }>;
+  coupon_progress: {
+    user_coupon_id: string;
+    name: string;
+    threshold: number;
+    value: number;
+    gap: number;
+  } | null;
+}
+export const getCartPreview = () =>
+  api.get<CartPreview>("/cart/preview").then((r) => r.data);
+
+export interface BundleSuggestion {
+  id: string;
+  name: string;
+  price: number;
+  image_url: string | null;
+  merchant_id: string;
+  projected_total: number;
+}
+export const getBundleSuggestions = (gap: number = 0, limit: number = 8) =>
+  api
+    .get<BundleSuggestion[]>("/cart/bundle-suggestions", { params: { gap, limit } })
+    .then((r) => r.data);
+
 // ---------- 订单 ----------
 export const checkout = (
   address: string,
@@ -478,6 +534,7 @@ export const checkout = (
     delivery_type?: "express" | "pickup";
     pickup_store?: string;
     cart_item_ids?: string[];
+    live_room_id?: string;
   }
 ) =>
   api
@@ -490,6 +547,7 @@ export const checkout = (
       delivery_type: opts?.delivery_type || "express",
       pickup_store: opts?.pickup_store || undefined,
       cart_item_ids: opts?.cart_item_ids || undefined,
+      live_room_id: opts?.live_room_id || undefined,
     })
     .then((r) => r.data);
 
@@ -542,6 +600,8 @@ export const getOrder = (id: string) =>
   api.get<OrderOut>(`/orders/${id}`).then((r) => r.data);
 export const transitionOrder = (id: string, status: OrderStatus) =>
   api.patch<OrderOut>(`/orders/${id}/status`, { status }).then((r) => r.data);
+export const deleteOrder = (id: string) =>
+  api.delete(`/orders/${id}`).then((r) => r.data);
 
 // ---------- AI 客服 ----------
 export const chat = (p: {
@@ -609,6 +669,8 @@ export interface NoteOut {
   likes_count: number;
   liked: boolean;
   created_at?: string | null;
+  affiliate_code?: string | null; // P3-G 种草商业化闭环
+  share_url?: string | null; // 作者推广分享链接
 }
 export const listNotes = (params?: { keyword?: string; limit?: number; offset?: number }) =>
   api.get<NoteOut[]>("/notes", { params }).then((r) => r.data);
@@ -624,6 +686,18 @@ export const toggleNoteLike = (id: string) =>
     .then((r) => r.data);
 export const deleteNote = (id: string) => api.delete(`/notes/${id}`).then(() => undefined);
 export const getNote = (id: string) => api.get<NoteOut>(`/notes/${id}`).then((r) => r.data);
+
+// P3-G 种草推荐流与商业化闭环
+export const getNoteFeed = (params: { limit?: number; offset?: number } = {}) =>
+  api.get<NoteOut[]>(`/notes/feed`, { params }).then((r) => r.data);
+export const getNotesForProduct = (productId: string, limit = 20) =>
+  api.get<NoteOut[]>(`/notes/for-product/${productId}`, { params: { limit } }).then((r) => r.data);
+export const attachAffiliate = (noteId: string) =>
+  api.post<NoteOut>(`/notes/${noteId}/attach-affiliate`).then((r) => r.data);
+export const trackAffiliateClick = (code: string) => {
+  if (!code) return Promise.resolve();
+  return api.post(`/affiliate/track`, { code }).catch(() => undefined);
+};
 
 // ---------- PLUS 付费会员（P3-H） ----------
 export interface PlusPlan {
@@ -824,6 +898,7 @@ export interface FloorOut {
   key: string;
   title: string;
   reason: string;
+  products: ProductOut[];
 }
 export interface HomeArrangeOut {
   segment: string;
@@ -1210,6 +1285,9 @@ export interface LiveProductOut {
   image_url?: string | null;
   stock: number;
   pinned: boolean;
+  live_price?: number | null; // 直播专属价
+  explaining: boolean; // 是否正在讲解
+  source: "normal" | "explaining" | "flash";
 }
 export interface LiveRoomOut {
   id: string;
@@ -1253,6 +1331,21 @@ export const listLiveMessages = (id: string, afterId?: string) =>
     .then((r) => r.data);
 export const sendLiveMessage = (id: string, content: string) =>
   api.post<LiveMessageOut>(`/live/${id}/messages`, { content }).then((r) => r.data);
+
+// P2 直播分销增强：改直播价 / 置顶 / 切讲解 / 移品 / AI 话术
+export const upsertLiveProduct = (
+  roomId: string,
+  productId: string,
+  p: { live_price?: number | null; explaining?: boolean; pinned?: boolean }
+) => api.put<LiveProductOut>(`/live/${roomId}/products/${productId}`, p).then((r) => r.data);
+export const removeLiveProduct = (roomId: string, productId: string) =>
+  api.delete(`/live/${roomId}/products/${productId}`).then((r) => r.data);
+export const setLiveExplaining = (roomId: string, productId: string, explaining: boolean) =>
+  api.post(`/live/${roomId}/products/${productId}/explain`, { explaining }).then((r) => r.data);
+export const liveAiScript = (roomId: string, productId?: string) =>
+  api
+    .post<{ script: string }>(`/live/${roomId}/ai-script`, { product_id: productId ?? null })
+    .then((r) => r.data);
 
 /** 直播弹幕 WebSocket 地址：同源走相对路径（开发经 Vite 代理，生产走同源托管）。 */
 export function liveWsUrl(id: string): string {
@@ -1446,6 +1539,49 @@ export const exportOrdersPdf = () =>
     .get("/merchant/reports/orders/pdf", { responseType: "blob" })
     .then((r) => downloadBlob(r.data, "orders.pdf"));
 
+// ---------- P1-3 历史价格曲线 ----------
+export interface PricePoint {
+  price: number;
+  source: string;
+  time: string | null;
+}
+export interface PriceHistoryOut {
+  series: PricePoint[];
+  compare: PriceCompareOut | null;
+}
+export const getPriceHistory = (productId: string) =>
+  api.get<PriceHistoryOut>(`/products/${productId}/price-history`).then((r) => r.data);
+
+// ---------- P1-5 售后进度时间轴 ----------
+export interface AftersaleEventOut {
+  id: string;
+  event_type: string;
+  actor_role: string;
+  title: string;
+  description: string | null;
+  time: string | null;
+}
+export interface AftersaleTimelineOut {
+  order_id: string;
+  status: OrderStatus;
+  events: AftersaleEventOut[];
+}
+export const getAftersaleTimeline = (orderId: string) =>
+  api.get<AftersaleTimelineOut>(`/orders/${orderId}/aftersale-timeline`).then((r) => r.data);
+
+// ---------- P1-6 地址智能解析 ----------
+export interface ParsedAddress {
+  province: string | null;
+  city: string | null;
+  district: string | null;
+  detail: string;
+  confidence: "high" | "medium" | "low" | "none";
+}
+export const parseAddressText = (text: string) =>
+  api
+    .post<ParsedAddress>(`/me/addresses/parse`, { text })
+    .then((r) => r.data);
+
 // ---------- 商品多规格 SKU ----------
 export interface VariantOut {
   id: string;
@@ -1597,6 +1733,13 @@ export interface AgentTool {
 export interface AgentReply {
   reply: string;
   intent?: string;
+  products?: {
+    id: string;
+    name: string;
+    price: number;
+    image_url: string | null;
+    category_id: string | null;
+  }[];
   tool_calls: { tool: string; result: unknown }[];
 }
 export const agentChat = (body: {

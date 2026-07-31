@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { Route, Routes } from "react-router-dom";
 import { Spin, message } from "antd";
 import Login from "./pages/Auth/Login";
+import ConsoleLogin from "./pages/Auth/ConsoleLogin";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ErrorBoundary from "./components/ErrorBoundary";
 import MainLayout from "./layouts/MainLayout";
@@ -159,8 +160,7 @@ export default function App() {
   }
 
   return (
-    <LanguageProvider>
-      <FlashPriceProvider>
+    <FlashPriceProvider>
       {/* P2-14 a11y：键盘用户可跳过顶部导航直接到达主内容 */}
       <a
         href="#main-content"
@@ -172,6 +172,7 @@ export default function App() {
         <Suspense fallback={<RouteFallback />}>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/console/login" element={<ConsoleLogin />} />
           <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
             <Route path="/" element={<Market />} />
             <Route path="/market" element={<Market />} />
@@ -235,6 +236,5 @@ export default function App() {
       </Suspense>
       </ErrorBoundary>
       </FlashPriceProvider>
-    </LanguageProvider>
   );
 }

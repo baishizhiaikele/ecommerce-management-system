@@ -28,6 +28,7 @@ from app.schemas.product import (
 from app.services import product_service
 from app.services.image_service import generate_images
 from app.services import price_compare_service
+from app.services.ai_service import ai_service
 from app.core.cache import cache_get, cache_set, cache_delete_prefix
 
 router = APIRouter(prefix="/products", tags=["products"])
@@ -95,6 +96,33 @@ async def get_product(product_id: str, db: AsyncSession = Depends(get_db)) -> Pr
     product = await product_service.get_product(db, product_id)
     await cache_set(f"products:detail:{product_id}", ProductOut.model_validate(product).model_dump(), ttl=60)
     return product
+
+
+@router.get("/{product_id}/price-history")
+async def get_price_history(product_id: str, db: AsyncSession = Depends(get_db)) -> dict:
+    """P1-3 历史价格曲线：返回该商品的价格快照序列（按时间升序）。"""
+    series = await price_compare_service.price_history(db, product_id)
+    # 比价摘要一并返回，前端曲线页可直接展示同类竞品区间
+    product = await product_service.get_product(db, product_id)
+    compare = await price_compare_service.compare_price(db, product)
+    return {"series": series, "compare": compare}
+
+
+@router.get("/{product_id}/review-summary")
+async def get_review_summary(product_id: str, db: AsyncSession = Depends(get_db)) -> dict:
+    """AI-4 评论摘要：聚合该商品的评论，给出正向/负向要点与整体结论。"""
+    from sqlalchemy import text as _text
+
+    rows = (
+        await db.execute(
+            _text(
+                "SELECT content, sentiment FROM reviews WHERE product_id=:pid ORDER BY created_at DESC LIMIT 50"
+            ),
+            {"pid": product_id},
+        )
+    ).all()
+    reviews = [{"content": r[0] or "", "sentiment": r[1] or "neutral"} for r in rows]
+    return await ai_service.summarize_reviews(reviews=reviews)
 
 
 @router.post("", response_model=ProductOut, status_code=201)
@@ -192,9 +220,9 @@ async def ai_image(
     count: int = Query(4, ge=1, le=8),
     apply: bool = Query(False, description="为 true 时将首张自动设为商品主图"),
 ) -> dict:
-    """AI 文生图：生成候选主图 / 场景图（未配置网关时降级为占位图）。"""
+    """AI 文生图：生成候选主图 / 场景图（未配置网关时降级为占位图，均落本地图床）。"""
     prompt = f"{product.name}。{product.description or ''}"
-    urls = await generate_images(prompt, count)
+    urls = await generate_images(prompt, count, seed=product.id)
     if apply and urls:
         product.image_url = urls[0]
         await db.commit()

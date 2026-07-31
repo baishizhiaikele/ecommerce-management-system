@@ -16,6 +16,10 @@ class LiveProductOut(BaseModel):
     image_url: str | None = None
     stock: int = 0
     pinned: bool = False
+    # P1-4 直播下单闭环
+    live_price: float | None = None  # 直播专属价（为空用原价）
+    explaining: bool = False  # 是否正在讲解
+    source: str = "normal"  # normal / explaining / flash（秒杀）
 
 
 class LiveRoomOut(BaseModel):

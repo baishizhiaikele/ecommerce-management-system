@@ -89,3 +89,34 @@ async def test_admin_dashboard_and_audit(client, admin_headers):
     assert logs.status_code == 200
     actions = [l["action"] for l in logs.json()]
     assert "login" in actions
+
+
+async def test_order_allocates_warehouse(client, buyer_headers, merchant_headers):
+    """P0-2：下单后订单项应写入由多仓路由选定的发货仓，且订单 API 正确返回该仓。"""
+    from app.db.session import SessionLocal
+    from sqlalchemy import text as _text
+
+    pid = await _merchant_product_id(client, merchant_headers)
+    # 确保该商品有分仓库存（不依赖 seed 顺序/幂等，独立稳定）
+    async with SessionLocal() as db:
+        wh = (await db.scalars(_text("SELECT id FROM warehouses LIMIT 1"))).first()
+        if wh:
+            await db.execute(
+                _text(
+                    "INSERT OR REPLACE INTO inventory_by_warehouse (id, product_id, warehouse_id, quantity) "
+                    "VALUES (:id, :pid, :wid, 10)"
+                ),
+                {"id": __import__("uuid").uuid4().hex, "pid": pid, "wid": wh},
+            )
+            await db.commit()
+    cart = await client.post("/api/cart/items", json={"product_id": pid, "quantity": 1}, headers=buyer_headers)
+    assert cart.status_code in (200, 201), cart.text
+    order_resp = await client.post(
+        "/api/orders/checkout", json={"address": "北京市朝阳区 demo 路 1 号"}, headers=buyer_headers
+    )
+    assert order_resp.status_code in (200, 201), order_resp.text
+    order = order_resp.json()
+    items = order.get("items") or []
+    assert items, "订单无明细"
+    wh_ids = {it["warehouse_id"] for it in items}
+    assert None not in wh_ids, f"订单项未分配发货仓: {items}"

@@ -27,6 +27,18 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: .
@@ -35,11 +47,15 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "8000:8000"
     environment:
       # 同步驱动连接串，应用会自动转换为 asyncpg 异步驱动
       DATABASE_URL: postgresql://${POSTGRES_USER:-ai_shop}:${POSTGRES_PASSWORD:-ai_shop}@db:5432/${POSTGRES_DB:-ai_shop}
+      # Redis 缓存 / 异步队列（P0 基础设施）：容器网络内指向 redis 服务
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       SECRET_KEY: ${SECRET_KEY:?请通过 .env 设置 SECRET_KEY}
       FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:8000}
       SEED_DEMO: ${SEED_DEMO:-true}
@@ -55,3 +71,4 @@ services:
 
 volumes:
   pgdata:
+  redisdata:

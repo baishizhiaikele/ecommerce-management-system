@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api._product_snapshot import load_product_map, snapshot_name
 from app.core.deps import get_current_user, require_role
 from app.db.session import get_db
-from app.models.order import Order, OrderItem, OrderStatus
+from app.models.order import Order, OrderItem, OrderStatus, AftersaleEvent
 from app.models.product import Product
 from app.models.user import Role, User
 from app.schemas.order import (
@@ -40,6 +40,7 @@ def _serialize(order: Order, items: list, snapshot: dict) -> OrderOut:
             image_url=snapshot.get(it.product_id).image_url if snapshot.get(it.product_id) else None,
             price=it.price,
             quantity=it.quantity,
+            warehouse_id=it.warehouse_id,
         )
         for it in items
     ]
@@ -62,6 +63,8 @@ def _serialize(order: Order, items: list, snapshot: dict) -> OrderOut:
         pickup_store=order.pickup_store,
         pickup_code=order.pickup_code,
         picked_up_at=order.picked_up_at,
+        live_room_id=order.live_room_id,  # P1-4 直播下单归因
+        affiliate_code=order.affiliate_code,  # P3-G 种草商业化闭环归因
         items=item_outs,
         created_at=order.created_at,
         paid_at=order.paid_at,
@@ -94,6 +97,8 @@ async def checkout(
         delivery_type=data.delivery_type,
         pickup_store=data.pickup_store,
         cart_item_ids=data.cart_item_ids,
+        live_room_id=data.live_room_id,  # P1-4 直播下单归因
+        affiliate_code=data.affiliate_code,  # P3-G 种草商业化闭环归因
     )
     return await _load_order_view(db, order)
 
@@ -129,6 +134,49 @@ async def get_order(
 ) -> OrderOut:
     order = await order_service.get_order(db, order_id, user_id=user.id, role=user.role.value)
     return await _load_order_view(db, order)
+
+
+@router.get("/{order_id}/aftersale-timeline")
+async def aftersale_timeline(
+    order_id: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+) -> dict:
+    """P1-5 售后进度可视化：返回订单的售后时间线事件（申请→处理→退款等）。"""
+    order = await order_service.get_order(db, order_id, user_id=user.id, role=user.role.value)
+    events = (
+        await db.scalars(
+            select(AftersaleEvent)
+            .where(AftersaleEvent.order_id == order.id)
+            .order_by(AftersaleEvent.created_at.asc())
+        )
+    ).all()
+    return {
+        "order_id": order.id,
+        "status": order.status.value,
+        "events": [
+            {
+                "id": e.id,
+                "event_type": e.event_type,
+                "actor_role": e.actor_role,
+                "title": e.title,
+                "description": e.description,
+                "time": e.created_at.isoformat() if e.created_at else None,
+            }
+            for e in events
+        ],
+    }
+
+
+@router.delete("/{order_id}")
+async def delete_order(
+    order_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    user_id = str(user.id)
+    role = getattr(user, "role", "buyer") or "buyer"
+    role_val = getattr(role, "value", role)
+    await order_service.soft_delete_order(db, order_id, user_id=user_id, role=str(role_val))
+    return {"ok": True}
 
 
 @router.patch("/{order_id}/status", response_model=OrderOut)

@@ -1,8 +1,25 @@
 """AI 比价：将商品售价与同类竞品横向对比，给出调价建议。"""
 from sqlalchemy import select
 
-from app.models.product import Product, ProductStatus
+from app.models.product import PriceHistory, Product, ProductStatus
 from app.services.ai_service import ai_service
+
+
+async def price_history(db, product_id: str) -> list[dict]:
+    """P1-3 历史价格曲线：返回该商品的价格快照序列（按时间升序）。"""
+    rows = await db.scalars(
+        select(PriceHistory)
+        .where(PriceHistory.product_id == product_id)
+        .order_by(PriceHistory.created_at.asc())
+    )
+    return [
+        {
+            "price": float(r.price),
+            "source": r.source,
+            "time": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in rows
+    ]
 
 
 async def compare_price(db, product) -> dict:

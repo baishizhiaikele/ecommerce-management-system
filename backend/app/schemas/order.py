@@ -16,6 +16,8 @@ class CheckoutRequest(BaseModel):
     delivery_type: str = Field(default="express", pattern="^(express|pickup)$")
     pickup_store: Optional[str] = Field(default=None, max_length=200)
     cart_item_ids: list[str] = []
+    live_room_id: Optional[str] = None  # P1-4 直播下单归因
+    affiliate_code: Optional[str] = None  # P3-G 种草商业化闭环：来自种草笔记分享链接的推广码
 
 
 class OrderItemOut(BaseModel):
@@ -25,6 +27,7 @@ class OrderItemOut(BaseModel):
     image_url: Optional[str] = None
     price: Decimal
     quantity: int
+    warehouse_id: Optional[str] = None  # P0-2 多仓发货：发货仓
 
 
 class OrderOut(BaseModel):
@@ -46,6 +49,7 @@ class OrderOut(BaseModel):
     pickup_store: Optional[str] = None
     pickup_code: Optional[str] = None
     picked_up_at: Optional[datetime] = None
+    affiliate_code: Optional[str] = None  # P3-G 种草商业化闭环归因
     items: list[OrderItemOut]
     created_at: datetime
     paid_at: Optional[datetime]

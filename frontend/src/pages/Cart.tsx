@@ -7,27 +7,36 @@ import {
   InputNumber,
   Tag,
   message,
+  notification,
   Card,
   Input,
   Popconfirm,
   Empty,
   Result,
   Spin,
+  Drawer,
+  Progress,
 } from "antd";
-import { ReloadOutlined } from "@ant-design/icons";
+import { ReloadOutlined, GiftOutlined } from "@ant-design/icons";
 import {
   getCart,
   updateCartItem,
   removeCartItem,
+  addCartItem,
   checkout,
   myCoupons,
   listCategories,
   listAddresses,
   getErrorMessage,
+  getCartPreview,
+  getBundleSuggestions,
+  proxyImg,
   CartItemOut,
   UserCouponOut,
   CategoryOut,
   AddressOut,
+  CartPreview,
+  BundleSuggestion,
 } from "../api";
 import { money } from "../utils/format";
 import { calcSubtotal, calcCouponDiscount, calcPointsDiscount, calcPayable } from "../utils/cart";
@@ -60,6 +69,16 @@ export default function Cart() {
   const lastOkQtyRef = useRef<Record<string, number>>({});
   const [addresses, setAddresses] = useState<AddressOut[]>([]);
   const [selAddrId, setSelAddrId] = useState<string>();
+  // P1-2 凑单进度：后端算价预览（满减活动进度 + 满减券进度）
+  const [preview, setPreview] = useState<CartPreview | null>(null);
+  const [bundleOpen, setBundleOpen] = useState(false);
+  const [bundleList, setBundleList] = useState<BundleSuggestion[]>([]);
+  const [bundleLoading, setBundleLoading] = useState(false);
+  // 删除撤销：暂存"已被乐观隐藏、待真实删除"的条目与其在原列表中的下标，
+  // 撤销时恢复原位，避免列表顺序抖动。
+  const hiddenRef = useRef<Record<string, CartItemOut>>({});
+  const hiddenIndexRef = useRef<Record<string, number>>({});
+  const undoTimersRef = useRef<Record<string, number>>({});
   const formatAddr = (a: AddressOut) =>
     `${a.receiver} ${a.phone} ${a.province}${a.city}${a.district}${a.detail}`;
 
@@ -68,13 +87,15 @@ export default function Cart() {
     setLoading(true);
     setLoadError(null);
     try {
-      const [cart, mine, cats, addrs] = await Promise.all([
+      const [cart, mine, cats, addrs, pv] = await Promise.all([
         getCart(),
         myCoupons(),
         listCategories(),
         listAddresses(),
+        getCartPreview().catch(() => null),
       ]);
       setItems(cart);
+      setPreview(pv);
       lastOkQtyRef.current = Object.fromEntries(cart.map((it) => [it.id, it.quantity]));
       // 从商品详情「立即购买」进来时只勾选该商品；否则首次进入默认全选，
       // 避免用户点结算才发现"未选择商品"。之后只剔除已不存在的条目，不覆盖手动取消
@@ -135,11 +156,14 @@ export default function Cart() {
     selectedItems.map((it) => it.merchant_id).filter(Boolean) as string[],
   );
 
-  // 与后端 compute_discount 对齐：同时校验适用范围（品类/商家）与满减门槛，
-  // 返回 { ok, reason }，reason 用于向用户说明为何不可用。
+  // 与后端 compute_discount / find_usable_user_coupon 对齐：校验适用范围（品类/商家）、
+  // 满减门槛与有效期，返回 { ok, reason }，reason 用于向用户说明为何不可用。
+  // 过期券直接判不可用，避免「最优惠券」把无效券推荐给用户。
   const couponCheck = (
     c: UserCouponOut,
   ): { ok: boolean; reason: string } => {
+    if (c.expire_at && new Date(c.expire_at).getTime() < Date.now())
+      return { ok: false, reason: t("coupon.expired") };
     if (c.applicable_category && !cartCategorySlugs.has(c.applicable_category))
       return { ok: false, reason: t("cart.couponMismatchCategory") };
     if (c.merchant_id && !cartMerchantIds.has(c.merchant_id))
@@ -188,14 +212,71 @@ export default function Cart() {
     }, 300);
     pending.set(id, entry);
   };
-  const remove = async (id: string) => {
-    try {
-      await removeCartItem(id);
-      load();
-    } catch (e) {
-      const err = e as AxiosError<ApiError>;
-      message.error(err.response?.data?.detail || t("common.operationFailed"));
-    }
+  // 卸载时清理待执行的删除定时器，避免对已卸载组件 setState
+  useEffect(() => {
+    const timers = undoTimersRef.current;
+    return () => {
+      Object.values(timers).forEach((t) => clearTimeout(t));
+      undoTimersRef.current = {} as Record<string, number>;
+      hiddenRef.current = {} as Record<string, CartItemOut>;
+    };
+  }, []);
+
+  // 删除：乐观隐藏（列表立刻无该条目），5s 内可撤销恢复原位；超时后才真实调后端删除，
+  // 避免误删无挽回（阶段 D UX 精致度：撤销 Snackbar）。
+  const remove = (id: string) => {
+    const idx = items.findIndex((it) => it.id === id);
+    if (idx < 0) return;
+    const target = items[idx];
+    hiddenRef.current[id] = target;
+    hiddenIndexRef.current[id] = idx;
+    setItems((s) => s.filter((it) => it.id !== id));
+    setSelectedIds((s) => s.filter((x) => x !== id));
+    if (undoTimersRef.current[id]) clearTimeout(undoTimersRef.current[id]);
+    undoTimersRef.current[id] = window.setTimeout(async () => {
+      try {
+        await removeCartItem(id);
+      } catch (e) {
+        const err = e as AxiosError<ApiError>;
+        message.error(err.response?.data?.detail || t("cart.deleteFail"));
+        restoreHidden(id);
+      } finally {
+        delete undoTimersRef.current[id];
+        delete hiddenRef.current[id];
+        delete hiddenIndexRef.current[id];
+      }
+    }, 5000);
+    notification.open({
+      message: t("cart.undoDelete"),
+      btn: (
+        <Button
+          size="small"
+          type="link"
+          onClick={() => {
+            if (undoTimersRef.current[id]) clearTimeout(undoTimersRef.current[id]);
+            delete undoTimersRef.current[id];
+            restoreHidden(id);
+          }}
+        >
+          {t("cart.undo")}
+        </Button>
+      ),
+      duration: 5,
+    });
+  };
+  // 把被乐观隐藏的条目恢复回原下标（Id 稳定，列表顺序不抖动）
+  const restoreHidden = (id: string) => {
+    const item = hiddenRef.current[id];
+    const at = hiddenIndexRef.current[id];
+    delete hiddenRef.current[id];
+    delete hiddenIndexRef.current[id];
+    if (!item) return;
+    setItems((s) => {
+      const n = [...s];
+      const idx = Math.min(at ?? n.length, n.length);
+      n.splice(idx, 0, item);
+      return n;
+    });
   };
   const removeSelected = async () => {
     if (selectedIds.length === 0) return;
@@ -234,6 +315,8 @@ export default function Cart() {
         setSubmitting(false);
         return;
       }
+      // P1-4 直播下单闭环：若来自直播间加购，归因到对应直播间
+      const liveRoomId = localStorage.getItem("live_room_id") || undefined;
       const order = await checkout(address.trim(), {
         receiver: receiver.trim(),
         contact: phone.trim(),
@@ -242,7 +325,9 @@ export default function Cart() {
         delivery_type: deliveryType,
         pickup_store: deliveryType === "pickup" ? pickupStore.trim() : undefined,
         cart_item_ids: selectedIds,
+        live_room_id: liveRoomId,
       });
+      if (liveRoomId) localStorage.removeItem("live_room_id");
       clear();
       message.success(t("cart.orderSuccess"));
       navigate(`/orders/${order.id}`);
@@ -264,12 +349,46 @@ export default function Cart() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   })();
   const assembleGap = (() => {
+    // 修 Bug：凑单提示只应针对「满减券」(full_reduce)，折扣券无门槛无需凑单
     const cands = coupons
       .filter(couponApplicable)
-      .filter((c) => c.type === "discount" && c.threshold && subtotal < Number(c.threshold));
+      .filter((c) => c.type === "full_reduce" && c.threshold && subtotal < Number(c.threshold));
     if (cands.length === 0) return null;
     return Math.min(...cands.map((c) => (Number(c.threshold) || 0) - subtotal));
   })();
+
+  // 主凑单提示：优先后端算价——满减券进度，其次本地满减券门槛，再其次满减活动进度
+  const bundleGap = (() => {
+    if (preview?.coupon_progress?.gap) return preview.coupon_progress.gap;
+    if (assembleGap != null) return assembleGap;
+    const gaps = (preview?.full_reduce_progress || []).filter((p) => !p.reached).map((p) => p.gap);
+    return gaps.length ? Math.min(...gaps) : null;
+  })();
+  const bundleHint = preview?.coupon_progress
+    ? `${preview.coupon_progress.name}（满${money(preview.coupon_progress.threshold)}减${money(preview.coupon_progress.value)}）`
+    : preview?.full_reduce_progress?.find((p) => !p.reached)?.title || "";
+
+  const openBundle = async () => {
+    setBundleOpen(true);
+    setBundleLoading(true);
+    try {
+      const list = await getBundleSuggestions(bundleGap || 0);
+      setBundleList(list);
+    } catch (e) {
+      message.error(getErrorMessage(e));
+    } finally {
+      setBundleLoading(false);
+    }
+  };
+  const addBundle = async (p: BundleSuggestion) => {
+    try {
+      await addCartItem({ product_id: p.id, quantity: 1 });
+      message.success(t("cart.added"));
+      await load();
+    } catch (e) {
+      message.error(getErrorMessage(e));
+    }
+  };
   // 前端计算最优券（后端暂无 best 接口），取可适用且优惠力度最大者
   const applyBest = () => {
     if (selectedItems.length === 0) {
@@ -418,11 +537,9 @@ export default function Cart() {
               title: t("common.action"),
               fixed: "right",
               render: (_, r) => (
-                <Popconfirm title={t("common.confirmDelete")} onConfirm={() => remove(r.id)}>
-                  <Button type="link" danger>
-                    {t("common.delete")}
-                  </Button>
-                </Popconfirm>
+                <Button type="link" danger onClick={() => remove(r.id)}>
+                  {t("common.delete")}
+                </Button>
               ),
             },
           ]}
@@ -443,17 +560,29 @@ export default function Cart() {
                   onChange={(v) => setCouponId(v)}
                   options={coupons.map((c) => {
                     const chk = couponCheck(c);
-                    const hint =
+                    const benefit =
                       c.type === "discount"
-                        ? t("coupon.type.discount")
+                        ? t("coupon.discountHint2").replace("{value}", String(Number(c.value) * 10))
                         : t("coupon.discountHint")
-                            .replace("{threshold}", c.threshold)
-                            .replace("{value}", c.value);
+                            .replace("{threshold}", String(c.threshold))
+                            .replace("{value}", String(c.value));
+                    const scope =
+                      c.merchant_id
+                        ? t("coupon.scope.shop")
+                        : c.applicable_category
+                          ? `${t("coupon.scope.shop")}:${c.applicable_category}`
+                          : t("coupon.scope.platform");
+                    const expire = c.expire_at
+                      ? new Date(c.expire_at).toLocaleDateString()
+                      : "";
+                    const sub = [benefit, scope, expire ? `${t("coupon.expireAt")}:${expire}` : ""]
+                      .filter(Boolean)
+                      .join(" · ");
                     return {
                       value: c.id,
                       label: chk.ok
-                        ? `${c.name}（${hint}）`
-                        : `${c.name}（${hint} · ${chk.reason}）`,
+                        ? `${c.name}（${sub}）`
+                        : `${c.name}（${sub} · ${chk.reason}）`,
                       disabled: !chk.ok,
                     };
                   })}
@@ -466,6 +595,38 @@ export default function Cart() {
             {assembleGap != null && (
               <div className="text-xs text-orange-500 mt-1">
                 🎯 {t("cart.assembleHint").replace("{n}", money(assembleGap))}
+              </div>
+            )}
+            {/* P1-2 凑单进度：后端算价的满减券/满减活动进度 + 一键去凑单 */}
+            {bundleGap != null && (
+              <div className="mt-2 rounded-lg bg-orange-50 border border-orange-100 px-3 py-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-orange-600">
+                    🎯 {t("cart.bundleHint").replace("{n}", money(bundleGap))}
+                    {bundleHint ? ` · ${bundleHint}` : ""}
+                  </span>
+                  <Button size="small" type="primary" ghost onClick={openBundle}>
+                    {t("cart.bundleGo")}
+                  </Button>
+                </div>
+                {preview?.full_reduce_progress?.map((p) => (
+                  <div key={p.product_id} className="mt-1.5">
+                    <div className="flex items-center justify-between text-[11px] text-slate-500">
+                      <span className="truncate max-w-[60%]">{p.title}</span>
+                      <span>
+                        {p.reached
+                          ? `已享减${money(p.value)}`
+                          : `还差${money(p.gap)}`}
+                      </span>
+                    </div>
+                    <Progress
+                      percent={p.threshold > 0 ? Math.min(100, Math.round((p.line_total / p.threshold) * 100)) : 100}
+                      showInfo={false}
+                      size="small"
+                      strokeColor="#f97316"
+                    />
+                  </div>
+                ))}
               </div>
             )}
             <div className="flex items-center justify-between gap-3">
@@ -489,9 +650,11 @@ export default function Cart() {
               <span className="text-slate-500">{t("cart.itemsSubtotal")}</span>
               <span className="text-slate-700">¥{money(subtotal)}</span>
             </div>
-            {cDisc > 0 && (
+            {cDisc > 0 && selCoupon && (
               <div className="flex items-center justify-between">
-                <span className="text-slate-500">{t("cart.couponDiscount")}</span>
+                <span className="text-slate-500">
+                  {t("cart.couponDiscount")}（{selCoupon.name}）
+                </span>
                 <span className="text-emerald-600">-¥{money(cDisc)}</span>
               </div>
             )}
@@ -591,6 +754,45 @@ export default function Cart() {
           </Button>
         </Card>
       </div>
+
+      {/* P1-2 凑单抽屉：基于差额推荐可一键加购的商品 */}
+      <Drawer
+        title={t("cart.bundleDrawerTitle")}
+        placement="right"
+        width={360}
+        open={bundleOpen}
+        onClose={() => setBundleOpen(false)}
+      >
+        {bundleLoading ? (
+          <Spin />
+        ) : bundleList.length === 0 ? (
+          <Empty description={t("cart.bundleEmpty")} />
+        ) : (
+          <div className="space-y-3">
+            {bundleList.map((p) => (
+              <div
+                key={p.id}
+                className="flex items-center gap-3 rounded-lg border border-slate-100 p-2"
+              >
+                <img
+                  src={p.image_url ? proxyImg(p.image_url) : undefined}
+                  alt={p.name}
+                  className="h-14 w-14 rounded object-cover bg-slate-50"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm text-slate-700">{p.name}</div>
+                  <div className="text-xs text-slate-400">
+                    ¥{money(p.price)} · {t("cart.bundleProjected").replace("{n}", money(p.projected_total))}
+                  </div>
+                </div>
+                <Button size="small" type="primary" icon={<GiftOutlined />} onClick={() => addBundle(p)}>
+                  {t("cart.add")}
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </Drawer>
     </div>
   );
 }

@@ -43,6 +43,10 @@ class LiveRoomProduct(Base):
     room_id = Column(String(36), ForeignKey("live_rooms.id"), nullable=False, index=True)
     product_id = Column(String(36), ForeignKey("products.id"), nullable=False)
     pinned = Column(Integer, default=0, nullable=False)
+    # P1-4 直播下单闭环：直播专属价（为空则用商品原价）、是否正在讲解、排序权重
+    live_price = Column(String(20), nullable=True, default=None)
+    explaining = Column(Integer, default=0, nullable=False)
+    sort = Column(Integer, default=0, nullable=False)
 
 
 class LiveMessage(Base):

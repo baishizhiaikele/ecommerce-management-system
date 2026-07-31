@@ -11,7 +11,7 @@ from sqlalchemy.orm import selectinload
 from app.core.db_errors import is_deadlock
 from app.models.cart import CartItem
 from app.models.catalog import Category
-from app.models.order import Order, OrderItem, OrderStatus
+from app.models.order import Order, OrderItem, OrderStatus, AftersaleEvent
 from app.models.product import Product, ProductStatus
 from app.models.variant import ProductVariant
 import json
@@ -44,6 +44,24 @@ from app.services.shipping_service import compute_freight
 from app.core.member_levels import get_tier
 from app.services.plus_service import PLUS_EXTRA_DISCOUNT, is_plus_active
 from app.events import bus
+from app.core.metrics import inc_counter
+
+
+def _aftersale_event(target: OrderStatus, role: str, order: Order) -> dict | None:
+    """P1-5 将售后相关状态流转映射为面向用户的时间线事件（None 表示非售后流转）。"""
+    REFUND_STATES = {
+        OrderStatus.REFUND_REQUESTED: ("refund_requested", "已发起退款申请", "买家发起退款，等待商家处理。"),
+        OrderStatus.REFUND_REJECTED: ("refund_rejected", "退款申请被驳回", "商家驳回了退款申请，可补充凭证后重新发起或申请仲裁。"),
+        OrderStatus.RETURN_REQUESTED: ("refund_requested", "已发起退货退款", "买家发起退货退款，等待商家审核。"),
+        OrderStatus.RETURN_SHIPPED: ("return_shipped", "已寄出退货", f"买家已寄回退货{'，运单号 ' + order.tracking_no if order.tracking_no else ''}。"),
+        OrderStatus.RETURN_RECEIVED: ("return_received", "商家已收货", "商家已收到退回商品，正在处理退款。"),
+        OrderStatus.REFUNDED: ("refunded", "退款已完成", "商家已同意退款，款项原路退回，请注意查收。"),
+        OrderStatus.DISPUTE: ("dispute_opened", "平台仲裁已开启", f"订单进入平台仲裁：{order.dispute_reason or '买家申请介入'}。"),
+    }
+    if target in REFUND_STATES:
+        etype, title, desc = REFUND_STATES[target]
+        return {"event_type": etype, "title": title, "description": desc}
+    return None
 
 
 async def _next_order_no(db: AsyncSession) -> str:
@@ -63,10 +81,14 @@ async def _build_order_items(
     order: Order,
     cart_rows: list[CartItem],
     pmap: dict[str, Product],
+    ship_region: str | None = None,
 ) -> tuple[float, dict[str, float], list[tuple[str, int, float]], list[str]]:
     """遍历购物车逐件校验库存/规格、扣减库存并记录销量，生成 OrderItem；
     同时累加金额小计、各商家小计与促销输入。返回 (total, merchant_subtotals, promo_input, out_of_stock)。
-    调用方需已对涉及商品加行锁（with_for_update），此处直接扣减以保证不超卖。"""
+    调用方需已对涉及商品加行锁（with_for_update），此处直接扣减以保证不超卖。
+
+    P0-2：逐件按收货地就近 + 有货优先分配发货仓，写入 OrderItem.warehouse_id。
+    """
     total = 0.0
     merchant_subtotals: dict[str, float] = {}
     out_of_stock: list[str] = []
@@ -111,6 +133,12 @@ async def _build_order_items(
             variant_info = json.dumps(
                 {"variant_id": variant.id, "specs": variant.specs_dict()}, ensure_ascii=False
             )
+        # P0-2：多仓发货路由（无分仓数据返回 None，沿用单仓逻辑）
+        from app.services.inventory_service import allocate_warehouse
+
+        warehouse_id = await allocate_warehouse(
+            db, product_id=product.id, quantity=item.quantity, ship_region=ship_region
+        )
         db.add(
             OrderItem(
                 order_id=order.id,
@@ -120,6 +148,7 @@ async def _build_order_items(
                 name=product.name,
                 image_url=product.image_url,
                 variant_info=variant_info,
+                warehouse_id=warehouse_id,
             )
         )
     return total, merchant_subtotals, promo_input, out_of_stock
@@ -220,6 +249,9 @@ async def checkout(
     delivery_type: str = "express",
     pickup_store: str | None = None,
     cart_item_ids: list[str] | None = None,
+    ship_region: str | None = None,
+    live_room_id: str | None = None,
+    affiliate_code: str | None = None,  # P3-G 种草商业化闭环：来自种草笔记分享链接
 ) -> Order:
     cart_rows = list(
         await db.scalars(select(CartItem).where(CartItem.user_id == buyer.id))
@@ -251,9 +283,19 @@ async def checkout(
         contact=contact,
         delivery_type=delivery_type,
         pickup_store=pickup_store,
+        live_room_id=live_room_id,  # P1-4 直播下单归因
+        affiliate_code=affiliate_code,  # P3-G 种草商业化闭环归因
     )
     db.add(order)
     await db.flush()
+    inc_counter("orders_created")
+
+    # P0-2：未显式传收货大区时，从地址文本粗粒度推断（华东/华北/华南/华中/西南/西北/东北）
+    if ship_region is None and address:
+        for r in ("华北", "华东", "华南", "华中", "西南", "西北", "东北"):
+            if r in address:
+                ship_region = r
+                break
 
     # S3/P1-M4：排序 + 去重加行锁取出全部涉及商品，消除 N+1 并避免并发超卖/死锁
     product_ids = sorted(set(it.product_id for it in cart_rows))
@@ -286,9 +328,9 @@ async def checkout(
             category_slugs.add(c.slug)
     merchant_ids = {p.merchant_id for p in locked if p.merchant_id}
 
-    # 库存锁定 + 构建订单明细
+    # 库存锁定 + 构建订单明细（P0-2 传入收货大区用于多仓路由）
     total, merchant_subtotals, promo_input, out_of_stock = await _build_order_items(
-        db, order=order, cart_rows=cart_rows, pmap=pmap
+        db, order=order, cart_rows=cart_rows, pmap=pmap, ship_region=ship_region
     )
     subtotal = round(total, 2)
 
@@ -358,6 +400,7 @@ async def list_orders(
         )
     else:
         stmt = stmt.where(Order.buyer_id == user_id)
+    stmt = stmt.where(Order.deleted_at.is_(None))
     if status:
         stmt = stmt.where(Order.status == status)
     # P2-M6：服务端分页，避免一次性加载整张订单表
@@ -389,6 +432,19 @@ async def get_order(db: AsyncSession, order_id: str, *, user_id: str, role: str)
             return order
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权查看该订单")
     return order
+
+
+async def soft_delete_order(db: AsyncSession, order_id: str, *, user_id: str, role: str) -> None:
+    """买家软删除自己的订单（仅本人可操作，管理员不可代删以免破坏数据）。"""
+    if role == "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="管理员不可删除用户订单")
+    if role == "merchant":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="商家不可删除订单")
+    order = await _load_order(db, order_id)
+    if order.buyer_id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权删除该订单")
+    order.deleted_at = datetime.now(timezone.utc)
+    await db.commit()
 
 
 async def transition_status(
@@ -487,6 +543,10 @@ async def transition_status(
     # 任何异常（含死锁）均回滚，避免"状态已落库而审计缺失"或会话残留脏状态。
     try:
         await record(db, actor_id, f"order.{target.value}", "order", order.id, order.order_no)
+        # P1-5 售后进度可视化：把售后相关流转落成面向用户的时间线事件
+        _event = _aftersale_event(target, role, order)
+        if _event:
+            db.add(AftersaleEvent(order_id=order.id, actor_role=role, **_event))
         await db.commit()
     except OperationalError as e:
         await db.rollback()

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { AxiosError } from "axios";
-import { Card, Button, Spin, Empty, message, Tabs, Tag } from "antd";
+import { Card, Button, Spin, Empty, message, Tabs, Tag, Popconfirm } from "antd";
 import { useNavigate } from "react-router-dom";
 import { myFollowing, unfollowShop, followFeed, FollowShopOut, ShopEventOut } from "../api";
 import { useI18n } from "../i18n";
@@ -63,9 +63,17 @@ export default function Following() {
             <Button key="go" type="link" onClick={() => nav(`/shops/${f.merchant_id}`)}>
               {t("follow.visitShop")}
             </Button>,
-            <Button key="un" type="link" danger onClick={() => unfollow(f.merchant_id)}>
-              {t("follow.unfollow")}
-            </Button>,
+            <Popconfirm
+              key="un"
+              title={t("follow.confirmUnfollow")}
+              okText={t("common.ok")}
+              cancelText={t("common.cancel")}
+              onConfirm={() => unfollow(f.merchant_id)}
+            >
+              <Button type="link" danger>
+                {t("follow.unfollow")}
+              </Button>
+            </Popconfirm>,
           ]}
         >
           <div className="flex items-center gap-3">

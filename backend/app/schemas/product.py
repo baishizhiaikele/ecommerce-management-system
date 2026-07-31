@@ -32,6 +32,8 @@ class ProductBase(BaseModel):
     image_url: Optional[str] = Field(default=None, max_length=512)
     category_id: Optional[str] = None
     warning_threshold: Optional[int] = Field(default=None, ge=0, le=100000)
+    ar_enabled: Optional[bool] = None
+    ar_overlay_url: Optional[str] = Field(default=None, max_length=512)
 
 
 class ProductCreate(ProductBase):
@@ -46,6 +48,8 @@ class ProductUpdate(BaseModel):
     image_url: Optional[str] = Field(default=None, max_length=512)
     category_id: Optional[str] = None
     warning_threshold: Optional[int] = Field(default=None, ge=0, le=100000)
+    ar_enabled: Optional[bool] = None
+    ar_overlay_url: Optional[str] = Field(default=None, max_length=512)
 
 
 class ProductOut(BaseModel):
@@ -69,6 +73,8 @@ class ProductOut(BaseModel):
     ai_price_suggestion: Optional[Decimal]
     created_at: datetime
     reject_reason: Optional[str] = None
+    ar_enabled: bool = False
+    ar_overlay_url: Optional[str] = None
 
 
 class AIGenerateRequest(BaseModel):

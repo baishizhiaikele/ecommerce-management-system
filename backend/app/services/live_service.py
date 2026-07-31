@@ -90,6 +90,7 @@ async def room_detail(db: AsyncSession, room_id: str) -> LiveRoomDetail:
     for rp, product in rows.all():
         if product.status != ProductStatus.ACTIVE:
             continue
+        live_price = float(rp.live_price) if rp.live_price else None
         detail.products.append(
             LiveProductOut(
                 id=product.id,
@@ -98,8 +99,15 @@ async def room_detail(db: AsyncSession, room_id: str) -> LiveRoomDetail:
                 image_url=product.image_url,
                 stock=int(product.stock or 0),
                 pinned=bool(rp.pinned),
+                live_price=live_price,
+                explaining=bool(rp.explaining),
+                source="explaining" if rp.explaining else ("flash" if live_price else "normal"),
             )
         )
+    # 讲解中的排最前，其次置顶，再次按 sort 升序
+    detail.products.sort(
+        key=lambda p: (0 if p.explaining else (1 if p.pinned else 2), 0)
+    )
     return detail
 
 
@@ -143,3 +151,100 @@ async def list_messages(
         if after_id in ids:
             rows = rows[ids.index(after_id) + 1 :]
     return [LiveMessageOut.model_validate(m) for m in rows]
+
+
+# ---------------------------------------------------------------------------
+# P1-4 直播下单闭环：挂车商品管理（改直播价 / 讲解标记 / 置顶）
+# ---------------------------------------------------------------------------
+async def upsert_product(
+    db: AsyncSession,
+    *,
+    merchant: User,
+    room_id: str,
+    product_id: str,
+    live_price: float | None = None,
+    explaining: bool = False,
+    pinned: bool = False,
+) -> LiveProductOut:
+    """挂车或更新某商品的直播专属信息（幂等：已挂则更新）。"""
+    room = await db.get(LiveRoom, room_id)
+    if not room or room.merchant_id != merchant.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="直播间不存在")
+    product = await db.get(Product, product_id)
+    if not product or product.merchant_id != merchant.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="商品不存在或不属于你"
+        )
+    rp = await db.scalar(
+        select(LiveRoomProduct).where(
+            LiveRoomProduct.room_id == room_id, LiveRoomProduct.product_id == product_id
+        )
+    )
+    if rp is None:
+        rp = LiveRoomProduct(room_id=room_id, product_id=product_id)
+        db.add(rp)
+    if live_price is not None:
+        rp.live_price = str(live_price)
+    rp.explaining = 1 if explaining else 0
+    rp.pinned = 1 if pinned else 0
+    await db.commit()
+    await db.refresh(rp)
+    return LiveProductOut(
+        id=product.id,
+        name=product.name,
+        price=float(product.price),
+        image_url=product.image_url,
+        stock=int(product.stock or 0),
+        pinned=bool(rp.pinned),
+        live_price=float(rp.live_price) if rp.live_price else None,
+        explaining=bool(rp.explaining),
+        source="explaining" if rp.explaining else ("flash" if rp.live_price else "normal"),
+    )
+
+
+async def remove_product(
+    db: AsyncSession, *, merchant: User, room_id: str, product_id: str
+) -> dict:
+    room = await db.get(LiveRoom, room_id)
+    if not room or room.merchant_id != merchant.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="直播间不存在")
+    rp = await db.scalar(
+        select(LiveRoomProduct).where(
+            LiveRoomProduct.room_id == room_id, LiveRoomProduct.product_id == product_id
+        )
+    )
+    if rp is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="商品未挂车")
+    await db.delete(rp)
+    await db.commit()
+    return {"ok": True}
+
+
+async def set_explaining(
+    db: AsyncSession, *, merchant: User, room_id: str, product_id: str, explaining: bool
+) -> dict:
+    """切换某挂车商品是否正在讲解（同一时间仅一个为讲解中，体现主播话术节奏）。"""
+    room = await db.get(LiveRoom, room_id)
+    if not room or room.merchant_id != merchant.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="直播间不存在")
+    rp = await db.scalar(
+        select(LiveRoomProduct).where(
+            LiveRoomProduct.room_id == room_id, LiveRoomProduct.product_id == product_id
+        )
+    )
+    if rp is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="商品未挂车")
+    if explaining:
+        # 先清掉其他讲解中
+        others = list(
+            await db.scalars(
+                select(LiveRoomProduct).where(
+                    LiveRoomProduct.room_id == room_id, LiveRoomProduct.explaining == 1
+                )
+            )
+        )
+        for o in others:
+            o.explaining = 0
+    rp.explaining = 1 if explaining else 0
+    await db.commit()
+    return {"ok": True}

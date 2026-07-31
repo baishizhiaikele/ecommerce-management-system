@@ -4,13 +4,16 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from app.schemas.product import ProductOut
+
 
 class FloorOut(BaseModel):
-    """首页楼层编排单元。"""
+    """首页楼层编排单元（含该楼层的真实商品内容）。"""
 
     key: str
     title: str
     reason: str
+    products: list[ProductOut] = []
 
 
 class HomeArrangeOut(BaseModel):
@@ -20,6 +23,9 @@ class HomeArrangeOut(BaseModel):
     hour: int
     floors: list[FloorOut]
     insight: str
+    # AI-2 A/B 实验：用户落入的桶（0=对照组-规则编排，1=实验组-LLM 决策），group 为可读标签
+    bucket: int = 0
+    group: str = "control"
 
 
 class TrendInsightOut(BaseModel):

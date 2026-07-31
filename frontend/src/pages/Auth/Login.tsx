@@ -241,6 +241,14 @@ export default function Login() {
                     </Tag.CheckableTag>
                   ))}
                 </div>
+                <div className="mt-4 pt-4 border-t border-slate-100 text-center">
+                  <a
+                    className="text-xs text-slate-400 hover:text-slate-600 cursor-pointer"
+                    onClick={() => navigate("/console/login")}
+                  >
+                    {t("login.toConsole")}
+                  </a>
+                </div>
               </div>
             )}
           </div>

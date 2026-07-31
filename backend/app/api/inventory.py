@@ -7,6 +7,7 @@ from app.models.product import Product
 from app.models.user import Role, User
 from app.schemas.inventory import StockAdjustIn, StockLogOut, StockSummaryOut
 from app.services import inventory_service
+from app.services.replenishment_service import restock_suggestions
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
@@ -64,6 +65,17 @@ async def list_logs(
             )
         )
     return out
+
+
+@router.get("/restock-suggestions", response_model=list[dict])
+async def get_restock_suggestions(
+    days: int = Query(30, ge=7, le=365),
+    only_urgent: bool = False,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(Role.MERCHANT)),
+) -> list[dict]:
+    """P1-9 智能补货：基于近 days 天销量与安全库存生成补货建议单。"""
+    return await restock_suggestions(db, merchant_id=user.id, days=days, only_urgent=only_urgent)
 
 
 @router.post("/adjust", response_model=StockLogOut, status_code=201)

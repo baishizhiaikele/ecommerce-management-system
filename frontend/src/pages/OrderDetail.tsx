@@ -30,9 +30,11 @@ import {
   verifyPickup,
   getOrderInvoice,
   applyInvoice,
+  getAftersaleTimeline,
   OrderOut,
   OrderStatus,
   LogisticsEvent,
+  AftersaleEventOut,
 } from "../api";
 import { money, orderStatusMeta, nextActions, actionLabel, escrowMeta, formatDateTime } from "../utils/format";
 import { getPaymentStatus, PaymentStatus } from "../api";
@@ -58,6 +60,8 @@ export default function OrderDetail() {
   const [logData, setLogData] = useState<{ tracking_no?: string; events: LogisticsEvent[] }>({
     events: [],
   });
+  // P1-5 售后进度可视化
+  const [aftersale, setAftersale] = useState<AftersaleEventOut[] | null>(null);
   const [logTrack, setLogTrack] = useState("");
   const [logDesc, setLogDesc] = useState("");
   const [returnShipOpen, setReturnShipOpen] = useState(false);
@@ -89,6 +93,13 @@ export default function OrderDetail() {
         setInvoice(await getOrderInvoice(id));
       } catch {
         setInvoice(null);
+      }
+      // P1-5 售后进度时间轴
+      try {
+        const tl = await getAftersaleTimeline(id);
+        setAftersale(tl.events || []);
+      } catch {
+        setAftersale(null);
       }
     } catch {
       /* 忽略 */
@@ -427,6 +438,25 @@ export default function OrderDetail() {
               {t("einv.already")}
               {invoice.invoice_no}
             </Tag>
+          )}
+
+          {/* P1-5 售后进度可视化：售后状态流转时间轴 */}
+          {aftersale && aftersale.length > 0 && (
+            <Card size="small" className="mt-4 w-full" title={t("od.aftersaleTimeline")}>
+              <Timeline
+                mode="left"
+                items={aftersale.map((e) => ({
+                  color: e.event_type.startsWith("refund") ? "blue" : "green",
+                  children: (
+                    <div>
+                      <div className="font-medium">{e.title}</div>
+                      {e.description && <div className="text-xs text-slate-500">{e.description}</div>}
+                      {e.time && <div className="text-xs text-slate-400">{formatDateTime(e.time)}</div>}
+                    </div>
+                  ),
+                }))}
+              />
+            </Card>
           )}
           {user?.role === "buyer" &&
             !invoice &&

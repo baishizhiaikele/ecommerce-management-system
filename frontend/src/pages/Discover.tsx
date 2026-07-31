@@ -15,13 +15,16 @@ import {
 } from "antd";
 import { BookOpen, Heart, PenLine, Trash2 } from "lucide-react";
 import {
+  attachAffiliate,
   createNote,
   deleteNote,
+  getNoteFeed,
   listNotes,
   listProducts,
   NoteOut,
   ProductOut,
   toggleNoteLike,
+  trackAffiliateClick,
   uploadImage,
 } from "../api";
 import ProductImage from "../components/ProductImage";
@@ -29,6 +32,7 @@ import ProductPrice from "../components/ProductPrice";
 import { formatDateTime } from "../utils/format";
 import { useAuth } from "../store/auth";
 import { useI18n } from "../i18n";
+import { getErrorMessage } from "../api/client";
 
 export default function Discover() {
   const { t } = useI18n();
@@ -49,8 +53,10 @@ export default function Discover() {
   const load = useCallback(
     (kw?: string) => {
       setLoading(true);
-      listNotes(kw ? { keyword: kw } : undefined)
+      // 种草推荐流：已审核通过的笔记按「热度+新近」综合排序（商业化闭环入口）
+      (kw ? listNotes({ keyword: kw }) : getNoteFeed({ limit: 30, offset: 0 }))
         .then(setNotes)
+        .catch((e) => message.error(getErrorMessage(e)))
         .finally(() => setLoading(false));
     },
     []
@@ -82,6 +88,24 @@ export default function Discover() {
       message.success(t("note.deleted"));
     } catch {
       message.error(t("note.deleteFail"));
+    }
+  };
+
+  // 种草商业化闭环：作者将笔记与分销推广绑定，生成专属分享链接
+  const onPromote = async (n: NoteOut) => {
+    try {
+      const updated = await attachAffiliate(n.id);
+      setNotes((prev) => prev.map((x) => (x.id === n.id ? updated : x)));
+      if (updated.share_url) {
+        try {
+          await navigator.clipboard?.writeText(updated.share_url);
+          message.success(t("note.promoteOk"));
+        } catch {
+          message.success(t("note.promoteLinked"));
+        }
+      }
+    } catch (e: any) {
+      message.error(e?.response?.data?.detail || t("note.promoteFail"));
     }
   };
 
@@ -184,7 +208,11 @@ export default function Discover() {
                     <div
                       key={p.id}
                       className="flex items-center gap-3 p-2 rounded-xl border border-slate-100 hover:border-indigo-200 cursor-pointer"
-                      onClick={() => navigate(`/products/${p.id}`)}
+                      onClick={() => {
+                        // 种草商业化闭环：从已推广笔记点进商品，埋点归因到作者推广码
+                        if (n.affiliate_code) trackAffiliateClick(n.affiliate_code);
+                        navigate(`/products/${p.id}`);
+                      }}
                     >
                       <div className="w-12 h-12 rounded-lg overflow-hidden bg-slate-100 shrink-0">
                         <ProductImage
@@ -216,10 +244,26 @@ export default function Discover() {
                   <Heart size={16} fill={n.liked ? "currentColor" : "none"} />
                   {n.likes_count}
                 </button>
+                {n.affiliate_code && (
+                  <Tag color="green" className="text-xs">{t("note.promoting")}</Tag>
+                )}
+                {user?.id === n.author_id && (
+                  <Button
+                    size="small"
+                    type={n.affiliate_code ? "default" : "primary"}
+                    className="ml-auto"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onPromote(n);
+                    }}
+                  >
+                    {n.affiliate_code ? t("note.copyShare") : t("note.promote")}
+                  </Button>
+                )}
                 {(user?.id === n.author_id || user?.role === "admin") && (
                   <Popconfirm title={t("note.deleteConfirm")} onConfirm={() => onDelete(n)}>
                     <button
-                      className="flex items-center gap-1 text-sm text-slate-400 hover:text-rose-500 ml-auto"
+                      className="flex items-center gap-1 text-sm text-slate-400 hover:text-rose-500"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <Trash2 size={15} />

@@ -2,7 +2,16 @@ import { useEffect, useState } from "react";
 import type { AxiosError } from "axios";
 import { Card, Button, Modal, Form, Input, Switch, Popconfirm, message, Empty, Tag, Cascader } from "antd";
 import { Plus, Edit, Delete, MapPin } from "lucide-react";
-import { listAddresses, createAddress, updateAddress, deleteAddress, getErrorMessage, AddressOut } from "../api";
+import {
+  listAddresses,
+  createAddress,
+  updateAddress,
+  deleteAddress,
+  parseAddressText,
+  getErrorMessage,
+  AddressOut,
+  ParsedAddress,
+} from "../api";
 import { REGION_OPTIONS } from "../data/regions";
 import { useI18n } from "../i18n";
 
@@ -12,6 +21,36 @@ export default function AddressBook() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<AddressOut | null>(null);
   const [form] = Form.useForm();
+  // P1-6 地址智能解析
+  const [parseOpen, setParseOpen] = useState(false);
+  const [parseText, setParseText] = useState("");
+  const [parsing, setParsing] = useState(false);
+  const [parseResult, setParseResult] = useState<ParsedAddress | null>(null);
+
+  const runParse = async () => {
+    if (!parseText.trim()) return;
+    setParsing(true);
+    try {
+      const r = await parseAddressText(parseText);
+      setParseResult(r);
+    } catch {
+      message.error(t("address.parseFail"));
+    } finally {
+      setParsing(false);
+    }
+  };
+  const applyParse = () => {
+    const r = parseResult;
+    if (!r) return;
+    // 回填：省市区 → 级联选择器；详细地址 → detail 字段
+    form.setFieldsValue({
+      region: [r.province, r.city, r.district].filter(Boolean),
+      detail: r.detail,
+    });
+    setParseOpen(false);
+    setParseResult(null);
+    message.success(t("address.parseApplied"));
+  };
 
   const load = async () => {
     try {
@@ -78,9 +117,14 @@ export default function AddressBook() {
     <div className="space-y-6">
       <div className="section-title">
         <h2>{t("page.address.title")}</h2>
-        <Button className="ml-auto" type="primary" icon={<Plus size={16} />} onClick={openAdd}>
-          {t("address.new")}
-        </Button>
+        <div className="ml-auto flex gap-2">
+          <Button icon={<MapPin size={16} />} onClick={() => setParseOpen(true)}>
+            {t("address.parse")}
+          </Button>
+          <Button type="primary" icon={<Plus size={16} />} onClick={openAdd}>
+            {t("address.new")}
+          </Button>
+        </div>
       </div>
 
       {list.length === 0 ? (
@@ -172,6 +216,33 @@ export default function AddressBook() {
             <Switch />
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* P1-6 地址智能解析：粘贴整段文本一键识别省/市/区 */}
+      <Modal
+        title={t("address.parse")}
+        open={parseOpen}
+        onCancel={() => setParseOpen(false)}
+        onOk={parseResult ? applyParse : runParse}
+        okText={parseResult ? t("address.applyParse") : t("address.runParse")}
+        confirmLoading={parsing}
+      >
+        <Input.TextArea
+          rows={3}
+          value={parseText}
+          onChange={(e) => {
+            setParseText(e.target.value);
+            setParseResult(null);
+          }}
+          placeholder={t("address.phParse")}
+        />
+        {parseResult && (
+          <div className="mt-3 p-3 bg-slate-50 rounded text-sm space-y-1">
+            <div><b>{t("address.region")}：</b>{(parseResult as any).province} {(parseResult as any).city} {(parseResult as any).district}</div>
+            <div><b>{t("address.detail")}：</b>{(parseResult as any).detail}</div>
+            <div className="text-xs text-slate-400">{t("address.confidence")}：{(parseResult as any).confidence}</div>
+          </div>
+        )}
       </Modal>
     </div>
   );

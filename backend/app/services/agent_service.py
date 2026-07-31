@@ -19,7 +19,7 @@ from app.models.cart import CartItem
 from app.models.product import Product, ProductStatus
 from app.models.shipping import ShippingTemplate
 from app.models.user import User
-from app.services import order_service
+from app.services import order_service, product_service
 from app.services.audit_service import record
 
 
@@ -117,6 +117,65 @@ async def tool_checkout(db: AsyncSession, user: User, address: str) -> dict:
     }
 
 
+# ---------- 购物意图解析辅助 ----------
+def _parse_budget(message: str) -> float | None:
+    """从自然语言提取预算上限，如「200左右」「300以内」「不超过500」→ 对应上限。"""
+    import re
+
+    # 匹配「数字+单位/左右/以内/以下/不超过/预算」
+    m = re.search(r"(\d+(?:\.\d+)?)\s*(?:元|块|rmb)?\s*(?:左右|以内|以下|以下|之内|封顶|预算|大概)?", message)
+    if not m:
+        return None
+    base = float(m.group(1))
+    # 「左右/大概」放宽 15%，「以内/以下/不超过」严格取上限
+    if any(k in message for k in ("左右", "大概", "约", "差不")):
+        return round(base * 1.15, 2)
+    return base
+
+
+def _extract_keyword(message: str) -> str | None:
+    """剔除意图词后，把剩余当作商品搜索关键词（如「想买耳机，200左右」→「耳机」）。"""
+    stop = ("想买", "要买", "买", "推荐", "找", "搜", "看看", "有", "没有", "的", "我要", "帮我", "一个", "一款", "一支", "一条", "一台", "个", "款", "支", "条", "台", "左右", "以内", "以下", "预算", "大概", "约", "差不", "元", "块", "rmb")
+    text = message
+    for s in stop:
+        text = text.replace(s, " ")
+    # 去掉数字与标点
+    import re
+
+    text = re.sub(r"\d+(\.\d+)?", "", text)
+    text = re.sub(r"[，,。.、\s]+", " ", text).strip()
+    return text or None
+
+
+async def tool_search_products(db: AsyncSession, user: User, message: str) -> dict:
+    keyword = _extract_keyword(message)
+    budget = _parse_budget(message)
+    items, _total = await product_service.list_products(
+        db,
+        keyword=keyword or None,
+        max_price=budget,
+        sort="price_asc",
+        page=1,
+        page_size=6,
+    )
+    items = [
+        {
+            "id": str(p.id),
+            "name": p.name,
+            "price": float(p.price),
+            "image_url": p.image_url,
+            "category_id": str(p.category_id) if p.category_id else None,
+        }
+        for p in items
+    ]
+    return {
+        "keyword": keyword,
+        "budget": budget,
+        "count": len(items),
+        "products": items,
+    }
+
+
 # ---------- 工具注册表 ----------
 TOOLS: dict[str, dict[str, Any]] = {
     "check_stock": {
@@ -144,6 +203,11 @@ TOOLS: dict[str, dict[str, Any]] = {
         "description": "用购物车一键下单并创建待支付订单",
         "params": {"address": "收货地址"},
     },
+    "search_products": {
+        "fn": tool_search_products,
+        "description": "按用户自然语言需求（关键词+预算）搜索并推荐商品",
+        "params": {"message": "用户的需求描述，如「想买耳机，200左右」"},
+    },
 }
 
 
@@ -167,6 +231,14 @@ def route_intent(message: str) -> str | None:
         return "add_to_cart"
     if any(k in m for k in ("下单", "结算", "checkout", "付款", "拍下")):
         return "checkout"
+    # 购物意图：含「买/想买/推荐/找/搜/看看」或预算/类目词 → 走商品搜索
+    if any(k in m for k in ("买", "推荐", "找", "搜", "看看", "想要", "需要", "挑", "选购")):
+        return "search_products"
+    if any(k in m for k in ("左右", "以内", "以下", "预算", "元", "块")):
+        return "search_products"
+    # 兜底：含常见商品类目词也视为搜索
+    if any(k in m for k in ("耳机", "手机", "电脑", "键盘", "鼠标", "衣服", "鞋", "包", "表", "相机", "充电")):
+        return "search_products"
     return None
 
 
@@ -182,12 +254,13 @@ async def agent_chat(
     chosen = tool or route_intent(message)
     if not chosen or chosen not in TOOLS:
         return {
-            "reply": "我可以帮你查库存、比价、凑单、加购或下单，请告诉我你想做什么～",
+            "reply": "我可以帮你搜商品、查库存、比价、凑单、加购或下单，告诉我你想买什么或想做什么～",
             "tool_calls": [],
         }
     spec = TOOLS[chosen]
     fn = spec["fn"]
     calls: list[dict] = []
+    result: dict = {}
 
     # 需要 product_id 的工具：从显式参数或消息里提取
     if chosen in ("check_stock", "compare_price", "add_to_cart") and not product_id:
@@ -198,19 +271,24 @@ async def agent_chat(
             product_id = m.group(0)
 
     if chosen == "check_stock":
-        data = await fn(db, product_id)
+        result = await fn(db, product_id)
     elif chosen == "compare_price":
-        data = await fn(db, product_id)
+        result = await fn(db, product_id)
     elif chosen == "bundle_recommend":
-        data = await fn(db, user)
+        result = await fn(db, user)
     elif chosen == "add_to_cart":
-        data = await fn(db, user, product_id, 1)
-    else:  # checkout
-        data = await fn(db, user, address or "（未提供地址）")
-    calls.append({"tool": chosen, "result": data})
+        result = await fn(db, user, product_id, 1)
+    elif chosen == "checkout":
+        result = await fn(db, user, address or "（未提供地址）")
+    else:  # search_products
+        result = await fn(db, user, message)
+    calls.append({"tool": chosen, "result": result})
 
-    reply = _render_reply(chosen, data)
-    return {"reply": reply, "tool_calls": calls, "intent": chosen}
+    reply = _render_reply(chosen, result)
+    payload: dict = {"reply": reply, "tool_calls": calls, "intent": chosen}
+    if chosen == "search_products":
+        payload["products"] = result.get("products", [])
+    return payload
 
 
 def _render_reply(tool: str, data: dict) -> str:
@@ -229,4 +307,14 @@ def _render_reply(tool: str, data: dict) -> str:
         return f"已为你加入购物车（数量 {data['quantity']}）。"
     if tool == "checkout":
         return f"已下单：订单号 {data['order_no']}，应付 ¥{data['total_amount']}。"
+    if tool == "search_products":
+        kw = data.get("keyword")
+        budget = data.get("budget")
+        count = data.get("count", 0)
+        scope = f"「{kw}」" if kw else ""
+        price_hint = f"（预算¥{budget}以内）" if budget else ""
+        if count == 0:
+            return f"没找到匹配{scope}{price_hint}的商品，换个关键词或放宽预算试试～"
+        top = "、".join(f"{p['name']}（¥{p['price']}）" for p in data.get("products", [])[:3])
+        return f"为你找到 {count} 款{scope}{price_hint}商品，例如：{top}。点击下方卡片查看详情～"
     return "已完成操作。"

@@ -24,6 +24,7 @@ from app.models.user import Role
 from app.models.settlement import Settlement
 from app.services import order_service
 from app.services.payment_providers import get_provider, get_order_payment
+from app.core.metrics import inc_counter
 
 
 def _utcnow() -> datetime:
@@ -52,9 +53,9 @@ async def create_charge(db: AsyncSession, order: Order) -> dict:
     payment = await get_or_create_payment(db, order)
     if payment.status != "created":
         provider = get_provider(payment.gateway)
-        return provider.build_charge(payment, order)
+        return await provider.build_charge(payment, order)
     provider = get_provider(payment.gateway)
-    charge = provider.build_charge(payment, order)
+    charge = await provider.build_charge(payment, order)
     payment.raw_data = json.dumps(charge, ensure_ascii=False)
     await db.commit()
     await db.refresh(payment)
@@ -85,6 +86,7 @@ async def handle_webhook(db: AsyncSession, gateway: str, payload: dict) -> Payme
     # 验真：非法签名直接拒绝
     if not provider.verify_webhook(payload, payment):
         payment.status = "failed"
+        inc_counter("webhook_signature_failures")
         await db.commit()
         await db.refresh(payment)
         raise ValueError("回调签名校验失败")
@@ -100,6 +102,7 @@ async def handle_webhook(db: AsyncSession, gateway: str, payload: dict) -> Payme
     payment.transaction_id = payload.get("transaction_id")
     payment.paid_at = _utcnow()
     payment.escrow_status = "held"  # 担保托管：暂不结算给商家
+    inc_counter("payments_succeeded")
     payment.raw_data = json.dumps(payload, ensure_ascii=False)
 
     order = await db.get(Order, order_id)
@@ -152,6 +155,7 @@ async def refund_payment(db: AsyncSession, order: Order) -> Payment:
     res = provider.build_refund(payment, refund_amount)
     payment.status = "refunded"
     payment.raw_data = json.dumps(res, ensure_ascii=False)
+    inc_counter("payments_refunded")
     # 逆向托管资金
     await reverse_escrow(db, order, payment)
     await db.commit()

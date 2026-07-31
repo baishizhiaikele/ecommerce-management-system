@@ -10,6 +10,7 @@ import {
   type PresaleOut,
   type PresaleReservationOut,
 } from "../api";
+import { getErrorMessage } from "../api/client";
 import { useI18n } from "../i18n";
 import { formatDateTime, money } from "../utils/format";
 import ProductImage from "../components/ProductImage";
@@ -35,6 +36,7 @@ export default function Presales() {
         setPresales(ps);
         setReservations(rs);
       })
+      .catch((e) => message.error(getErrorMessage(e)))
       .finally(() => setLoading(false));
   };
   useEffect(load, [user]);

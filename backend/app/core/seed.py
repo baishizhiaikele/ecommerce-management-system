@@ -4,12 +4,14 @@ from uuid import uuid4
 
 from sqlalchemy import select
 
+from app.core.config import settings
 from app.core.security import hash_password
 from app.db.session import SessionLocal
 from app.models.catalog import Category
 from app.models.content import Address, Banner, Promotion, PromotionType
 from app.models.coupon import Coupon, CouponType, UserCoupon
 from app.models.favorite import Favorite
+from app.models.inventory import InventoryByWarehouse, Warehouse
 from app.models.notification import Notification, NotificationType
 from app.models.order import Order, OrderItem, OrderStatus
 from app.models.points import PointLog, PointAction
@@ -236,6 +238,16 @@ async def seed_demo() -> None:
     async with SessionLocal() as db:
         existing = await db.scalar(select(User).where(User.username == "admin"))
         if existing:
+            # 库已灌过演示数据：仅做幂等补仓（P0-2 多仓上线后，旧库可能缺仓库数据）
+            from sqlalchemy import func, select as _select
+            from app.models.inventory import Warehouse as _Wh
+
+            wh_count = await db.scalar(_select(func.count()).select_from(_Wh))
+            if not wh_count:
+                # 扫全库现有商品补分仓库存（不重置任何既有数据）
+                rows = (await db.scalars(_select(Product))).all()
+                await _ensure_warehouses(db, {str(p.id): p for p in rows})
+                await db.commit()
             return
 
         users = {}
@@ -300,6 +312,9 @@ async def seed_demo() -> None:
             products[slug] = p
         await db.flush()
 
+        # ---- P0-2 多仓发货：建立区域仓 + 为种子商品分配分仓库存 ----
+        await _ensure_warehouses(db, products)
+
         # ---- 一个已完成订单（满足评价外键，并给买家一条真实订单）----
         order = Order(
             order_no="SEED-" + uuid4().hex[:8].upper(),
@@ -352,21 +367,38 @@ async def seed_demo() -> None:
         await db.flush()
 
         # ---- 优惠券（平台 + 店铺）----
+        # 过期时间贴近真实电商：7~30 天为主，避免"永不过期"观感
         _now = datetime.now(timezone.utc)
         coupons = [
-            Coupon(name="新人专享券（满100减20）", type=CouponType.FULL_REDUCE, threshold=100, value=20, total=200, end_at=_now + timedelta(days=30)),
-            Coupon(name="全平台满200减30", type=CouponType.FULL_REDUCE, threshold=200, value=30, total=200, end_at=_now + timedelta(days=60)),
-            Coupon(name="数码品类券（满300减50）", type=CouponType.FULL_REDUCE, threshold=300, value=50, total=150, merchant_id=users["merchant"].id, applicable_category="digital", end_at=_now + timedelta(days=45)),
-            Coupon(name="家居满150减25", type=CouponType.FULL_REDUCE, threshold=150, value=25, total=150, merchant_id=users["merchant_2"].id, applicable_category="home", end_at=_now + timedelta(days=90)),
-            Coupon(name="文创满99减15", type=CouponType.FULL_REDUCE, threshold=99, value=15, total=150, applicable_category="culture", end_at=_now + timedelta(days=30)),
-            Coupon(name="会员折扣券（8.8折）", type=CouponType.DISCOUNT, threshold=0, value=0.88, total=100, end_at=_now + timedelta(days=180)),
+            Coupon(name="新人专享券（满100减20）", type=CouponType.FULL_REDUCE, threshold=100, value=20, total=200, end_at=_now + timedelta(days=7)),
+            Coupon(name="全平台满200减30", type=CouponType.FULL_REDUCE, threshold=200, value=30, total=200, end_at=_now + timedelta(days=15)),
+            Coupon(name="数码品类券（满300减50）", type=CouponType.FULL_REDUCE, threshold=300, value=50, total=150, merchant_id=users["merchant"].id, applicable_category="digital", end_at=_now + timedelta(days=7)),
+            Coupon(name="家居满150减25", type=CouponType.FULL_REDUCE, threshold=150, value=25, total=150, merchant_id=users["merchant_2"].id, applicable_category="home", end_at=_now + timedelta(days=7)),
+            Coupon(name="文创满99减15", type=CouponType.FULL_REDUCE, threshold=99, value=15, total=150, applicable_category="culture", end_at=_now + timedelta(days=7)),
+            Coupon(name="会员折扣券（8.8折）", type=CouponType.DISCOUNT, threshold=0, value=0.88, total=100, end_at=_now + timedelta(days=7)),
             Coupon(name="限时秒杀补给券（满50减10）", type=CouponType.FULL_REDUCE, threshold=50, value=10, total=300, end_at=_now + timedelta(days=3)),
         ]
         for c in coupons:
             db.add(c)
         await db.flush()
-        # 给买家发一张已领取券
+        # 给买家发一张已领取券（未过期）
         db.add(UserCoupon(user_id=buyer.id, coupon_id=coupons[0].id))
+        # 给买家发两张已过期券（用于演示「已过期」分区）
+        expired_coupons = [
+            Coupon(name="春节满减券（满199减40）", type=CouponType.FULL_REDUCE, threshold=199, value=40, total=100, end_at=_now - timedelta(days=10)),
+            Coupon(name="清明出行券（满80减12）", type=CouponType.FULL_REDUCE, threshold=80, value=12, total=100, end_at=_now - timedelta(days=25)),
+        ]
+        for c in expired_coupons:
+            db.add(c)
+        await db.flush()
+        for c in expired_coupons:
+            db.add(
+                UserCoupon(
+                    user_id=buyer.id,
+                    coupon_id=c.id,
+                    claimed_at=_now - timedelta(days=40),
+                )
+            )
 
         # ---- 促销活动（秒杀）----
         now = datetime.now(timezone.utc)
@@ -398,7 +430,7 @@ async def seed_demo() -> None:
                     image_url=img,
                     link_type=ltype,
                     link_id=lid,
-                    link_url="http://localhost:5173/" if ltype == "url" else None,
+                    link_url=f"{settings.FRONTEND_BASE_URL.rstrip('/')}/" if ltype == "url" else None,
                     sort_order=i,
                 )
             )
@@ -504,6 +536,70 @@ async def seed_demo() -> None:
         )
 
         await db.commit()
+
+
+# ---- P0-2 多仓发货：建立区域仓并为商品分配分仓库存 ----
+# 入参 products: {任意key: Product}。函数幂等：仅给「尚无分仓库存」的商品补仓，
+# 且各分仓数量之和 == product.stock，使既有单仓库存语义（product.stock 展示值）保持一致。
+async def _ensure_warehouses(db, products: dict) -> None:
+    REGIONS = [
+        ("华东仓", "华东", "上海", 121.47, 31.23, 0),
+        ("华北仓", "华北", "北京", 116.41, 39.90, 0),
+        ("华南仓", "华南", "广州", 113.26, 23.13, 0),
+        ("西南仓", "西南", "成都", 104.07, 30.67, 1),  # 兜底默认仓
+    ]
+    # 复用已存在的仓库（幂等：补仓场景仓可能已建）
+    from sqlalchemy import select as _select
+    from app.models.inventory import Warehouse as _Wh
+
+    existing_wh = (await db.scalars(_select(_Wh))).all()
+    warehouses: dict = {w.region: w for w in existing_wh}
+    for name, region, city, lng, lat, is_def in REGIONS:
+        if region not in warehouses:
+            w = Warehouse(
+                name=name, region=region, city=city,
+                lng=str(lng), lat=str(lat), is_default=is_def,
+            )
+            db.add(w)
+            warehouses[region] = w
+    await db.flush()
+
+    # 查询已有分仓库存的商品，避免重复补仓
+    from app.models.inventory import InventoryByWarehouse as _IW
+
+    existing_prod_ids = set(
+        (await db.scalars(_select(_IW.product_id))).all()
+    )
+
+    default_region = "西南"
+    others = [r for r in warehouses if r != default_region]
+    for key, p in products.items():
+        if p.id in existing_prod_ids:
+            continue
+        total_stock = int(getattr(p, "stock", 0) or 0)
+        if total_stock <= 0:
+            continue
+        default_qty = total_stock * 30 // 100
+        remaining = total_stock - default_qty
+        allocations = {default_region: default_qty}
+        if others:
+            per = remaining // len(others)
+            for r in others:
+                allocations[r] = per
+            allocated = sum(allocations.values())
+            if allocated < total_stock:
+                allocations[others[0]] += total_stock - allocated
+    for region, qty in allocations.items():
+        if qty <= 0:
+            continue
+            db.add(
+                _IW(
+                    product_id=p.id,
+                    warehouse_id=warehouses[region].id,
+                    quantity=qty,
+                )
+            )
+    await db.flush()
 
 
 if __name__ == "__main__":

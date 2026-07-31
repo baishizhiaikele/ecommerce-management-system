@@ -17,8 +17,11 @@ export default function ProtectedRoute({
 
   useEffect(() => {
     if (!user) {
+      // 买家端路径回买家登录页，商家/管理员后台路径回独立的后台登录页
+      const isConsole = location.pathname.startsWith("/merchant") || location.pathname.startsWith("/admin");
+      const loginPath = isConsole ? "/console/login" : "/login";
       // 记住来源页，登录成功后原路返回
-      navigate("/login", {
+      navigate(loginPath, {
         replace: true,
         state: { from: location.pathname + location.search },
       });

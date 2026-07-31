@@ -60,10 +60,15 @@ class Order(Base):
     pickup_store = Column(String(200))  # 自提门店名称/地址
     pickup_code = Column(String(12), index=True)  # 支付成功后生成的自提核销码
     picked_up_at = Column(DateTime(timezone=True), nullable=True)  # 核销时间
+    # P1-4 直播下单闭环：归因到具体直播间（营销/主播业绩统计）
+    live_room_id = Column(String(36), nullable=True, index=True)
+    # P3-G 种草商业化闭环：下单时携带的推广码（来自种草笔记分享链接），用于佣金归因
+    affiliate_code = Column(String(12), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     paid_at = Column(DateTime(timezone=True), nullable=True)
     shipped_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)  # 买家软删除标记
 
     buyer = relationship("User", back_populates="orders")
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
@@ -90,5 +95,37 @@ class OrderItem(Base):
     name = Column(String(200), nullable=True)
     image_url = Column(String(500), nullable=True)
     variant_info = Column(Text)
+    # P0-2 多仓发货：下单时按收货地就近 + 有货优先选定的发货仓；无分仓数据时为空（沿用单仓逻辑）
+    warehouse_id = Column(String(36), ForeignKey("warehouses.id"), nullable=True, index=True)
 
     order = relationship("Order", back_populates="items")
+
+
+class AftersaleEvent(Base):
+    """P1-5 售后进度可视化：订单售后流转的结构化时间线事件。
+
+    与 audit_log（纯审计）不同，本表面向买家/商家展示「申请退款 → 商家处理
+    → 退货物流 → 退款到账」等可读进度，含中文描述与角色标签。
+    """
+
+    __tablename__ = "aftersale_events"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    order_id = Column(String(36), ForeignKey("orders.id"), nullable=False, index=True)
+    # 事件类型：refund_requested / refund_rejected / refund_approved /
+    # return_shipped / return_received / refunded / dispute_opened / dispute_resolved / note
+    event_type = Column(String(40), nullable=False)
+    # 触发角色：buyer / merchant / admin / system
+    actor_role = Column(String(20), nullable=False, default="system")
+    title = Column(String(120), nullable=False)
+    description = Column(Text)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    order = relationship("Order", back_populates="aftersale_events")
+
+    __table_args__ = (Index("ix_aftersale_order_time", "order_id", "created_at"),)
+
+
+Order.aftersale_events = relationship(
+    "AftersaleEvent", back_populates="order", cascade="all, delete-orphan", order_by="AftersaleEvent.created_at"
+)

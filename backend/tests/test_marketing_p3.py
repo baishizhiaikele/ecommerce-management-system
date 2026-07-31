@@ -83,14 +83,17 @@ async def test_bargain_reaches_floor_then_buy(client, merchant_headers, buyer_he
     assert b.status_code == 200, b.text
     bid = b.json()["id"]
 
-    # 砍价直到触底（每次约减 10%，4~5 次到底）
-    for _ in range(6):
-        c = await client.post(f"/api/marketing/bargains/{bid}/cut", headers=merchant_headers,
+    # 砍价直到触底：模拟多人助力（每人一刀，防刷），发起者先砍一刀、买家再砍一刀
+    cutters = [merchant_headers, buyer_headers]
+    last = None
+    for i in range(6):
+        c = await client.post(f"/api/marketing/bargains/{bid}/cut", headers=cutters[i % len(cutters)],
                               json={"address": "砍手"})
         assert c.status_code == 200, c.text
+        last = c
         if c.json()["status"] == "locked":
             break
-    assert c.json()["status"] == "locked"
+    assert last.json()["status"] == "locked"
     assert c.json()["current_price"] <= 80
 
     buy = await client.post(f"/api/marketing/bargains/{bid}/buy", headers=buyer_headers,

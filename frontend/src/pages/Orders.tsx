@@ -1,8 +1,8 @@
 import { useNavigate } from "react-router-dom";
-import { Table, Tag, Button, Card } from "antd";
+import { Table, Tag, Button, Card, Popconfirm, message } from "antd";
 import AsyncBoundary from "../components/AsyncBoundary";
 import { useAsync } from "../hooks/useAsync";
-import { listOrders, OrderOut, OrderStatus } from "../api";
+import { listOrders, deleteOrder, OrderOut, OrderStatus } from "../api";
 import { money, orderStatusMeta, formatDateTime } from "../utils/format";
 import { useI18n } from "../i18n";
 
@@ -11,6 +11,16 @@ export default function Orders() {
   const { t } = useI18n();
   const { data, loading, error, retry } = useAsync<OrderOut[]>(() => listOrders(), []);
   const items = data ?? [];
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteOrder(id);
+      message.success(t("order.deleted"));
+      retry();
+    } catch (e: any) {
+      message.error(e?.response?.data?.detail || t("order.deleteFailed"));
+    }
+  };
   return (
     <div>
       <div className="section-title">
@@ -77,6 +87,16 @@ export default function Orders() {
                     {t("order.next.pay")}
                   </Button>
                 )}
+                <Popconfirm
+                  title={t("order.confirmDelete")}
+                  okText={t("common.ok")}
+                  cancelText={t("common.cancel")}
+                  onConfirm={() => handleDelete(r.id)}
+                >
+                  <Button type="link" danger>
+                    {t("common.delete")}
+                  </Button>
+                </Popconfirm>
               </>
             ),
           },

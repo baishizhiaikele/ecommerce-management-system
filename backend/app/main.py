@@ -91,6 +91,8 @@ _DEMO_COLUMN_DEFS = [
     ("reviews", "is_pinned", "ALTER TABLE reviews ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0"),
     ("order_items", "variant_info", "ALTER TABLE order_items ADD COLUMN variant_info TEXT"),
     ("order_items", "variant_id", "ALTER TABLE order_items ADD COLUMN variant_id TEXT"),
+    ("order_items", "warehouse_id", "ALTER TABLE order_items ADD COLUMN warehouse_id VARCHAR(36)"),
+    ("orders", "live_room_id", "ALTER TABLE orders ADD COLUMN live_room_id VARCHAR(36)"),
     ("coupons", "applicable_category", "ALTER TABLE coupons ADD COLUMN applicable_category VARCHAR(80)"),
     ("orders", "refund_amount", "ALTER TABLE orders ADD COLUMN refund_amount NUMERIC NOT NULL DEFAULT 0"),
     ("orders", "refund_rejections", "ALTER TABLE orders ADD COLUMN refund_rejections INTEGER NOT NULL DEFAULT 0"),
@@ -113,6 +115,7 @@ _DEMO_COLUMN_DEFS = [
     ("orders", "pickup_store", "ALTER TABLE orders ADD COLUMN pickup_store VARCHAR(200)"),
     ("orders", "pickup_code", "ALTER TABLE orders ADD COLUMN pickup_code VARCHAR(12)"),
     ("orders", "picked_up_at", "ALTER TABLE orders ADD COLUMN picked_up_at TIMESTAMP"),
+    ("orders", "deleted_at", "ALTER TABLE orders ADD COLUMN deleted_at TIMESTAMP"),
     ("reviews", "images", "ALTER TABLE reviews ADD COLUMN images TEXT"),
     ("reviews", "video", "ALTER TABLE reviews ADD COLUMN video VARCHAR(512)"),
     ("reviews", "append_content", "ALTER TABLE reviews ADD COLUMN append_content TEXT"),
@@ -132,6 +135,14 @@ _DEMO_COLUMN_DEFS = [
     ("support_tickets", "unread_for_buyer", "ALTER TABLE support_tickets ADD COLUMN unread_for_buyer INTEGER NOT NULL DEFAULT 0"),
     ("support_tickets", "unread_for_merchant", "ALTER TABLE support_tickets ADD COLUMN unread_for_merchant INTEGER NOT NULL DEFAULT 0"),
     ("support_messages", "is_internal", "ALTER TABLE support_messages ADD COLUMN is_internal INTEGER NOT NULL DEFAULT 0"),
+    ("shopping_notes", "review_status", "ALTER TABLE shopping_notes ADD COLUMN review_status VARCHAR(20) NOT NULL DEFAULT 'pending'"),
+    ("shopping_notes", "reject_reason", "ALTER TABLE shopping_notes ADD COLUMN reject_reason VARCHAR(255)"),
+    ("shopping_notes", "reviewed_at", "ALTER TABLE shopping_notes ADD COLUMN reviewed_at TIMESTAMP"),
+    ("shopping_notes", "reviewed_by", "ALTER TABLE shopping_notes ADD COLUMN reviewed_by VARCHAR(36)"),
+    ("shopping_notes", "affiliate_code", "ALTER TABLE shopping_notes ADD COLUMN affiliate_code VARCHAR(12)"),
+    ("orders", "affiliate_code", "ALTER TABLE orders ADD COLUMN affiliate_code VARCHAR(12)"),
+    ("products", "ar_enabled", "ALTER TABLE products ADD COLUMN ar_enabled INTEGER NOT NULL DEFAULT 0"),
+    ("products", "ar_overlay_url", "ALTER TABLE products ADD COLUMN ar_overlay_url VARCHAR(512)"),
 ]
 _DEMO_ENUM_UPDATES = [
     "UPDATE support_tickets SET status = LOWER(status) WHERE status IN ('OPEN','ANSWERED','CLOSED')",
@@ -241,6 +252,8 @@ async def run_migrations() -> None:
         Base.metadata.create_all(_sync_engine)
     finally:
         _sync_engine.dispose()
+    # 列演进已由 Alembic 迁移 0009_demo_columns 正式接管；此处 _ensure_demo_columns 仅作为
+    # 极端情况下（Alembic 未运行/旧库直连）的最终兜底，幂等无副作用。
     await _ensure_demo_columns()
     # 兼容旧库：结算唯一约束升级为 (order_id, merchant_id)，支持多商家分别结算
     await _reconcile_settlement_index()
@@ -260,6 +273,10 @@ async def lifespan(app: FastAPI):
             await seed_demo()
         except IntegrityError:
             pass
+    # 异步队列 worker（P0 基础设施）：Redis 可达时启动后台消费协程
+    from app.services.async_queue import run_worker, stop_worker
+
+    await run_worker()
     # 后台定时任务：自动取消超时未支付订单并回补库存
     expire_task = asyncio.create_task(scheduler_loop(60))
     try:
@@ -268,6 +285,7 @@ async def lifespan(app: FastAPI):
         expire_task.cancel()
         with suppress(asyncio.CancelledError):
             await expire_task
+        await stop_worker()
 
 
 app = FastAPI(title=settings.PROJECT_NAME, lifespan=lifespan)
@@ -281,6 +299,12 @@ if not settings.TESTING:
 
 # 可观测性（P2）：请求指标中间件（始终开启，开销极低）
 app.add_middleware(MetricsMiddleware)
+
+# 可观测性接外部 APM（P2 收尾）：可选 OpenTelemetry 链路追踪，仅在 OTEL_ENABLED=true 时真正生效
+from app.core.tracing import TracingMiddleware
+
+if settings.OTEL_ENABLED:
+    app.add_middleware(TracingMiddleware)
 
 # 安全加固（P1-10 / P1-5）：安全响应头 + 请求体大小限制
 app.add_middleware(SecurityHeadersMiddleware)

@@ -17,9 +17,10 @@ from app.models.affiliate import (
 from app.models.notification import NotificationType
 from app.models.order import Order
 from app.models.user import User
+from app.core.config import settings
 from app.services.notification_service import notify
 
-COMMISSION_RATE = 0.05  # 佣金比例：订单实付金额的 5%
+COMMISSION_RATE = settings.AFFILIATE_COMMISSION_RATE  # 佣金比例：订单实付金额的 N%（取自配置）
 
 
 def _gen_code() -> str:
@@ -194,11 +195,25 @@ async def process_withdrawal(
 
 
 async def grant_commission(db: AsyncSession, order: Order) -> AffiliateCommission | None:
-    """订单完成时结算佣金（幂等：每单至多一条）。"""
+    """订单完成时结算佣金（幂等：每单至多一条）。
+
+    归因优先级（种草商业化闭环）：
+      1) 点击归因绑定（invitee→promoter）；
+      2) 订单自带的 affiliate_code（来自种草笔记分享链接），按其推广人归因。
+    二者皆无则不计佣金。"""
+    promoter_id = None
     binding = await db.scalar(
         select(AffiliateBinding).where(AffiliateBinding.invitee_id == order.buyer_id)
     )
-    if not binding or binding.promoter_id == order.buyer_id:
+    if binding and binding.promoter_id != order.buyer_id:
+        promoter_id = binding.promoter_id
+    elif order.affiliate_code:
+        link = await db.scalar(
+            select(AffiliateLink).where(AffiliateLink.code == order.affiliate_code)
+        )
+        if link and link.user_id != order.buyer_id:
+            promoter_id = link.user_id
+    if not promoter_id:
         return None
     exists = await db.scalar(
         select(AffiliateCommission).where(AffiliateCommission.order_id == order.id)
@@ -211,7 +226,7 @@ async def grant_commission(db: AsyncSession, order: Order) -> AffiliateCommissio
         return None
     row = AffiliateCommission(
         order_id=order.id,
-        promoter_id=binding.promoter_id,
+        promoter_id=promoter_id,
         buyer_id=order.buyer_id,
         order_amount=amount,
         commission=commission,
@@ -219,10 +234,10 @@ async def grant_commission(db: AsyncSession, order: Order) -> AffiliateCommissio
     db.add(row)
     await notify(
         db,
-        binding.promoter_id,
+        promoter_id,
         NotificationType.SYSTEM,
         "分销佣金到账",
-        f"您邀请的好友完成订单 {order.order_no}，获得佣金 ¥{commission:.2f}。",
+        f"您的推广完成订单 {order.order_no}，获得佣金 ¥{commission:.2f}。",
         order.id,
     )
     return row

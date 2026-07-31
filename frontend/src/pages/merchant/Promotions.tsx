@@ -24,6 +24,7 @@ import {
   type ProductOut,
   type PromotionOut,
   type PromotionType,
+  type PromotionCreate,
 } from "../../api";
 import { useI18n, translate } from "../../i18n";
 
@@ -70,7 +71,7 @@ export default function MerchantPromotions() {
 
   const submit = async () => {
     const v = await form.validateFields();
-    const payload: any = {
+    const payload: PromotionCreate = {
       title: v.title,
       type: v.type,
       product_id: v.product_id,

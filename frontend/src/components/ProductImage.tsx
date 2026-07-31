@@ -197,42 +197,9 @@ export default function ProductImage({
   // seed 旧格式 / 无 URL：纯图标，不请求网络
   if (isSeedUrl || !hasUrl) return iconBlock;
 
-  // 有真实图源：尝试加载；失败或加载中显示图标块兜底
+  // 有真实图源：单子树渲染，图标块作兜底底图，真实图加载成功后淡入覆盖，避免重复 DOM 与闪烁
   const finalSrc = proxyImg(usableUrl!);
 
-  if (imgErr || !imgOk) {
-    return (
-      <div
-        className={className}
-        style={{
-          height,
-          borderRadius: rounded,
-          overflow: "hidden",
-          position: "relative",
-        }}
-      >
-        {/* 底层的图标兜底，加载成功时被 img 遮挡 */}
-        <div style={{ position: "absolute", inset: 0 }}>{iconBlock}</div>
-        <img
-          src={finalSrc}
-          alt={displayName}
-          loading="lazy"
-          decoding="async"
-          onLoad={() => setImgOk(true)}
-          onError={() => setImgErr(true)}
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            opacity: 0,
-            position: "relative",
-          }}
-        />
-      </div>
-    );
-  }
-
-  // 加载成功：只显示真实图片
   return (
     <div
       className={className}
@@ -244,18 +211,26 @@ export default function ProductImage({
         background: "#F3F4F6",
       }}
     >
-      <img
-        src={finalSrc}
-        alt={displayName}
-        loading="lazy"
-        decoding="async"
-        onError={() => setImgErr(true)}
-        style={{
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-        }}
-      />
+      {/* 底层的图标兜底，加载成功时被真实图遮挡 */}
+      <div style={{ position: "absolute", inset: 0 }}>{iconBlock}</div>
+      {!imgErr && (
+        <img
+          src={finalSrc}
+          alt={displayName}
+          loading="lazy"
+          decoding="async"
+          onLoad={() => setImgOk(true)}
+          onError={() => setImgErr(true)}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            position: "relative",
+            transition: "opacity 200ms ease",
+            opacity: imgOk ? 1 : 0,
+          }}
+        />
+      )}
     </div>
   );
 }

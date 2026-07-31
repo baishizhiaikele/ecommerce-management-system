@@ -110,7 +110,7 @@ export default function AdminAudit() {
                 <List
                   dataSource={replay}
                   locale={{ emptyText: t("admin.emptyReplay") }}
-                  renderItem={(it: any) => (
+                  renderItem={(it: AuditLogItem) => (
                     <List.Item>
                       <div>
                         <Tag color="blue">{it.action}</Tag>

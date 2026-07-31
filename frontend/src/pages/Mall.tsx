@@ -5,6 +5,7 @@ import { Gift, Coins, Sparkles, Ticket as TicketIcon } from "lucide-react";
 import { useAuth } from "../store/auth";
 import { useI18n } from "../i18n";
 import { listRewards, redeemReward, myRedemptions, me, RedemptionItemOut, RedemptionRecordOut } from "../api";
+import { getErrorMessage } from "../api/client";
 import { formatDateTime } from "../utils/format";
 
 function RewardCard({
@@ -81,6 +82,7 @@ export default function Mall() {
         setItems(it);
         setRecords(rec);
       })
+      .catch((e) => message.error(getErrorMessage(e)))
       .finally(() => setLoading(false));
   };
 

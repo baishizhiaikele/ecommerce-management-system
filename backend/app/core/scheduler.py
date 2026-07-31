@@ -11,16 +11,18 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.exc import OperationalError
 
+from app.core.config import settings
 from app.core.db_errors import is_deadlock
 from app.db.session import SessionLocal
 from app.models.order import Order, OrderStatus
 from app.models.user import Role
 from app.services.order_service import transition_status
 from app.services import report_task_service
+from app.services import marketing_service
 
 logger = logging.getLogger("scheduler")
 
-EXPIRE_MINUTES = 30
+EXPIRE_MINUTES = settings.ORDER_EXPIRE_MINUTES
 
 
 async def _cancel_expired_orders() -> int:
@@ -74,3 +76,18 @@ async def scheduler_loop(interval_seconds: int = 60) -> None:
                 logger.info("已生成并发送 %d 封定时报表邮件", m)
         except Exception as e:  # noqa: BLE001
             logger.warning("定时报表发送异常: %s", e)
+        # P2-1 拼团成团超时：未成团自动解散并退款成员订单
+        try:
+            async with SessionLocal() as db:
+                k = await marketing_service.expire_groups(db)
+            if k:
+                logger.info("已超时解散 %d 个未成团拼团", k)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("拼团超时扫描异常: %s", e)
+        # P2 收尾：可观测性接外部 APM —— 周期推送进程内指标到 OTLP（未启用则 no-op）
+        try:
+            from app.core.tracing import export_metrics_otlp
+
+            export_metrics_otlp()
+        except Exception as e:  # noqa: BLE001
+            logger.debug("OTLP 指标推送跳过: %s", e)

@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select, update
@@ -84,6 +84,17 @@ async def delete_address(
     await db.commit()
 
 
+@router.post("/addresses/parse")
+async def parse_address_text(
+    payload: dict, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+) -> dict:
+    """P1-6 地址智能解析：粘贴整段地址文本，返回省/市/区与详细地址结构化结果。"""
+    from app.services.address_service import parse_address
+
+    text = (payload or {}).get("text", "")
+    return parse_address(text)
+
+
 @router.post("/signin")
 async def signin(
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
@@ -98,10 +109,21 @@ async def signin(
     week_ago = date.fromordinal(today.toordinal() - 6).isoformat()
     recent = await db.scalars(
         select(PointLog)
-        .where(PointLog.user_id == user.id, PointLog.action == PointAction.SIGNIN, func.date(PointLog.created_at) >= week_ago)
+        .where(
+            PointLog.user_id == user.id,
+            PointLog.action == PointAction.SIGNIN,
+            func.date(PointLog.created_at, "localtime") >= week_ago,
+        )
         .order_by(PointLog.created_at)
     )
-    streak = len(set(str(r.created_at)[:10] for r in recent))
+    # 同样按本地时区折算天数，避免 UTC 存储在 UTC+8 凌晨把同一天拆成两天。
+    # SQLite 读回的 datetime 可能不带 tzinfo，此时按 UTC 解释后再转本地。
+    def _local_day(dt: datetime) -> str:
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone().date().isoformat()
+
+    streak = len({_local_day(r.created_at) for r in recent if r.created_at})
     gained = 5 + min(streak, 6)  # 基础 5 分，连签每日 +1，封顶 +6
 
     new_balance = user.points + gained

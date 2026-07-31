@@ -27,6 +27,9 @@ from app.models.qna import ProductQuestion, ProductAnswer
 from app.models.view import ProductView
 from app.models.shop_event import ShopEvent
 from app.models.knowledge import KnowledgeEntry
+from app.models.search import ImageFeature, SearchKeyword
+from app.models.variant import ProductVariant
+from app.models.product import Product, ProductStatus, PriceHistory
 from app.models.affiliate import (
     AffiliateBinding,
     AffiliateCommission,
@@ -126,4 +129,8 @@ __all__ = [
     "ReportTask",
     "ReportFrequency",
     "EmailLog",
+    "ImageFeature",
+    "SearchKeyword",
+    "ProductVariant",
+    "PriceHistory",
 ]

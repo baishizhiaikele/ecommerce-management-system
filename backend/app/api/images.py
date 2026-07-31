@@ -13,14 +13,36 @@ fallback 字体）会出现"色块但看不到商品名"的问题。改用 Pillo
 """
 import hashlib
 import mimetypes
-import os
 from pathlib import Path
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, HTTPException, Path as ApiPath, Query, Response
+
+from app.core.config import settings
 
 router = APIRouter(prefix="/images", tags=["images"])
+
+
+# --- AI 商品图真实图床：对外提供本地 / 对象存储挂载目录中的商品图 ---
+_BED_DIR = Path(settings.IMAGE_BED_DIR)
+
+
+@router.get("/bed/{filename}")
+async def bed_image(filename: str = ApiPath(..., description="图床文件名")) -> Response:
+    """返回 AI 生成后落盘到图床的商品图（稳定 URL，离线可用）。"""
+    # 防目录穿越：仅允许文件名本体
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(status_code=400, detail="非法文件名")
+    _BED_DIR.mkdir(parents=True, exist_ok=True)
+    path = _BED_DIR / filename
+    if not path.exists():
+        return _placeholder_response()
+    return Response(
+        content=path.read_bytes(),
+        media_type=mimetypes.guess_type(filename)[0] or "image/png",
+        headers=CACHE_HEADERS,
+    )
 
 ALLOWED_HOSTS = {
     "picsum.photos",
@@ -131,7 +153,11 @@ def _resolve_font() -> Optional[dict]:
     global _CACHED_FONT
     if _CACHED_FONT is not None:
         return _CACHED_FONT
-    for p in FONT_CANDIDATES:
+    candidates = FONT_CANDIDATES
+    # 配置了 FONT_PATH 时优先使用（覆盖默认候选列表）
+    if settings.FONT_PATH:
+        candidates = (settings.FONT_PATH, *FONT_CANDIDATES)
+    for p in candidates:
         if Path(p).exists():
             _CACHED_FONT = {"path": p, "index": 0}
             return _CACHED_FONT

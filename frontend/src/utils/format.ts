@@ -55,6 +55,7 @@ export const orderStatusMeta = i18nMeta({
   paid: { color: "blue", key: "order.status.paid" },
   shipped: { color: "cyan", key: "order.status.shipped" },
   completed: { color: "green", key: "order.status.completed" },
+  cancelled: { color: "default", key: "order.status.cancelled" },
   refund_requested: { color: "volcano", key: "order.status.refunding" },
   refunded: { color: "red", key: "order.status.refunded" },
   refund_rejected: { color: "red", key: "order.status.refund_rejected" },
@@ -63,6 +64,7 @@ export const orderStatusMeta = i18nMeta({
   return_received: { color: "geekblue", key: "order.status.return_received" },
   exchange: { color: "purple", key: "order.status.exchange" },
   dispute: { color: "magenta", key: "order.status.dispute" },
+  closed: { color: "default", key: "order.status.closed" },
 });
 
 export const escrowMeta = i18nMeta({
