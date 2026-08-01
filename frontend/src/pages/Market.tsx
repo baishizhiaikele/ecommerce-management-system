@@ -604,7 +604,7 @@ export default function Market() {
       {browsingCategory && (
         <section>
           <div className="section-title">
-            <span className="st-text">{t("market.catBoardTitle", { name: cats.find((c) => c.id === cat)?.name ?? cat })}</span>
+            <span className="st-text">{t("market.catBoardTitle", { name: cats.find((c) => c.id === cat)?.name ?? cat ?? "" })}</span>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <ProductLeaderboard
