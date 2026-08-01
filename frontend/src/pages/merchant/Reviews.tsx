@@ -51,7 +51,6 @@ export default function MerchantReviews() {
   };
   useEffect(() => {
     load(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sentiment]);
 
   const submitReply = async () => {

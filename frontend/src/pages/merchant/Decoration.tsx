@@ -59,7 +59,6 @@ export default function MerchantDecoration() {
       })
       .catch(() => message.error(t("deco.loadFail")))
       .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const recProducts = useMemo(

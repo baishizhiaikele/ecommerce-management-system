@@ -289,7 +289,6 @@ export default function Support() {
   useEffect(() => {
     load();
     refreshUnread();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusF, priorityF, categoryF, search, page]);
 
   const openTicket = async (id: string) => {

@@ -59,7 +59,6 @@ export function useAsync<T>(fetcher: () => Promise<T>, deps: unknown[] = []): As
       // 依赖变更：使旧请求失效
       runIdRef.current++;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, tick]);
 
   const retry = useCallback(() => setTick((n) => n + 1), []);

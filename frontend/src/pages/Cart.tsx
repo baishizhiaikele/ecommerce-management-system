@@ -99,7 +99,6 @@ export default function Cart() {
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const toggle = (id: string, checked: boolean) =>

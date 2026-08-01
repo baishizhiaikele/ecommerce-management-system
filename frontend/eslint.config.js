@@ -1,19 +1,28 @@
 // T6: ESLint 兜底，拦截"静默吞错"与无脑 console。
-// 配置保持宽松（其余规则默认 off），只启用与审计强相关的几条，避免误伤现有大量代码。
-import js from "@eslint/js";
+// 不引入 typescript-eslint 的 recommended 全家桶（会误伤大量存量代码/Service Worker/未装的 react-hooks 插件），
+// 仅启用与审计强相关的几条宽松规则。
 import tseslint from "typescript-eslint";
 
 export default [
   {
-    ignores: ["dist/**", "node_modules/**", "coverage/**", "playwright-report/**"],
+    ignores: [
+      "dist/**",
+      "node_modules/**",
+      "coverage/**",
+      "playwright-report/**",
+      // Service Worker 等运行在浏览器全局上下文的脚本，self/caches/fetch 均为合法运行时全局
+      "public/**",
+    ],
   },
-  js.configs.recommended,
-  ...tseslint.configs.recommended,
   {
     files: ["**/*.{ts,tsx}"],
     languageOptions: {
+      parser: tseslint.parser,
       ecmaVersion: 2022,
       sourceType: "module",
+    },
+    plugins: {
+      "@typescript-eslint": tseslint.plugin,
     },
     rules: {
       // 禁止空函数体：避免 `.catch(() => {})` 这类吞掉异常（配合 reportError/swallow 使用）

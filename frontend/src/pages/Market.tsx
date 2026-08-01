@@ -328,7 +328,6 @@ export default function Market() {
         setLoading(false);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   const HISTORY_KEY = "market_search_history";

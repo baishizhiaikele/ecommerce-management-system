@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { swallow } from "../src/utils/reportError";
 
 /**
  * P2 体验增强：核心闭环 E2E。三条用例覆盖
@@ -56,7 +57,9 @@ test.describe("电商核心闭环", () => {
   test("2) 种草推荐流 -> 笔记详情 -> 点赞", async ({ page }) => {
     // 以买家身份访问发现页（推荐流）
     await page.goto("/discover");
-    await page.waitForSelector("a[href^='/discover/']", { timeout: 15000 }).catch(() => {});
+    await page
+      .waitForSelector("a[href^='/discover/']", { timeout: 15000 })
+      .catch((e) => swallow(e, "discover.waitForCard"));
     const cards = page.locator("a[href^='/discover/']");
     const count = await cards.count();
     if (count > 0) {

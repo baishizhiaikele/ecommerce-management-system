@@ -43,7 +43,6 @@ export default function ProductQA({
         .catch(() => setSuggests([]));
     }, 500);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, merchantId]);
 
   const load = async () => {
@@ -59,7 +58,6 @@ export default function ProductQA({
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId]);
 
   const ask = async () => {

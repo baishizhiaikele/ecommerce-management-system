@@ -101,7 +101,6 @@ export default function Shop() {
         .catch((e) => message.error(getErrorMessage(e)))
         .finally(() => setLoading(false));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   if (id) {

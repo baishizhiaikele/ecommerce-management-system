@@ -68,7 +68,6 @@ export default function Discover() {
     listProducts()
       .then(setProducts)
       .catch((e) => reportError(e, { tag: "Discover.products" }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const onLike = async (n: NoteOut) => {

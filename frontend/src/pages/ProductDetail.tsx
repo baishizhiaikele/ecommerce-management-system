@@ -120,7 +120,6 @@ export default function ProductDetail() {
   };
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   // 记录浏览历史（本地兜底 + 登录用户同步后端）
@@ -542,7 +541,7 @@ export default function ProductDetail() {
                       <CheckCircle2 size={15} className="text-indigo-500 mt-0.5 shrink-0" />
                       <span>
                         <span className="text-slate-400">{k}：</span>
-                        {v}
+                        {String(v)}
                       </span>
                     </li>
                   ))}
