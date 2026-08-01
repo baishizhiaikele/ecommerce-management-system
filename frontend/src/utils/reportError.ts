@@ -37,7 +37,6 @@ export function reportError(err: unknown, meta?: ReportMeta): void {
   }
   // 降级：分级日志，保留原始堆栈
   const tag = meta?.tag ? `[${meta.tag}] ` : "";
-  // eslint-disable-next-line no-console
   console.error(`${tag}未捕获错误:`, err, meta?.extra ?? "");
 }
 
@@ -48,6 +47,5 @@ export function reportError(err: unknown, meta?: ReportMeta): void {
 export function swallow(err: unknown, tag?: string): void {
   if (!tag) return;
   // 仅记录 debug 级别，便于排查但不打扰
-  // eslint-disable-next-line no-console
   console.debug(`[swallow:${tag}] 已忽略预期内异常:`, err);
 }
