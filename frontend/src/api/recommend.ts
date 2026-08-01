@@ -1,6 +1,6 @@
 // T7：个性化推荐域（从 api/index.ts 按域拆出）
 import { api } from "./client";
-import type { ProductOut } from "./index";
+import type { ProductOut } from "./types";
 
 /** 登录用户「猜你喜欢」个性化推荐。 */
 export const recommendations = () =>
