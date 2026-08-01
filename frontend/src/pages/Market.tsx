@@ -212,6 +212,12 @@ export default function Market() {
   const [topRating, setTopRating] = useState<ProductOut[]>([]);
   const [topNew, setTopNew] = useState<ProductOut[]>([]);
   const [topPrice, setTopPrice] = useState<ProductOut[]>([]);
+  // T19：类目内榜单（仅进入"按分类浏览"模式时加载与展示，复用 listProducts 的 category_id + sort）
+  const [catTop, setCatTop] = useState<{
+    sales: ProductOut[];
+    rating: ProductOut[];
+    new: ProductOut[];
+  }>({ sales: [], rating: [], new: [] });
   const [kw, setKw] = useState(searchParams.get("kw") || "");
   const [cat, setCat] = useState<string | undefined>(searchParams.get("category") || undefined);
   // 处于"按分类浏览"模式时（从 AI 首页/分类入口进入），隐藏首页式元素（轮播/快捷入口/榜单/推荐），
@@ -284,6 +290,8 @@ export default function Market() {
     setKw(k ?? "");
     setCat(c ?? undefined);
     setSort(undefined);
+    // T19：进入分类浏览模式时同步加载类目内榜单
+    loadCatBoards(c ?? undefined);
     // 同步筛选快照并立即加载，确保拿到对应类目商品
     const snapshot = {
       kw: k ?? "",
@@ -431,11 +439,30 @@ export default function Market() {
 
   const pickCat = (id?: string) => {
     setCat(id);
+    loadCatBoards(id);
     setTimeout(() => {
       load();
       productSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 0);
   };
+
+  // T19：按当前分类加载类目内榜单（销量/好评/新品），独立于全局榜单，进入分类浏览时调用
+  const loadCatBoards = useCallback(
+    async (catId?: string) => {
+      if (!catId) {
+        setCatTop({ sales: [], rating: [], new: [] });
+        return;
+      }
+      const fetchOne = (sort: string, setter: (v: ProductOut[]) => void) =>
+        listProducts({ category_id: catId, sort, page_size: 5 })
+          .then(setter)
+          .catch(() => {});
+      fetchOne("sales", (v) => setCatTop((s) => ({ ...s, sales: v })));
+      fetchOne("top_rating", (v) => setCatTop((s) => ({ ...s, rating: v })));
+      fetchOne("newest", (v) => setCatTop((s) => ({ ...s, new: v })));
+    },
+    [],
+  );
 
   const goBanner = (b: BannerOut) => {
     if (b.link_type === "product" && b.link_id) navigate(`/products/${b.link_id}`);
@@ -454,6 +481,23 @@ export default function Market() {
 
   return (
     <div className="page-shell stack-lg py-8">
+      {/* T19：分类浏览模式下的面包屑：首页 > 全部分类 > 当前类目，点击可回退 */}
+      {browsingCategory && (
+        <nav aria-label={t("market.breadcrumbAll")} className="flex items-center gap-2 text-sm text-slate-500">
+          <button className="hover:text-[#4F46E5]" onClick={() => { navigate("/"); pickCat(undefined); }}>
+            {t("market.breadcrumbHome")}
+          </button>
+          <span>/</span>
+          <button className="hover:text-[#4F46E5]" onClick={() => pickCat(undefined)}>
+            {t("market.breadcrumbAll")}
+          </button>
+          <span>/</span>
+          <span className="text-slate-800 font-medium">
+            {cats.find((c) => c.id === cat)?.name ?? cat}
+          </span>
+        </nav>
+      )}
+
       {/* 轮播 Banner（放大 + 柔和叠层）
           走 ProductImage：可代理外链、加载失败自动回退到 lucide 图标+渐变+标题，
           避免出现“只有 alt 文字 / 空白块”的情况。 */}
@@ -553,6 +597,39 @@ export default function Market() {
           />
         ))}
       </section>
+      )}
+
+      {/* T19：类目内榜单（仅分类浏览模式展示，区别于全局榜单）。
+          标题取当前类目名，三榜复用 ProductLeaderboard，数据来自 loadCatBoards。 */}
+      {browsingCategory && (
+        <section>
+          <div className="section-title">
+            <span className="st-text">{t("market.catBoardTitle", { name: cats.find((c) => c.id === cat)?.name ?? cat })}</span>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <ProductLeaderboard
+              titleKey="market.catTopSales"
+              icon={<Flame size={16} className="text-rose-500" />}
+              data={catTop.sales}
+              boardKey="cat-sales"
+              onOpen={openProduct}
+            />
+            <ProductLeaderboard
+              titleKey="market.catTopRating"
+              icon={<TrendingUp size={16} className="text-amber-500" />}
+              data={catTop.rating}
+              boardKey="cat-rating"
+              onOpen={openProduct}
+            />
+            <ProductLeaderboard
+              titleKey="market.catTopNew"
+              icon={<Zap size={16} className="text-emerald-500" />}
+              data={catTop.new}
+              boardKey="cat-new"
+              onOpen={openProduct}
+            />
+          </div>
+        </section>
       )}
 
       {/* 店铺街 */}

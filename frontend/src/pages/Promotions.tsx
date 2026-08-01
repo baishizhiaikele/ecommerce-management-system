@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Card, Tag, Empty, Spin, Segmented, Row, Col, Button, message } from "antd";
 import type { AxiosError } from "axios";
 import { Flame, Zap, Gift, PackagePlus, Percent, Boxes, ShoppingCart } from "lucide-react";
-import { getPromotions, addCartItem, ApiError, type PromotionOut, type PromotionType } from "../api";
+import { getPromotions, addCartItem, getErrorMessage, ApiError, type PromotionOut, type PromotionType } from "../api";
 import { useCart } from "../store/cart";
 import { money, parseTime } from "../utils/format";
 import { useI18n, translate } from "../i18n";
@@ -90,7 +90,7 @@ export default function Promotions() {
     setLoading(true);
     getPromotions()
       .then(setList)
-      .catch(() => {})
+      .catch((e) => message.error(getErrorMessage(e)))
       .finally(() => setLoading(false));
   }, []);
 

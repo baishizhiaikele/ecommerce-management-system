@@ -3,7 +3,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, Enum as SAEnum, Float, ForeignKey, String
+from sqlalchemy import Column, DateTime, Enum as SAEnum, ForeignKey, Numeric, String
 
 from app.db.base import Base
 
@@ -31,6 +31,6 @@ class Invoice(Base):
     title_type = Column(SAEnum(InvoiceTitleType), default=InvoiceTitleType.PERSONAL, nullable=False)
     title = Column(String(100), nullable=False)
     tax_no = Column(String(30), nullable=True)
-    amount = Column(Float, nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
     pdf_url = Column(String(512), nullable=True)
     issued_at = Column(DateTime(timezone=True), default=_now)

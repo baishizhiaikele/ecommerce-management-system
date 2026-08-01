@@ -61,7 +61,7 @@ export default function ProductCard({ p }: { p: ProductOut }) {
       hoverable
       className="product-card group"
       cover={
-        <div className="relative">
+        <div className="relative overflow-hidden">
           <ProductImage name={p.name} image_url={p.image_url} height={200} rounded={0} />
           <Button
             shape="circle"

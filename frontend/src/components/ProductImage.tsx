@@ -221,13 +221,15 @@ export default function ProductImage({
           decoding="async"
           onLoad={() => setImgOk(true)}
           onError={() => setImgErr(true)}
+          className="product-img"
           style={{
             width: "100%",
             height: "100%",
             objectFit: "cover",
             position: "relative",
-            transition: "opacity 200ms ease",
+            transition: "opacity 200ms ease, transform 360ms ease",
             opacity: imgOk ? 1 : 0,
+            willChange: "transform",
           }}
         />
       )}

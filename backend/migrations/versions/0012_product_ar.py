@@ -4,6 +4,7 @@ Revision ID: 0012_product_ar
 Revises: 0011_note_affiliate
 """
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy import inspect
 
 revision = "0012_product_ar"
@@ -23,7 +24,7 @@ def _has_column(conn, table: str, column: str) -> bool:
 
 def upgrade() -> None:
     bind = op.get_bind()
-    for table, column, _col in _COLUMNS:
+    for table, column, _type, _col in _COLUMNS:
         if not _has_column(bind, table, column):
             with op.batch_alter_table(table) as batch:
                 batch.add_column(_col)
@@ -31,7 +32,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     bind = op.get_bind()
-    for table, column, _col in _COLUMNS:
+    for table, column, _type, _col in _COLUMNS:
         if _has_column(bind, table, column):
             with op.batch_alter_table(table) as batch:
                 batch.drop_column(column)

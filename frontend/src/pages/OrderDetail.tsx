@@ -101,6 +101,12 @@ export default function OrderDetail() {
       } catch {
         setAftersale(null);
       }
+      // T10 物流轨迹：已发货即自动拉取，提升到常驻卡片（不再只藏在弹窗里）
+      try {
+        setLogData(await getLogistics(id));
+      } catch {
+        /* 物流非关键路径 */
+      }
     } catch {
       /* 忽略 */
     } finally {
@@ -365,6 +371,41 @@ export default function OrderDetail() {
             {formatDateTime(order.created_at)}
           </Descriptions.Item>
         </Descriptions>
+
+        {/* T10 物流轨迹常驻卡片：已发货/运输中/已完成时持续展示，对标京东物流进度条 */}
+        {["shipped", "transit", "completed"].includes(order.status) && logData.events.length > 0 && (
+          <Card className="soft-card mt-3" title={t("od.logistics")}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-sm text-slate-500">
+                {t("od.trackingNo")}：
+                <span className="font-mono text-slate-700">{logData.tracking_no || t("od.waitTracking")}</span>
+              </div>
+              <Button type="link" size="small" onClick={openLogistics}>
+                {t("od.viewDetail")}
+              </Button>
+            </div>
+            <Timeline
+              items={logData.events.slice(0, 4).map((e, idx, arr) => ({
+                color: idx === arr.length - 1 ? "green" : "blue",
+                children: (
+                  <div>
+                    <div className="text-slate-700">{e.description}</div>
+                    <div className="text-xs text-slate-400">
+                      {e.location ? `${e.location} · ` : ""}
+                      {e.time ? formatDateTime(e.time) : ""}
+                    </div>
+                  </div>
+                ),
+              }))}
+            />
+            {logData.events.length > 4 && (
+              <Button type="link" size="small" className="p-0" onClick={openLogistics}>
+                {t("od.moreLogistics").replace("{n}", String(logData.events.length - 4))}
+              </Button>
+            )}
+          </Card>
+        )}
+
         <List
           dataSource={order.items}
           renderItem={(it) => (

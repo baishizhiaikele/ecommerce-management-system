@@ -3,7 +3,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, Enum as SAEnum, Float, ForeignKey, Integer, String
+from sqlalchemy import Column, DateTime, Enum as SAEnum, ForeignKey, Integer, Numeric, String
 
 from app.db.base import Base
 
@@ -55,8 +55,8 @@ class AffiliateCommission(Base):
     order_id = Column(String(36), ForeignKey("orders.id"), nullable=False, unique=True)
     promoter_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     buyer_id = Column(String(36), ForeignKey("users.id"), nullable=False)
-    order_amount = Column(Float, nullable=False)
-    commission = Column(Float, nullable=False)
+    order_amount = Column(Numeric(12, 2), nullable=False)
+    commission = Column(Numeric(12, 2), nullable=False)
     status = Column(SAEnum(CommissionStatus), default=CommissionStatus.SETTLED, nullable=False)
     created_at = Column(DateTime(timezone=True), default=_now)
 
@@ -74,7 +74,7 @@ class AffiliateWithdrawal(Base):
 
     id = Column(String(36), primary_key=True, default=_uuid)
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
-    amount = Column(Float, nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
     status = Column(SAEnum(WithdrawalStatus), default=WithdrawalStatus.PENDING, nullable=False)
     remark = Column(String(200), nullable=True)
     created_at = Column(DateTime(timezone=True), default=_now)

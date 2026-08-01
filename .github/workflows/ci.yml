@@ -31,6 +31,21 @@ jobs:
         run: |
           pip install pip-audit
           pip-audit -r requirements.txt || true
+      - name: Schema gate (T18) - 纯 Alembic 建库，禁止静默补列
+        # 生产等价配置：ALLOW_SCHEMA_AUTOFIX=False。
+        # 验证数据库可由 Alembic 迁移完整建出，应用能在"无兜底补列"下启动，
+        # 确保 schema 漂移会被暴露而非被 _ensure_demo_columns 掩盖。
+        env:
+          DATABASE_URL: sqlite+aiosqlite:///./ci_schema.db
+          SECRET_KEY: ci-test-secret-key
+          TESTING: "true"
+          SEED_DEMO: "false"
+          ALLOW_SCHEMA_AUTOFIX: "false"
+        run: |
+          python -m pip install alembic
+          rm -f ci_schema.db
+          alembic upgrade head
+          python -c "import asyncio; from app.main import run_migrations; asyncio.run(run_migrations()); print('[schema-gate] run_migrations OK with ALLOW_SCHEMA_AUTOFIX=False')"
       - name: Run tests
         run: pytest -q
 

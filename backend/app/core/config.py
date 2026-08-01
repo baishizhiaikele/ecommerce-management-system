@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     TESTING: bool = False
     # 是否在启动时灌入演示数据（含弱口令演示账号）；生产环境应显式设为 False
     SEED_DEMO: bool = True
+    # T18：是否允许启动时自动补列（_ensure_demo_columns）。
+    # 仅在本地 / 演示 / 测试环境为 True；生产环境必须保持 False，
+    # 让 schema 漂移暴露出来（由 Alembic migration 正确治理），而非静默补列。
+    ALLOW_SCHEMA_AUTOFIX: bool = False
 
     AI_API_KEY: str = ""
     AI_BASE_URL: str = "https://api.openai.com/v1"

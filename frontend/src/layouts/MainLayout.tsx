@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../store/auth";
+import { useCartCount } from "../store/cart";
 import { useI18n } from "../i18n";
 import { supportUnread } from "../api";
 import {
@@ -83,8 +84,21 @@ const MOBILE_NAV = [
 export default function MainLayout() {
   const { user, logout } = useAuth();
   const { t, lang, setLang } = useI18n();
+  const cartCount = useCartCount();
   const navigate = useNavigate();
   const location = useLocation();
+  // T20：加购时角标 bump 动效（cartCount 变化触发一次）
+  const [cartBump, setCartBump] = useState(false);
+  const prevCart = useRef(cartCount);
+  useEffect(() => {
+    if (cartCount > prevCart.current) {
+      setCartBump(true);
+      const id = setTimeout(() => setCartBump(false), 450);
+      prevCart.current = cartCount;
+      return () => clearTimeout(id);
+    }
+    prevCart.current = cartCount;
+  }, [cartCount]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [headerKw, setHeaderKw] = useState("");
   const [unread, setUnread] = useState(0);
@@ -161,6 +175,7 @@ export default function MainLayout() {
           <div className="hidden lg:flex items-center gap-1 flex-1 min-w-0">
             <nav
               ref={navRef}
+              aria-label={t("nav.primaryNav")}
               className="relative flex items-center gap-1 min-w-0 overflow-x-auto flex-1"
             >
               {PRIMARY_NAV.map((n) => {
@@ -169,6 +184,8 @@ export default function MainLayout() {
                   <button
                     key={n.key}
                     data-active={active}
+                    aria-current={active ? "page" : undefined}
+                    aria-label={t(n.labelKey)}
                     onClick={() => go(n.path)}
                     className={`relative shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition ${
                       active
@@ -180,6 +197,11 @@ export default function MainLayout() {
                       {n.icon}
                       {n.key === "support" && unread > 0 && (
                         <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-rose-500" />
+                      )}
+                      {n.key === "cart" && cartCount > 0 && (
+                        <span className={`absolute -top-2 -right-2 min-w-4 h-4 px-1 rounded-full bg-rose-500 text-white text-[10px] leading-4 text-center ${cartBump ? "cart-bump" : ""}`}>
+                          {cartCount > 99 ? "99+" : cartCount}
+                        </span>
                       )}
                     </span>
                     {t(n.labelKey)}
@@ -197,6 +219,9 @@ export default function MainLayout() {
             </nav>
             <div className="relative shrink-0" ref={moreRef}>
               <button
+                aria-haspopup="menu"
+                aria-expanded={moreOpen}
+                aria-label={t("nav.more")}
                 onClick={() => setMoreOpen((v) => !v)}
                 className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm transition ${
                   moreActive
@@ -208,7 +233,11 @@ export default function MainLayout() {
                 <ChevronDown size={14} />
               </button>
               {moreOpen && (
-                <div className="absolute right-0 top-full mt-2 w-60 max-h-[26rem] overflow-y-auto rounded-xl bg-white shadow-lg border border-slate-100 py-1.5 z-50">
+                <div
+                  role="menu"
+                  aria-label={t("nav.more")}
+                  className="absolute right-0 top-full mt-2 w-60 max-h-[26rem] overflow-y-auto rounded-xl bg-white shadow-lg border border-slate-100 py-1.5 z-50"
+                >
                   {[
                     ...GROUPED_MORE,
                     ...(UNGROUPED_MORE.length
@@ -224,6 +253,8 @@ export default function MainLayout() {
                         return (
                           <button
                             key={n.key}
+                            role="menuitem"
+                            aria-current={a ? "page" : undefined}
                             onClick={() => {
                               go(n.path);
                               setMoreOpen(false);
@@ -288,6 +319,7 @@ export default function MainLayout() {
             </button>
             <button
               onClick={() => setLang(lang === "zh" ? "en" : "zh")}
+              aria-label={t("nav.language")}
               className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-100"
               title={t("nav.language")}
             >
@@ -298,6 +330,9 @@ export default function MainLayout() {
             {user ? (
               <div className="relative">
                 <button
+                  aria-haspopup="menu"
+                  aria-expanded={menuOpen}
+                  aria-label={t("nav.profile")}
                   onClick={() => setMenuOpen((v) => !v)}
                   className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-100"
                 >
@@ -308,10 +343,13 @@ export default function MainLayout() {
                 </button>
                 {menuOpen && (
                   <div
+                    role="menu"
+                    aria-label={t("nav.profile")}
                     className="absolute right-0 mt-2 w-40 bg-white rounded-xl shadow-lg border border-slate-100 py-1 z-40"
                     onMouseLeave={() => setMenuOpen(false)}
                   >
                     <button
+                      role="menuitem"
                       onClick={() => {
                         setMenuOpen(false);
                         go("/me");
@@ -321,6 +359,7 @@ export default function MainLayout() {
                       <User size={15} /> {t("nav.profile")}
                     </button>
                     <button
+                      role="menuitem"
                       onClick={() => {
                         setMenuOpen(false);
                         logout();
@@ -348,19 +387,34 @@ export default function MainLayout() {
       <main id="main-content" tabIndex={-1} className="max-w-7xl mx-auto px-4 py-8 pb-24 lg:pb-8 outline-none"><Outlet /></main>
 
       {/* 移动端底部导航 */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur border-t border-slate-100 grid grid-cols-5 pb-[env(safe-area-inset-bottom)]">
-        {MOBILE_NAV.map((n) => (
+      <nav
+        aria-label={t("nav.mobileNav")}
+        className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur border-t border-slate-100 grid grid-cols-5 pb-[env(safe-area-inset-bottom)]"
+      >
+        {MOBILE_NAV.map((n) => {
+          const active = isActive(n.path);
+          return (
           <button
             key={n.key}
+            aria-current={active ? "page" : undefined}
+            aria-label={t(n.labelKey)}
             onClick={() => go(n.path)}
             className={`flex flex-col items-center justify-center gap-0.5 py-2 text-[11px] ${
-              isActive(n.path) ? "text-indigo-600" : "text-slate-500"
+              active ? "text-indigo-600" : "text-slate-500"
             }`}
           >
-            {n.icon}
+            <span className="relative inline-flex">
+              {n.icon}
+              {n.key === "cart" && cartCount > 0 && (
+                <span className={`absolute -top-2 -right-2 min-w-4 h-4 px-1 rounded-full bg-rose-500 text-white text-[10px] leading-4 text-center ${cartBump ? "cart-bump" : ""}`}>
+                  {cartCount > 99 ? "99+" : cartCount}
+                </span>
+              )}
+            </span>
             {t(n.labelKey)}
           </button>
-        ))}
+          );
+        })}
       </nav>
     </div>
   );

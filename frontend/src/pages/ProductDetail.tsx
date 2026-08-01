@@ -39,6 +39,7 @@ import ProductChat from "../components/ProductChat";
 import ProductQA from "../components/ProductQA";
 import ProductCard from "../components/ProductCard";
 import Reveal from "../components/Reveal";
+import LoginPrompt from "../components/LoginPrompt";
 import ARTryOn from "../components/ARTryOn";
 import { CheckCircle2, RotateCcw, ShieldCheck, Zap, PackageCheck, type LucideIcon } from "lucide-react";
 
@@ -76,6 +77,11 @@ export default function ProductDetail() {
   const [arOpen, setArOpen] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const arStreamRef = useRef<MediaStream | null>(null);
+  // 游客加购时的非阻断式登录引导；reason 区分加购与结算文案
+  const [loginPrompt, setLoginPrompt] = useState<{ open: boolean; reason: "cart" | "checkout" }>({
+    open: false,
+    reason: "cart",
+  });
 
   const startCamera = async () => {
     try {
@@ -265,13 +271,21 @@ export default function ProductDetail() {
   if (!p) return <EmptyState title={t("pd.notFound")} description={t("pd.maybeOff")} />;
 
   const addToCart = async () => {
-    if (!user) {
-      message.warning(t("common.loginFirst"));
-      navigate("/login", { state: { from: location.pathname } });
-      return;
-    }
     if (variants.length && !matchedVariant) {
       message.warning(t("pd.selectSpec"));
+      return;
+    }
+    // 游客也允许加购：先写入本地购物车，再弹出非阻断式登录引导（可继续浏览）
+    if (!user) {
+      useCart.getState().add({
+        product_id: p.id,
+        name: p.name,
+        price: displayPrice,
+        quantity: qty,
+        image_url: matchedVariant?.image_url || p.image_url || undefined,
+      });
+      message.success(t("pd.addedCart"));
+      setLoginPrompt({ open: true, reason: "cart" });
       return;
     }
     try {
@@ -290,13 +304,20 @@ export default function ProductDetail() {
   };
 
   const buyNow = async () => {
-    if (!user) {
-      message.warning(t("common.loginFirst"));
-      navigate("/login", { state: { from: location.pathname } });
-      return;
-    }
     if (variants.length && !matchedVariant) {
       message.warning(t("pd.selectSpec"));
+      return;
+    }
+    if (!user) {
+      // 立即购买需要登录结算：游客先提示登录，本地车已记录本次商品
+      useCart.getState().add({
+        product_id: p.id,
+        name: p.name,
+        price: displayPrice,
+        quantity: qty,
+        image_url: matchedVariant?.image_url || p.image_url || undefined,
+      });
+      setLoginPrompt({ open: true, reason: "checkout" });
       return;
     }
     try {
@@ -326,6 +347,8 @@ export default function ProductDetail() {
       <Row gutter={[32, 24]}>
         <Col xs={24} md={10}>
           <div
+            role="img"
+            aria-label={`${p.name} ${t("pd.mainImage")}`}
             className="relative aspect-square rounded-2xl overflow-hidden bg-slate-100 flex items-center justify-center cursor-zoom-in group"
             onMouseMove={(e) => {
               const el = e.currentTarget.querySelector("img");
@@ -355,6 +378,8 @@ export default function ProductDetail() {
                 <button
                   key={i}
                   onClick={() => setActiveImg(i)}
+                  aria-current={i === activeImg ? "true" : undefined}
+                  aria-label={`${t("pd.thumbnail")} ${i + 1}`}
                   className={`shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 ${
                     i === activeImg ? "border-indigo-500" : "border-transparent"
                   }`}
@@ -420,6 +445,8 @@ export default function ProductDetail() {
                           key={val}
                           type={active ? "primary" : "default"}
                           shape="round"
+                          aria-pressed={active}
+                          aria-label={`${g.key} ${val}`}
                           onClick={() => setSelected((s) => ({ ...s, [g.key]: val }))}
                         >
                           {val}
@@ -461,7 +488,7 @@ export default function ProductDetail() {
             <span className="text-slate-400 text-sm">
               {t("pd.stockInfo").replace("{n}", String(stock))}
               {stock > 0 && stock <= 20 && (
-                <span className="ml-2 text-rose-500 font-medium">
+                <span className="ml-2 text-rose-500 font-medium" role="status" aria-live="polite">
                   {t("pd.lowStock").replace("{n}", String(stock))}
                 </span>
               )}
@@ -477,10 +504,11 @@ export default function ProductDetail() {
               icon={<ShoppingCartOutlined />}
               onClick={addToCart}
               disabled={stock <= 0}
+              aria-label={t("pd.addCart")}
             >
               {t("pd.addCart")}
             </Button>
-            <Button size="large" onClick={buyNow} disabled={stock <= 0}>
+            <Button size="large" onClick={buyNow} disabled={stock <= 0} aria-label={t("pd.buyNow")}>
               {t("pd.buyNow")}
             </Button>
             <Tooltip title={faved ? t("pd.favRemoved") : t("pd.fav")}>
@@ -490,17 +518,18 @@ export default function ProductDetail() {
                 icon={faved ? <HeartFilled /> : <HeartOutlined />}
                 onClick={toggleFav}
                 disabled={!user}
+                aria-label={faved ? t("pd.unfav") : t("pd.fav")}
               >
                 {faved ? t("pd.unfav") : t("pd.fav")}
               </Button>
             </Tooltip>
             <Tooltip title={t("pd.aiChat")}>
-              <Button size="large" icon={<RobotOutlined />} onClick={() => setChatOpen(true)}>
+              <Button size="large" icon={<RobotOutlined />} onClick={() => setChatOpen(true)} aria-label={t("pd.chat")}>
                 {t("pd.chat")}
               </Button>
             </Tooltip>
             <Tooltip title={t("pd.arHint")}>
-              <Button size="large" icon={<CameraOutlined />} onClick={() => { setArOpen(true); setTimeout(startCamera, 300); }}>
+              <Button size="large" icon={<CameraOutlined />} onClick={() => { setArOpen(true); setTimeout(startCamera, 300); }} aria-label={t("pd.ar")}>
                 {t("pd.ar")}
               </Button>
             </Tooltip>
@@ -607,6 +636,34 @@ export default function ProductDetail() {
       >
         <ProductChat product={p} />
       </Drawer>
+
+      <LoginPrompt
+        open={loginPrompt.open}
+        reason={loginPrompt.reason}
+        onClose={() => setLoginPrompt((s) => ({ ...s, open: false }))}
+      />
+
+      {/* T13 移动端吸底操作栏：小屏常驻加购/立即购买，主流程键盘与拇指可达 */}
+      <div
+        aria-label={t("pd.mobileActions")}
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-30 flex items-center gap-2 bg-white/95 backdrop-blur border-t border-slate-100 px-3 py-2 safe-area-bottom"
+      >
+        <Button
+          type="primary"
+          block
+          icon={<ShoppingCartOutlined />}
+          onClick={addToCart}
+          disabled={stock <= 0}
+          aria-label={t("pd.addCart")}
+        >
+          {t("pd.addCart")}
+        </Button>
+        <Button block onClick={buyNow} disabled={stock <= 0} aria-label={t("pd.buyNow")}>
+          {t("pd.buyNow")}
+        </Button>
+      </div>
+      {/* 吸底栏占位，避免遮挡页面底部内容 */}
+      <div className="lg:hidden h-14" />
     </div>
   );
 }

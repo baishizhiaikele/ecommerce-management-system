@@ -5,6 +5,10 @@ export default defineConfig({
   plugins: [react()],
   build: {
     chunkSizeWarningLimit: 1300,
+    // C-4：生产构建清除 console.* / debugger（开发期仍保留便于调试）
+    esbuild: {
+      drop: ["console", "debugger"],
+    },
     rollupOptions: {
       output: {
         manualChunks(id) {

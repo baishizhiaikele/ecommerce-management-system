@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+/* T20：加购时购物车角标 bump 动效 */
+@keyframes cart-bump {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.45); }
+  70% { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+.cart-bump {
+  animation: cart-bump 0.45s ease-out;
+}
+
 html,
 body,
 #root {
@@ -38,6 +49,11 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #cbd0d8;
+}
+
+/* T17：商品卡片 hover 主图轻微放大（对标天猫/京东的卡片反馈） */
+.product-card:hover .product-img {
+  transform: scale(1.06);
 }
 
 /* ============ 简约设计语言 ============ */

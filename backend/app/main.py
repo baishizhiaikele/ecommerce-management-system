@@ -252,9 +252,14 @@ async def run_migrations() -> None:
         Base.metadata.create_all(_sync_engine)
     finally:
         _sync_engine.dispose()
-    # 列演进已由 Alembic 迁移 0009_demo_columns 正式接管；此处 _ensure_demo_columns 仅作为
-    # 极端情况下（Alembic 未运行/旧库直连）的最终兜底，幂等无副作用。
-    await _ensure_demo_columns()
+    # 列演进已由 Alembic 迁移 0009_demo_columns 正式接管。
+    # T18：_ensure_demo_columns 作为最终兜底，仅在 ALLOW_SCHEMA_AUTOFIX=True 时执行，
+    # 避免生产环境静默补列掩盖 schema 漂移（应由 Alembic 正确治理）。本地/演示/测试环境可开启。
+    if settings.ALLOW_SCHEMA_AUTOFIX:
+        logger.info("[schema] ALLOW_SCHEMA_AUTOFIX=True，运行 _ensure_demo_columns 兜底补列")
+        await _ensure_demo_columns()
+    else:
+        logger.info("[schema] ALLOW_SCHEMA_AUTOFIX=False，跳过 _ensure_demo_columns；schema 漂移交由 Alembic 处理")
     # 兼容旧库：结算唯一约束升级为 (order_id, merchant_id)，支持多商家分别结算
     await _reconcile_settlement_index()
 

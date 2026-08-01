@@ -19,6 +19,7 @@ import { trackAffiliate } from "./api";
 // S5：按路由懒加载，把买家二级页、商家后台、管理后台（含 recharts 等较重依赖）拆出首屏包体
 const ProductDetail = lazy(() => import("./pages/ProductDetail"));
 const Cart = lazy(() => import("./pages/Cart"));
+const Checkout = lazy(() => import("./pages/Checkout"));
 const Orders = lazy(() => import("./pages/Orders"));
 const OrderDetail = lazy(() => import("./pages/OrderDetail"));
 const Favorites = lazy(() => import("./pages/Favorites"));
@@ -173,38 +174,43 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/console/login" element={<ConsoleLogin />} />
-          <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
-            <Route path="/" element={<Market />} />
-            <Route path="/market" element={<Market />} />
-            <Route path="/products/:id" element={<ProductDetail />} />
-            <Route path="/cart" element={<Cart />} />
-            <Route path="/orders" element={<Orders />} />
-            <Route path="/orders/:id" element={<OrderDetail />} />
-            <Route path="/favorites" element={<Favorites />} />
-            <Route path="/notifications" element={<Notifications />} />
-            <Route path="/points" element={<Points />} />
-            <Route path="/membership" element={<Membership />} />
-            <Route path="/pay/:id" element={<Pay />} />
-            <Route path="/me" element={<Me />} />
-            <Route path="/addresses" element={<Address />} />
-            <Route path="/coupons" element={<Coupons />} />
-            <Route path="/mall" element={<Mall />} />
-            <Route path="/support" element={<Support />} />
-            <Route path="/shops" element={<Shop />} />
-            <Route path="/shops/:id" element={<Shop />} />
-            <Route path="/promotions" element={<Promotions />} />
-            <Route path="/following" element={<Following />} />
-            <Route path="/ai-mall" element={<AIMall />} />
-            <Route path="/discover" element={<Discover />} />
-            <Route path="/discover/:id" element={<NoteDetail />} />
-            <Route path="/history" element={<History />} />
-            <Route path="/affiliate" element={<Affiliate />} />
-            <Route path="/live" element={<Live />} />
-            <Route path="/live/:id" element={<LiveRoomPage />} />
-            <Route path="/presales" element={<Presales />} />
-            <Route path="/settings/notifications" element={<NotificationSettings />} />
-            <Route path="/search" element={<SearchPage />} />
-          </Route>
+            {/* 游客可浏览的页面：未登录也放行，仅在加购/下单等动作点引导登录 */}
+            <Route element={<ProtectedRoute guest><MainLayout /></ProtectedRoute>}>
+              <Route path="/" element={<Market />} />
+              <Route path="/market" element={<Market />} />
+              <Route path="/products/:id" element={<ProductDetail />} />
+              <Route path="/search" element={<SearchPage />} />
+              <Route path="/shops" element={<Shop />} />
+              <Route path="/shops/:id" element={<Shop />} />
+              <Route path="/ai-mall" element={<AIMall />} />
+              <Route path="/discover" element={<Discover />} />
+              <Route path="/discover/:id" element={<NoteDetail />} />
+              <Route path="/live" element={<Live />} />
+              <Route path="/live/:id" element={<LiveRoomPage />} />
+              <Route path="/presales" element={<Presales />} />
+              <Route path="/promotions" element={<Promotions />} />
+              <Route path="/mall" element={<Mall />} />
+              <Route path="/following" element={<Following />} />
+              <Route path="/affiliate" element={<Affiliate />} />
+              <Route path="/history" element={<History />} />
+              <Route path="/favorites" element={<Favorites />} />
+              <Route path="/notifications" element={<Notifications />} />
+            </Route>
+            {/* 需要登录的页面：未登录跳登录页 */}
+            <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
+              <Route path="/cart" element={<Cart />} />
+              <Route path="/checkout" element={<Checkout />} />
+              <Route path="/orders" element={<Orders />} />
+              <Route path="/orders/:id" element={<OrderDetail />} />
+              <Route path="/points" element={<Points />} />
+              <Route path="/membership" element={<Membership />} />
+              <Route path="/pay/:id" element={<Pay />} />
+              <Route path="/me" element={<Me />} />
+              <Route path="/addresses" element={<Address />} />
+              <Route path="/coupons" element={<Coupons />} />
+              <Route path="/support" element={<Support />} />
+              <Route path="/settings/notifications" element={<NotificationSettings />} />
+            </Route>
           <Route element={<ProtectedRoute roles={["merchant"]}><MerchantLayout /></ProtectedRoute>}>
             <Route path="/merchant" element={<MerchantDashboard />} />
             <Route path="/merchant/products" element={<MerchantProducts />} />

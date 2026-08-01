@@ -5,6 +5,7 @@ import { Button, Form, Input, Segmented, Tag, Modal, message } from "antd";
 import { LockOutlined, UserOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import { api, getErrorMessage } from "../../api/client";
 import { useAuth } from "../../store/auth";
+import { useCart } from "../../store/cart";
 import { homeForRole } from "../../utils/roleRouting";
 import { useI18n } from "../../i18n";
 
@@ -87,6 +88,8 @@ export default function Login() {
       if (mode === "login") {
         const me = await api.get("/auth/me");
         setUser(me.data);
+        // 登录成功后把游客期间加入的本地购物车合并进服务端
+        void useCart.getState().mergeGuestToServer();
         navigate(from || homeForRole(me.data.role), { replace: true });
       } else {
         message.success(t("register.success"));
