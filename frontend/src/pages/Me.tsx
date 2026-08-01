@@ -5,6 +5,7 @@ import { Package, Gift, MapPin, Heart, Bell, Ticket, Sparkles, Share2 } from "lu
 import { useAuth } from "../store/auth";
 import { signIn, getSignInStatus, listAddresses } from "../api";
 import { useI18n } from "../i18n";
+import { reportError } from "../utils/reportError";
 
 export default function Me() {
   const navigate = useNavigate();
@@ -18,11 +19,11 @@ export default function Me() {
   useEffect(() => {
     listAddresses()
       .then((a) => setAddrCount(a.length))
-      .catch(() => {});
+      .catch((e) => reportError(e, { tag: "Me.addresses" }));
     // 进入页面时同步今日签到状态（只读，不触发发分）
     getSignInStatus()
       .then((r) => setSigned(r.signed_today))
-      .catch(() => {});
+      .catch((e) => reportError(e, { tag: "Me.signInStatus" }));
   }, []);
 
   const doSign = async () => {

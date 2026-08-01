@@ -14,7 +14,7 @@
   按 (类目优先级, 销量) 取前 limit 条，结果与原循环完全一致，DB 往返恒为 1 次。
 """
 
-from sqlalchemy import case, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.favorite import Favorite
@@ -26,6 +26,72 @@ VIEW_SEQ_LEN = 20
 BUY_SEQ_LEN = 10
 FAV_WEIGHT = 2.0
 BUY_WEIGHT = 3.0
+
+
+async def co_purchase(db: AsyncSession, product_id: str, limit: int = 8) -> list[Product]:
+    """搭配购买（T11）：基于订单共现的关联推荐。
+
+    取与 product_id 在同一订单中出现频次最高的其它商品（协同过滤 item-item）。
+    共现强度按共单数降序，同类目优先，已激活商品才召回。
+    """
+    co = (
+        select(OrderItem.product_id, func.count().label("cnt"))
+        .where(
+            OrderItem.order_id.in_(
+                select(OrderItem.order_id).where(OrderItem.product_id == product_id)
+            ),
+            OrderItem.product_id != product_id,
+        )
+        .group_by(OrderItem.product_id)
+        .order_by(func.count().desc())
+        .limit(limit * 3)
+    )
+    rows = list(await db.execute(co))
+    ids = [r[0] for r in rows]
+    if not ids:
+        return []
+    # 按共现强度保序取 limit
+    items = list(
+        await db.scalars(
+            select(Product)
+            .where(Product.id.in_(ids), Product.status == ProductStatus.ACTIVE)
+        )
+    )
+    by_id = {p.id: p for p in items}
+    return [by_id[i] for i in ids if i in by_id][:limit]
+
+
+async def also_viewed(db: AsyncSession, product_id: str, limit: int = 8) -> list[Product]:
+    """看了又看（T11）：基于浏览共现的关联推荐。
+
+    取与 product_id 被同一用户先后浏览（同一会话窗口内）的其它商品，
+    按共现频次降序召回，已激活商品才展示。
+    """
+    # 关联「也看过该商品的用户」的其它浏览记录
+    co = (
+        select(ProductView.product_id, func.count().label("cnt"))
+        .where(
+            ProductView.user_id.in_(
+                select(ProductView.user_id).where(ProductView.product_id == product_id)
+            ),
+            ProductView.product_id != product_id,
+        )
+        .group_by(ProductView.product_id)
+        .order_by(func.count().desc())
+        .limit(limit * 3)
+    )
+    rows = list(await db.execute(co))
+    ids = [r[0] for r in rows]
+    if not ids:
+        return []
+    items = list(
+        await db.scalars(
+            select(Product)
+            .where(Product.id.in_(ids), Product.status == ProductStatus.ACTIVE)
+        )
+    )
+    by_id = {p.id: p for p in items}
+    return [by_id[i] for i in ids if i in by_id][:limit]
 
 
 async def _category_scores(db: AsyncSession, user_id: str) -> dict[str, float]:

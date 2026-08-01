@@ -32,6 +32,7 @@ import ProductCard from "../components/ProductCard";
 import ProductGrid from "../components/ProductGrid";
 import Reveal from "../components/Reveal";
 import ProductPrice from "../components/ProductPrice";
+import { reportError } from "../utils/reportError";
 import { useFlashList } from "../context/FlashPriceContext";
 
 function FlashCountdown({ endAt }: { endAt?: string | null }) {
@@ -334,7 +335,7 @@ export default function Market() {
   useEffect(() => {
     searchHot()
       .then((r) => setHot(r))
-      .catch(() => {});
+      .catch((e) => reportError(e, { tag: "Market.searchHot" }));
     try {
       const h = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
       if (Array.isArray(h)) setHistory(h);
@@ -356,7 +357,7 @@ export default function Market() {
     setKw(t);
     if (t) {
       pushHistory(t);
-      searchRecord(t).catch(() => {});
+      searchRecord(t).catch((e) => reportError(e, { tag: "Market.searchRecord" }));
     }
     setTimeout(load, 0);
   };
@@ -456,7 +457,7 @@ export default function Market() {
       const fetchOne = (sort: string, setter: (v: ProductOut[]) => void) =>
         listProducts({ category_id: catId, sort, page_size: 5 })
           .then(setter)
-          .catch(() => {});
+          .catch((e) => reportError(e, { tag: `Market.board.${sort}` }));
       fetchOne("sales", (v) => setCatTop((s) => ({ ...s, sales: v })));
       fetchOne("top_rating", (v) => setCatTop((s) => ({ ...s, rating: v })));
       fetchOne("newest", (v) => setCatTop((s) => ({ ...s, new: v })));

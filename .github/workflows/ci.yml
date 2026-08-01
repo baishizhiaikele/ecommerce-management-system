@@ -67,6 +67,8 @@ jobs:
         run: npm ci
       - name: Type check
         run: npx tsc --noEmit
+      - name: Lint (T6 - 拦截静默 catch / 裸 console 回归)
+        run: npm run lint
       - name: Unit tests
         run: npm run test
       - name: Build

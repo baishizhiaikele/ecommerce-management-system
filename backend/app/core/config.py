@@ -88,6 +88,11 @@ class Settings(BaseSettings):
     # 采样比例：1.0=全采；高流量可调小
     OTEL_TRACES_SAMPLER_ARG: float = 1.0
 
+    # 可选 Sentry 错误监控（T26 可观测性收尾）：仅配置 DSN 且安装 sentry-sdk 时启用
+    SENTRY_DSN: str = ""
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.1
+    ENVIRONMENT: str = "production"
+
     @property
     def async_database_url(self) -> str:
         """返回 SQLAlchemy 异步引擎可用的数据库 URL。

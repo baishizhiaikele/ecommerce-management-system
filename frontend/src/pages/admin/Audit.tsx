@@ -4,6 +4,7 @@ import EmptyState from "../../components/EmptyState";
 import { adminAuditLogs, AuditLogOut, getAuditAlerts, getAuditReplay, AuditAlert, AuditLogItem } from "../../api";
 import { useI18n } from "../../i18n";
 import { formatDateTime } from "../../utils/format";
+import { reportError } from "../../utils/reportError";
 
 export default function AdminAudit() {
   const { t } = useI18n();
@@ -22,7 +23,7 @@ export default function AdminAudit() {
     setLoading(true);
     adminAuditLogs()
       .then(setItems)
-      .catch(() => {})
+      .catch((e) => reportError(e, { tag: "Admin.Audit" }))
       .finally(() => setLoading(false));
   };
   useEffect(() => {

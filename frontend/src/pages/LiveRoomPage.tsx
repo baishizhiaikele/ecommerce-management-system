@@ -10,12 +10,14 @@ import {
   listLiveMessages,
   liveWsUrl,
   sendLiveMessage,
+  type LiveRoomOut,
   trackAffiliateClick,
   type LiveMessageOut,
   type LiveRoomDetail,
 } from "../api";
 import { useI18n } from "../i18n";
 import ProductPrice from "../components/ProductPrice";
+import { reportError, swallow } from "../utils/reportError";
 import ProductImage from "../components/ProductImage";
 import { useAuth } from "../store/auth";
 
@@ -35,8 +37,8 @@ export default function LiveRoomPage() {
 
   useEffect(() => {
     if (!id) return;
-    getLiveRoom(id).then(setRoom).catch(() => {});
-    if (user) enterLiveRoom(id).catch(() => {});
+    getLiveRoom(id).then(setRoom).catch((e) => reportError(e, { tag: "LiveRoom.load" }));
+    if (user) enterLiveRoom(id).catch((e) => swallow(e, "LiveRoom.enter"));
   }, [id, user]);
 
   // 弹幕：优先 WebSocket 实时推送，连接失败/断开时降级为 3 秒轮询

@@ -269,6 +269,11 @@ async def lifespan(app: FastAPI):
     # 结构化日志（P2-11）：生产用 JSON 单行，测试保持可读
     if not settings.TESTING:
         setup_logging()
+    # 可观测性（T26）：可选 Sentry 错误监控（仅配置 DSN 时生效，零依赖降级）
+    from app.core.integrations.sentry import init_sentry
+
+    if not settings.TESTING:
+        init_sentry()
     register_handlers()
     # 通过 Alembic 将数据库 schema 升级到最新版本（幂等，兼容既有旧库）
     await run_migrations()
@@ -305,9 +310,12 @@ if not settings.TESTING:
 # 可观测性（P2）：请求指标中间件（始终开启，开销极低）
 app.add_middleware(MetricsMiddleware)
 
-# 可观测性接外部 APM（P2 收尾）：可选 OpenTelemetry 链路追踪，仅在 OTEL_ENABLED=true 时真正生效
-from app.core.tracing import TracingMiddleware
+# 可观测性（T26）：请求级 trace id 贯穿（始终开启，极低开销），注入日志与响应头
+from app.core.tracing import RequestIdMiddleware, TracingMiddleware
 
+app.add_middleware(RequestIdMiddleware)
+
+# 可观测性接外部 APM（P2 收尾）：可选 OpenTelemetry 链路追踪，仅在 OTEL_ENABLED=true 时真正生效
 if settings.OTEL_ENABLED:
     app.add_middleware(TracingMiddleware)
 

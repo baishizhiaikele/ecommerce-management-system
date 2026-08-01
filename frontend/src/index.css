@@ -2,6 +2,27 @@
 @tailwind components;
 @tailwind utilities;
 
+/* T8：无障碍 — 键盘聚焦可见 + 跳转到主内容（skip-link） */
+.skip-link {
+  position: fixed;
+  left: 8px;
+  top: -48px;
+  z-index: 9999;
+  background: #4f46e5;
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 8px;
+  transition: top 0.15s ease;
+}
+.skip-link:focus {
+  top: 8px;
+}
+:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 /* T20：加购时购物车角标 bump 动效 */
 @keyframes cart-bump {
   0% { transform: scale(1); }

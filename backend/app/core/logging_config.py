@@ -10,6 +10,8 @@ import logging
 import sys
 import time
 
+from app.core.tracing import get_trace_id
+
 _CONFIGURED = False
 
 
@@ -21,6 +23,10 @@ class JsonFormatter(logging.Formatter):
             "logger": record.name,
             "msg": record.getMessage(),
         }
+        # 贯穿 trace id，便于一次请求的全部日志串联
+        tid = get_trace_id()
+        if tid:
+            payload["trace_id"] = tid
         if record.exc_info:
             payload["exc"] = self.formatException(record.exc_info)
         return json.dumps(payload, ensure_ascii=False)

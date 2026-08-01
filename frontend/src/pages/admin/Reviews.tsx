@@ -5,6 +5,7 @@ import { adminNegativeReviews, ReviewOut } from "../../api";
 import { sentimentMeta } from "../../utils/format";
 import { useNavigate } from "react-router-dom";
 import { useI18n } from "../../i18n";
+import { reportError } from "../../utils/reportError";
 
 export default function AdminReviews() {
   const { t } = useI18n();
@@ -14,7 +15,7 @@ export default function AdminReviews() {
   useEffect(() => {
     adminNegativeReviews()
       .then(setItems)
-      .catch(() => {})
+      .catch((e) => reportError(e, { tag: "Admin.Reviews" }))
       .finally(() => setLoading(false));
   }, []);
   if (loading) return <div className="text-center py-10"><Spin /></div>;

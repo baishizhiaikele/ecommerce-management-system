@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { swallow } from "../utils/reportError";
 import type { ReactNode } from "react";
 import type { AxiosError } from "axios";
 import {
@@ -120,7 +121,7 @@ function AttachmentList({ urls, topMargin = true }: { urls: string[]; topMargin?
               if (document.fullscreenElement) {
                 document.exitFullscreen?.();
               } else {
-                el.requestFullscreen?.().catch(() => {});
+                el.requestFullscreen?.().catch((e) => swallow(e, "Support.fullscreen"));
               }
             }}
             style={{

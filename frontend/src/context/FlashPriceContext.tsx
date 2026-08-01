@@ -6,6 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { reportError } from "../utils/reportError";
 import { getPromotions, type ProductOut, type PromotionOut } from "../api";
 
 type FlashState = {
@@ -57,7 +58,7 @@ export function FlashPriceProvider({ children }: { children: ReactNode }) {
         .then((r) => {
           if (alive) setList(r);
         })
-        .catch(() => {});
+        .catch((e) => reportError(e, { tag: "FlashPrice.load" }));
     load();
     const id = setInterval(load, 60_000);
     return () => {

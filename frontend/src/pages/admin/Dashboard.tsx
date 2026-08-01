@@ -25,6 +25,7 @@ import {
   DashboardAnalytics,
 } from "../../api";
 import { money } from "../../utils/format";
+import { reportError } from "../../utils/reportError";
 import StatCard from "../../components/StatCard";
 import PageHeader from "../../components/PageHeader";
 import Reveal from "../../components/Reveal";
@@ -55,7 +56,7 @@ export default function AdminDashboard() {
         setTrend(tr);
         setAn(a);
       })
-      .catch(() => {})
+      .catch((e) => reportError(e, { tag: "Admin.Dashboard" }))
       .finally(() => setLoading(false));
   }, []);
 

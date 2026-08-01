@@ -7,6 +7,7 @@ import {
 } from "../../api";
 import { useI18n } from "../../i18n";
 import { formatDateTime } from "../../utils/format";
+import { reportError } from "../../utils/reportError";
 
 const COLORS: Record<string, string> = { pending: "gold", approved: "green", rejected: "red" };
 
@@ -21,7 +22,7 @@ export default function AdminWithdrawals() {
     setLoading(true);
     adminListAffiliateWithdrawals()
       .then(setRows)
-      .catch(() => {})
+      .catch((e) => reportError(e, { tag: "Admin.Withdrawals" }))
       .finally(() => setLoading(false));
   };
   useEffect(load, []);

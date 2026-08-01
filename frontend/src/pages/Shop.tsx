@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Card, Spin, Empty, Tag, Button, Popconfirm, message } from "antd";
 import { Star, Package, ChevronRight } from "lucide-react";
 import { getErrorMessage } from "../api/client";
+import { reportError } from "../utils/reportError";
 import {
   listShops,
   getShop,
@@ -66,10 +67,10 @@ export default function Shop() {
     if (detail) {
       followStatus(detail.id)
         .then((r) => setFollowed(r.following))
-        .catch(() => {});
+        .catch((e) => reportError(e, { tag: "Shop.followStatus" }));
       followersCount(detail.id)
         .then((r) => setFollowers(r.count))
-        .catch(() => {});
+        .catch((e) => reportError(e, { tag: "Shop.followersCount" }));
     }
   }, [detail]);
 

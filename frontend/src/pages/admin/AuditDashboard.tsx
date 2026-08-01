@@ -14,6 +14,7 @@ import {
 } from "recharts";
 import { auditStats } from "../../api";
 import { useI18n } from "../../i18n";
+import { reportError } from "../../utils/reportError";
 
 interface AuditStats {
   by_action: { action: string; count: number }[];
@@ -28,7 +29,7 @@ export default function AuditDashboard() {
   useEffect(() => {
     auditStats()
       .then(setData)
-      .catch(() => {})
+      .catch((e) => reportError(e, { tag: "Admin.AuditDashboard" }))
       .finally(() => setLoading(false));
   }, []);
 

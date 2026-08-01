@@ -10,8 +10,13 @@
 from __future__ import annotations
 
 import logging
+import uuid
+from contextvars import ContextVar
+from typing import Optional
 
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
 
 from app.core.config import settings
 
@@ -19,6 +24,22 @@ logger = logging.getLogger(__name__)
 
 _tracer = None
 _initialized = False
+
+# 请求级 trace id（贯穿一次请求的全部日志 / service 调用）
+trace_id_var: "ContextVar[Optional[str]]" = ContextVar("trace_id", default=None)
+
+
+def get_trace_id() -> Optional[str]:
+    """返回当前请求的 trace id；无请求上下文时返回 None。"""
+    return trace_id_var.get()
+
+
+def set_trace_id(value: Optional[str]) -> None:
+    trace_id_var.set(value)
+
+
+def new_trace_id() -> str:
+    return uuid.uuid4().hex[:16]
 
 
 def _try_init() -> bool:
@@ -131,7 +152,10 @@ def export_metrics_otlp() -> bool:
 
 
 class TracingMiddleware(BaseHTTPMiddleware):
-    """为每个请求创建一个 span（方法 + 路径模板 + 状态码），便于 APM 下钻。"""
+    """为每个请求创建一个 span（方法 + 路径模板 + 状态码），便于 APM 下钻。
+
+    同时把 span 的 trace id 写入 contextvar，使结构化日志可关联同一条链路。
+    """
 
     async def dispatch(self, request, call_next):
         tracer = get_tracer()
@@ -145,6 +169,28 @@ class TracingMiddleware(BaseHTTPMiddleware):
         with tracer.start_as_current_span(f"{request.method} {route}") as span:
             span.set_attribute("http.method", request.method)
             span.set_attribute("http.route", str(route))
+            set_trace_id(span.get_span_context().trace_id)
             response = await call_next(request)
             span.set_attribute("http.status_code", response.status_code)
             return response
+
+
+class RequestIdMiddleware(BaseHTTPMiddleware):
+    """始终开启：为每次请求分配/透传 trace id（X-Request-ID），并贯穿到日志。
+
+    - 若上游（网关/负载均衡）已带 X-Request-ID，则沿用，保证跨服务串联。
+    - 否则生成新 id。
+    - 写入响应头 X-Request-ID，便于前端排查。
+    - 通过 contextvar 注入当前协程，结构化日志（JsonFormatter）自动带上 trace_id。
+    """
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        incoming = request.headers.get("X-Request-ID") or request.headers.get("X-Trace-Id")
+        trace_id = incoming or new_trace_id()
+        token = trace_id_var.set(trace_id)
+        try:
+            response = await call_next(request)
+        finally:
+            trace_id_var.reset(token)
+        response.headers["X-Request-ID"] = trace_id
+        return response

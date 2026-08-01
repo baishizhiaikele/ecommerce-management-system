@@ -31,7 +31,7 @@ const LanguageContext = createContext<{
   translate: (key: string, params?: Record<string, string | number>) => string;
 }>({
   lang: currentLang,
-  setLang: () => {},
+  setLang: () => void 0,
   t: (k, p) => translate(k, p),
   translate,
 });

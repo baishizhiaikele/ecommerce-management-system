@@ -33,6 +33,7 @@ import { formatDateTime } from "../utils/format";
 import { useAuth } from "../store/auth";
 import { useI18n } from "../i18n";
 import { getErrorMessage } from "../api/client";
+import { reportError } from "../utils/reportError";
 
 export default function Discover() {
   const { t } = useI18n();
@@ -66,7 +67,7 @@ export default function Discover() {
     load();
     listProducts()
       .then(setProducts)
-      .catch(() => {});
+      .catch((e) => reportError(e, { tag: "Discover.products" }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

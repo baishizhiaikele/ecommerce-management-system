@@ -84,7 +84,7 @@ export interface ProductOut {
   ai_title?: string | null;
   ai_copy?: string | null;
   ai_price_suggestion?: string | null;
-  attributes?: Record<string, any>;
+  attributes?: Record<string, unknown>;
   created_at: string;
   reject_reason?: string | null;
   ar_enabled?: boolean; // P2 体验增强：AR 试穿开关
@@ -873,9 +873,8 @@ export const exportOrdersReport = () =>
     .get("/merchant/reports/orders", { responseType: "blob" })
     .then((r) => downloadBlob(r.data, "orders.csv"));
 
-// ---------- 个性化推荐 ----------
-export const recommendations = () =>
-  api.get<ProductOut[]>("/recommendations").then((r) => r.data);
+// ---------- 个性化推荐（T7：按域拆分到 ./recommend）----------
+export * from "./recommend";
 
 // ---------- AI 营销 / 定价 ----------
 export const aiMarketing = (id: string, platform: string, note?: string) =>

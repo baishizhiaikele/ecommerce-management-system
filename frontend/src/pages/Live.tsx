@@ -4,6 +4,7 @@ import { Card, Col, Empty, Row, Spin, Tag } from "antd";
 import { Radio as RadioIcon, Users } from "lucide-react";
 import { listLiveRooms, type LiveRoomOut } from "../api";
 import { useI18n } from "../i18n";
+import { reportError } from "../utils/reportError";
 import ProductImage from "../components/ProductImage";
 import Reveal from "../components/Reveal";
 
@@ -16,7 +17,7 @@ export default function Live() {
   useEffect(() => {
     listLiveRooms()
       .then(setRooms)
-      .catch(() => {})
+      .catch((e) => reportError(e, { tag: "Live.list" }))
       .finally(() => setLoading(false));
   }, []);
 

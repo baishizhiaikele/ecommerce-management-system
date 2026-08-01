@@ -26,7 +26,8 @@ import {
   CameraOutlined,
 } from "@ant-design/icons";
 import { Heart } from "lucide-react";
-import { getProduct, listProductReviews, listVariants, addCartItem, logView, proxyImg, listProducts, addFavorite, removeFavorite, isFavorited, getPriceHistory, getNotesForProduct, trackAffiliateClick, getErrorMessage, type ProductOut, type ReviewOut, type VariantOut, type PriceHistoryOut, type NoteOut } from "../api";
+import { getProduct, listProductReviews, listVariants, addCartItem, logView, proxyImg, listProducts, addFavorite, removeFavorite, isFavorited, getPriceHistory, getNotesForProduct, trackAffiliateClick, getSimilarProducts, listCoupons, getErrorMessage, type ProductOut, type ReviewOut, type VariantOut, type PriceHistoryOut, type NoteOut } from "../api";
+import { reportError, swallow } from "../utils/reportError";
 import { money, productStatusMeta } from "../utils/format";
 import { useFlashPrice } from "../context/FlashPriceContext";
 import { useAuth } from "../store/auth";
@@ -41,7 +42,7 @@ import ProductCard from "../components/ProductCard";
 import Reveal from "../components/Reveal";
 import LoginPrompt from "../components/LoginPrompt";
 import ARTryOn from "../components/ARTryOn";
-import { CheckCircle2, RotateCcw, ShieldCheck, Zap, PackageCheck, type LucideIcon } from "lucide-react";
+import { CheckCircle2, RotateCcw, ShieldCheck, Zap, PackageCheck, Bell, type LucideIcon } from "lucide-react";
 
 // 详情页服务承诺条（对标淘宝/京东信任背书）
 const SERVICES: { key: string; Icon: LucideIcon }[] = [
@@ -89,7 +90,7 @@ export default function ProductDetail() {
       arStreamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play().catch(() => {});
+        await videoRef.current.play().catch((e) => swallow(e, "ProductDetail.videoPlay"));
       }
     } catch {
       message.warning(t("pd.arNoCamera"));
@@ -143,7 +144,7 @@ export default function ProductDetail() {
         product_name: p.name,
         price: p.price != null ? Number(p.price) : null,
         image_url: p.image_url,
-      }).catch(() => {});
+      }).catch((e) => reportError(e, { tag: "ProductDetail.logView" }));
     }
   }, [p]);
 
@@ -189,7 +190,10 @@ export default function ProductDetail() {
   const [activeImg, setActiveImg] = useState(0);
   const [faved, setFaved] = useState(false);
   const [related, setRelated] = useState<ProductOut[]>([]);
+  const [coPurchase, setCoPurchase] = useState<ProductOut[]>([]); // T11 搭配购买
+  const [alsoViewed, setAlsoViewed] = useState<ProductOut[]>([]); // T11 看了又看
   const [seedingNotes, setSeedingNotes] = useState<NoteOut[]>([]); // P3-G 种草社交背书
+  const [landedPrice, setLandedPrice] = useState<number | null>(null); // T9 到手价预估
 
   const gallery = useMemo(() => {
     const extra: string[] = [];
@@ -212,7 +216,7 @@ export default function ProductDetail() {
     if (p && user) {
       isFavorited(p.id)
         .then((r) => alive && setFaved(r.favorited))
-        .catch(() => {});
+        .catch((e) => reportError(e, { tag: "ProductDetail.favStatus" }));
     } else {
       setFaved(false);
     }
@@ -228,7 +232,7 @@ export default function ProductDetail() {
     let alive = true;
     getPriceHistory(p.id)
       .then((r) => alive && setPriceHistory(r))
-      .catch(() => {});
+      .catch((e) => reportError(e, { tag: "ProductDetail.priceHistory" }));
     return () => {
       alive = false;
     };
@@ -238,12 +242,37 @@ export default function ProductDetail() {
     if (!p?.category_id) return;
     listProducts({ category_id: p.category_id, page_size: 12 })
       .then((r) => setRelated(r.filter((x) => x.id !== p.id).slice(0, 10)))
-      .catch(() => {});
+      .catch((e) => reportError(e, { tag: "ProductDetail.related" }));
     // P3-G 种草社交背书：该商品被哪些已审核笔记种草
     getNotesForProduct(p.id, 12)
       .then(setSeedingNotes)
-      .catch(() => {});
-  }, [p?.category_id, p?.id]);
+      .catch((e) => reportError(e, { tag: "ProductDetail.notes" }));
+    // T11 关联推荐（item-item 协同过滤）：搭配购买 + 看了又看
+    getSimilarProducts(p.id, "co_purchase", 10)
+      .then(setCoPurchase)
+      .catch((e: unknown) => reportError(e, { tag: "ProductDetail.coPurchase" }));
+    getSimilarProducts(p.id, "also_viewed", 10)
+      .then(setAlsoViewed)
+      .catch((e: unknown) => reportError(e, { tag: "ProductDetail.alsoViewed" }));
+    // T9 到手价预估：取可作用于本商品的平台券/商家券，估算最优券后到手价
+    const base = displayPrice;
+    listCoupons()
+      .then((cs) => {
+        const usable = cs.filter(
+          (c) => c.is_active && (c.merchant_id == null || (p?.merchant_id && c.merchant_id === p.merchant_id)),
+        );
+        let best = 0;
+        for (const c of usable) {
+          const threshold = Number(c.threshold) || 0;
+          const value = Number(c.value) || 0;
+          if (base < threshold) continue;
+          const off = c.type === "discount" ? base * (1 - value) : value;
+          best = Math.max(best, off);
+        }
+        setLandedPrice(best > 0 ? Number((base - best).toFixed(2)) : null);
+      })
+      .catch((e: unknown) => reportError(e, { tag: "ProductDetail.coupons" }));
+  }, [p?.category_id, p?.id, p?.merchant_id, displayPrice]);
 
   const toggleFav = async () => {
     if (!user) {
@@ -262,6 +291,26 @@ export default function ProductDetail() {
         setFaved(true);
         message.success(t("pd.favAdded"));
       }
+    } catch {
+      message.error(t("common.submitFail"));
+    }
+  };
+
+  // T21b 降价提醒：收藏商品降价时后端会推送 price_drop 通知，
+  // 因此「开启降价提醒」等价于确保已收藏（与淘宝保持一致）。
+  const togglePriceAlert = async () => {
+    if (!user) {
+      message.info(t("common.loginFirst"));
+      navigate("/login", { state: { from: location.pathname } });
+      return;
+    }
+    if (!p) return;
+    try {
+      if (!faved) {
+        await addFavorite(p.id);
+        setFaved(true);
+      }
+      message.success(t("pd.priceAlertOn"));
     } catch {
       message.error(t("common.submitFail"));
     }
@@ -416,6 +465,13 @@ export default function ProductDetail() {
                 {Number(matchedVariant.price_delta) > 0 ? "+" : ""}¥{money(Number(matchedVariant.price_delta))}
               </Tag>
             )}
+            {/* T9 到手价预估：叠加可领平台/店铺券后的最优券后价 */}
+            {landedPrice != null && landedPrice < displayPrice && (
+              <div className="mt-2 text-sm text-emerald-600">
+                {t("pd.landedPrice")}: <b className="text-base">¥{money(landedPrice)}</b>
+                <span className="ml-1 text-slate-400">{t("pd.landedHint")}</span>
+              </div>
+            )}
           </div>
 
           {/* 服务承诺（对标淘宝/京东信任背书） */}
@@ -430,6 +486,18 @@ export default function ProductDetail() {
               </span>
             ))}
           </div>
+
+          {/* T21b 降价提醒：收藏商品降价后推送通知（与收藏解耦的明确入口） */}
+          <button
+            type="button"
+            onClick={togglePriceAlert}
+            disabled={!user}
+            aria-label={t("pd.priceAlert")}
+            className="mt-3 inline-flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-700 disabled:text-slate-300"
+          >
+            <Bell size={14} />
+            {t("pd.priceAlert")}
+          </button>
 
           {/* 规格选择 */}
           {specGroups.length > 0 && (
@@ -595,6 +663,42 @@ export default function ProductDetail() {
           </div>
           <div className="rail-scroll">
             {related.map((rp, i) => (
+              <div key={rp.id} className="!w-44 shrink-0">
+                <Reveal delay={i * 40}>
+                  <ProductCard p={rp} />
+                </Reveal>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* T11 搭配购买（基于订单共现协同过滤） */}
+      {coPurchase.length > 0 && (
+        <section className="mt-10">
+          <div className="section-title">
+            <span className="st-text">{t("pd.coPurchase")}</span>
+          </div>
+          <div className="rail-scroll">
+            {coPurchase.map((rp, i) => (
+              <div key={rp.id} className="!w-44 shrink-0">
+                <Reveal delay={i * 40}>
+                  <ProductCard p={rp} />
+                </Reveal>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* T11 看了又看（基于浏览共现协同过滤） */}
+      {alsoViewed.length > 0 && (
+        <section className="mt-10">
+          <div className="section-title">
+            <span className="st-text">{t("pd.alsoViewed")}</span>
+          </div>
+          <div className="rail-scroll">
+            {alsoViewed.map((rp, i) => (
               <div key={rp.id} className="!w-44 shrink-0">
                 <Reveal delay={i * 40}>
                   <ProductCard p={rp} />

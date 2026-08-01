@@ -31,6 +31,7 @@ import {
 } from "../../api";
 import { money } from "../../utils/format";
 import { useI18n } from "../../i18n";
+import { reportError } from "../../utils/reportError";
 
 export default function MerchantDashboard() {
   const { t } = useI18n();
@@ -47,7 +48,7 @@ export default function MerchantDashboard() {
         setTrend(tr);
         setAnalytics(a);
       })
-      .catch(() => {})
+      .catch((e) => reportError(e, { tag: "Merchant.Dashboard" }))
       .finally(() => setLoading(false));
   }, [days]);
   if (loading || !stats)

@@ -8,6 +8,7 @@ import App from "./App";
 import { theme } from "./theme";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { LanguageProvider, useI18n } from "./i18n";
+import { swallow } from "./utils/reportError";
 import "./index.css";
 
 /** 根据当前语言切换 antd 内置文案（取消/确定/分页等），避免中文界面显示英文 "cancel"。 */
@@ -44,7 +45,7 @@ if ("serviceWorker" in navigator) {
     );
   } else {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("/sw.js").catch(() => {});
+      navigator.serviceWorker.register("/sw.js").catch((e) => swallow(e, "SW.register"));
     });
   }
 }

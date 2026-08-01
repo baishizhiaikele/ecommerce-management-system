@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
+import { swallow } from "./utils/reportError";
 import { Route, Routes } from "react-router-dom";
 import { Spin, message } from "antd";
 import Login from "./pages/Auth/Login";
@@ -148,7 +149,7 @@ export default function App() {
     if (ref && sessionStorage.getItem("aff_ref") !== ref) {
       trackAffiliate(ref)
         .then(() => sessionStorage.setItem("aff_ref", ref))
-        .catch(() => {});
+        .catch((e) => swallow(e, "App.affRef"));
     }
   }, [user]);
 
