@@ -12,7 +12,7 @@ import AdminLayout from "./layouts/AdminLayout";
 import Market from "./pages/Market";
 import Notifications from "./pages/Notifications";
 import NotFound from "./pages/NotFound";
-import { LanguageProvider, getLang } from "./i18n";
+import { getLang } from "./i18n";
 import { FlashPriceProvider } from "./context/FlashPriceContext";
 import { useAuth } from "./store/auth";
 import { trackAffiliate } from "./api";

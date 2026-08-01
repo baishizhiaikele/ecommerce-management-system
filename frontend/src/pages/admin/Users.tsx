@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { AxiosError } from "axios";
-import { Table, Tag, message, Card, Select, Switch, Spin } from "antd";
+import { Table, message, Card, Select, Switch, Spin } from "antd";
 import EmptyState from "../../components/EmptyState";
 import { adminListUsers, adminUpdateUser, UserOut, Role } from "../../api";
 import { useI18n } from "../../i18n";

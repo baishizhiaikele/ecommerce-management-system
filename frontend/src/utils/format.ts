@@ -1,4 +1,4 @@
-import { OrderStatus, Sentiment, ProductStatus } from "../api";
+import { OrderStatus } from "../api";
 import { translate } from "../i18n";
 
 export const money = (v: string | number) => {

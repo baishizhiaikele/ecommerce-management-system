@@ -9,7 +9,7 @@ import { formatDateTime } from "../utils/format";
 import { useAuth, vipTier, VIP_TIERS, type AuthUser } from "../store/auth";
 import { useI18n } from "../i18n";
 
-const { Paragraph, Text } = Typography;
+const { Paragraph } = Typography;
 
 const ACTION_LABEL: Record<string, string> = {
   order_complete: "points.action.order_complete",
@@ -62,7 +62,6 @@ export default function Points() {
           100,
           Math.max(0, Math.round(((growth - tier.min) / (tier.next - tier.min)) * 100)),
         );
-  const currentIndex = VIP_TIERS.findIndex((x) => x.key === tier.key);
 
   return (
     <div>

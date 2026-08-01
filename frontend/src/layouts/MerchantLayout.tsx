@@ -1,4 +1,4 @@
-import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
+import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../store/auth";
 import { useI18n } from "../i18n";
 import {
@@ -9,7 +9,6 @@ import {
   Tag,
   Ticket,
   ArrowLeft,
-  User,
   LogOut,
   Languages,
   TrendingUp,
@@ -49,7 +48,6 @@ const MOBILE_NAV = [
 export default function MerchantLayout() {
   const { user, logout } = useAuth();
   const { t, lang, setLang } = useI18n();
-  const navigate = useNavigate();
   const location = useLocation();
   const isActive = (path: string) => location.pathname === path;
 

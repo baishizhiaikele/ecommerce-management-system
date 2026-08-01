@@ -13,7 +13,6 @@ import {
   Spin,
   Empty,
 } from "antd";
-import { ReloadOutlined } from "@ant-design/icons";
 import {
   checkout,
   myCoupons,

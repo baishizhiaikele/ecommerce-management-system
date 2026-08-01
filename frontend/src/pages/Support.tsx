@@ -27,7 +27,7 @@ import {
   message,
 } from "antd";
 import type { UploadFile } from "antd";
-import { CloseOutlined, RobotOutlined, UploadOutlined, DeleteOutlined, ThunderboltOutlined } from "@ant-design/icons";
+import { RobotOutlined, UploadOutlined, DeleteOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import {
   aiReplyTicket,
   createTicket,

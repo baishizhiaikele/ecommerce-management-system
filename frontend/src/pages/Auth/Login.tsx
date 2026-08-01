@@ -84,7 +84,7 @@ export default function Login() {
               password: values.password,
               role: values.role || "buyer",
             };
-      const { data } = await api.post(url, payload);
+      await api.post(url, payload);
       if (mode === "login") {
         const me = await api.get("/auth/me");
         setUser(me.data);

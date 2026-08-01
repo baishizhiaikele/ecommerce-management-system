@@ -47,7 +47,6 @@ function ProductCard({
 
 export default function History() {
   const { t } = useI18n();
-  const navigate = useNavigate();
   const user = useAuth((s) => s.user);
   const [history, setHistory] = useState<ViewLogOut[]>([]);
   const [bought, setBought] = useState<BoughtOut[]>([]);

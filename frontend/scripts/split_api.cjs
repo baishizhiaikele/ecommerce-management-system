@@ -55,16 +55,28 @@ for (const seg of segments) {
 
 // 3) 生成每个域文件（剥离类型，保留函数 + 段注释）
 const typeStripRe = new RegExp(typeRe.source, "g");
-const header = (extraImports) =>
-  "// T7：api 按域拆分（由 split_api 脚本生成，函数签名与原 index.ts 完全一致）。\n" +
-  `import { api${extraImports ? ", " + extraImports : ""} } from "./client";\n` +
-  `import type { ${typeNames.join(", ")} } from "./types";\n\n`;
 
-const files = {};
+/** 按 body 实际出现的标识符裁剪 import，避免生成大量 no-unused-vars 警告。 */
+function buildHeader(body) {
+  // 去掉注释后再判断标识符是否真正被代码使用，避免注释中的词造成误判。
+  const code = body.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+  const used = (name) => new RegExp(`\\b${name}\\b`).test(code);
+  const valueImports = ["api", "API_BASE"].filter(used);
+  const usedTypes = typeNames.filter(used);
+  let out = "// T7：api 按域拆分（由 split_api 脚本生成，函数签名与原 index.ts 完全一致）。\n";
+  if (valueImports.length) {
+    out += `import { ${valueImports.join(", ")} } from "./client";\n`;
+  }
+  if (usedTypes.length) {
+    out += `import type { ${usedTypes.join(", ")} } from "./types";\n`;
+  }
+  return out + "\n";
+}
+
+const bodies = {};
 for (const [key, dom] of Object.entries(domains)) {
   if (key === "recommend") continue;
-  let body = dom.blocks.join("\n").replace(typeStripRe, "").trim();
-  files[key] = header("API_BASE") + body + "\n";
+  bodies[key] = dom.blocks.join("\n").replace(typeStripRe, "").trim();
 }
 
 // 把 preamble 中的函数（proxyImg 等，去掉 import 行）并入 misc.ts
@@ -75,7 +87,12 @@ const preambleFns = preamble
   .replace(typeStripRe, "")
   .trim();
 if (preambleFns) {
-  files.misc = (files.misc || header("API_BASE")) + "\n" + preambleFns + "\n";
+  bodies.misc = (bodies.misc ? bodies.misc + "\n" : "") + preambleFns;
+}
+
+const files = {};
+for (const [key, body] of Object.entries(bodies)) {
+  files[key] = buildHeader(body) + body + "\n";
 }
 
 // 4) 写文件

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { AxiosError } from "axios";
-import { Card, Button, Tabs, Tag, Spin, message } from "antd";
-import { GiftOutlined } from "@ant-design/icons";
+import { Button, Tabs, Tag, Spin, message } from "antd";
 import dayjs from "dayjs";
 import EmptyState from "../components/EmptyState";
 import { listCoupons, claimCoupon, myCoupons, CouponOut, UserCouponOut } from "../api";

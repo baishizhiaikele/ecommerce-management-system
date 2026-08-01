@@ -29,7 +29,7 @@ const DEMO_ACCOUNTS: Record<ConsoleRole, { labelKey: string; username: string; p
 };
 
 export default function ConsoleLogin() {
-  const [mode, setMode] = useState<Mode>("login");
+  const mode: Mode = "login";
   const [consoleRole, setConsoleRole] = useState<ConsoleRole>("merchant");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -45,7 +45,7 @@ export default function ConsoleLogin() {
   const onFinish = async (values: LoginValues) => {
     setLoading(true);
     try {
-      const { data } = await api.post("/auth/login", {
+      await api.post("/auth/login", {
         username: values.username,
         password: values.password,
       });

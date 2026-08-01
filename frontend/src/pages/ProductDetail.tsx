@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useNavigate, useLocation, Link } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import {
   Row,
   Col,
@@ -12,7 +12,6 @@ import {
   Rate,
   Tabs,
   Empty,
-  Popconfirm,
   Tooltip,
   Drawer,
   Modal,
@@ -22,7 +21,6 @@ import {
   HeartOutlined,
   HeartFilled,
   RobotOutlined,
-  MessageOutlined,
   CameraOutlined,
 } from "@ant-design/icons";
 import { Heart } from "lucide-react";

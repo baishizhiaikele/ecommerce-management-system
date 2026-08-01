@@ -23,15 +23,9 @@ import {
   getCart,
   removeCartItem,
   updateCartItem,
-  listAddresses,
-  listCategories,
-  myCoupons,
   getCartPreview,
   proxyImg,
   type CartItemOut,
-  type CategoryOut,
-  type AddressOut,
-  type UserCouponOut,
   type CartPreview,
 } from "../api";
 import { money } from "../utils/format";
@@ -56,9 +50,6 @@ export default function Cart() {
   const [editingId, setEditingId] = useState<string>();
   const [qtyInput, setQtyInput] = useState<number>(1);
   const [clearOpen, setClearOpen] = useState(false);
-  const [categories, setCategories] = useState<CategoryOut[]>([]);
-  const [addresses, setAddresses] = useState<AddressOut[]>([]);
-  const [coupons, setCoupons] = useState<UserCouponOut[]>([]);
   const [preview, setPreview] = useState<CartPreview | null>(null);
 
   // 组件首次挂载就刷新购物车角标
@@ -69,17 +60,11 @@ export default function Cart() {
   const load = async () => {
     setLoading(true);
     try {
-      const [cart, cats, addrs, mine, pv] = await Promise.all([
+      const [cart, pv] = await Promise.all([
         getCart(),
-        listCategories(),
-        listAddresses(),
-        myCoupons(),
         getCartPreview().catch(() => null),
       ]);
       setItems(cart);
-      setCategories(cats);
-      setAddresses(addrs);
-      setCoupons(mine);
       setPreview(pv);
       setSelectedIds((prev) => {
         const valid = cart.filter((it) => prev.includes(it.id)).map((it) => it.id);

@@ -1,4 +1,4 @@
-import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
+import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../store/auth";
 import { useI18n } from "../i18n";
 import {
@@ -11,7 +11,6 @@ import {
   Ticket,
   Wallet,
   ArrowLeft,
-  User,
   LogOut,
   Languages,
 } from "lucide-react";
@@ -38,7 +37,6 @@ const MOBILE_NAV = [
 export default function AdminLayout() {
   const { user, logout } = useAuth();
   const { t, lang, setLang } = useI18n();
-  const navigate = useNavigate();
   const location = useLocation();
   const isActive = (path: string) => location.pathname === path;
 

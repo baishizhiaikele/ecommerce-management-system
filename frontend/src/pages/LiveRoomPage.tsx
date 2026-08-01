@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { Badge, Button, Card, Drawer, Empty, Input, Tag, message } from "antd";
+import { useParams } from "react-router-dom";
+import { Button, Card, Drawer, Empty, Input, Tag, message } from "antd";
 import { Radio as RadioIcon, Send, ShoppingCart, Users } from "lucide-react";
 import {
   addCartItem,
@@ -10,7 +10,6 @@ import {
   listLiveMessages,
   liveWsUrl,
   sendLiveMessage,
-  type LiveRoomOut,
   trackAffiliateClick,
   type LiveMessageOut,
   type LiveRoomDetail,
@@ -24,7 +23,6 @@ import { useAuth } from "../store/auth";
 export default function LiveRoomPage() {
   const { id } = useParams<{ id: string }>();
   const { t } = useI18n();
-  const navigate = useNavigate();
   const { user } = useAuth();
   const [room, setRoom] = useState<LiveRoomDetail | null>(null);
   const [msgs, setMsgs] = useState<LiveMessageOut[]>([]);

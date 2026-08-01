@@ -4,7 +4,7 @@ import type { AxiosError } from "axios";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Carousel, Card, Button, Row, Col, Empty, Result, Tag, message, Select, Switch, InputNumber, Rate, Space, AutoComplete } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
-import { Search, Sparkles, Flame, Zap, ShoppingBag, Clock, Store, Gift, TrendingUp, Tag as TagIcon } from "lucide-react";
+import { Sparkles, Flame, Zap, ShoppingBag, Clock, Store, Gift, TrendingUp, Tag as TagIcon } from "lucide-react";
 import {
   listProducts,
   listCategories,
@@ -20,7 +20,6 @@ import {
   ProductOut,
   CategoryOut,
   BannerOut,
-  PromotionOut,
   CouponOut,
   Facets,
   getErrorMessage,
@@ -365,8 +364,6 @@ export default function Market() {
     setHistory([]);
     localStorage.removeItem(HISTORY_KEY);
   };
-
-  const topCats = cats.filter((c) => !c.parent_id);
 
   const load = async () => {
     const f = filterRef.current;

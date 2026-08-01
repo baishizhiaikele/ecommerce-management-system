@@ -12,7 +12,7 @@ interface Props {
 }
 
 /** 统一页面标题区：发光图标徽章 + 强标题 + 副标题 + 右侧操作 */
-export default function PageHeader({ icon, accent, title, subtitle, extra }: Props) {
+export default function PageHeader({ icon, accent: _accent, title, subtitle, extra }: Props) {
   return (
     <div className="flex items-start justify-between gap-4 flex-wrap mb-5 fade-up">
       <div className="flex items-center gap-4">

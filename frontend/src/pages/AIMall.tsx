@@ -7,8 +7,6 @@ import {
   Divider,
   Empty,
   Row,
-  Segmented,
-  Select,
   Space,
   Spin,
   Tag,
