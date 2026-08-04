@@ -219,3 +219,13 @@
 - **异步队列真实化**：`async_queue.py` 升级为基于 Redis 的轻量 worker（pub/sub + 后台任务消费），保留 `enqueue(fn, *args)` 兼容签名；提供 `worker` 启动入口与 `run_worker` 协程。
 
 
+## 文档索引
+
+| 文档 | 说明 |
+|---|---|
+| `README.md` | 项目门户（快速开始、技术栈、接口一览） |
+| `PLAN.md` | 本文档（权威状态摘要） |
+| `GETTING_STARTED.md` | 新手六阶段教程 |
+| `CODE_REVIEW_REPORT.md` | 安全审查报告与修复记录 |
+| `plans/PROJECT_PLAN.md` | 完整演进记录 + 路线图 |
+| `plans/PERF_TESTING.md` | 性能压测与 PostgreSQL 切换指南 |

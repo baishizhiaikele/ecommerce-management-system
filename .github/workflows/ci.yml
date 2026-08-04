@@ -69,6 +69,8 @@ jobs:
         run: npx tsc --noEmit
       - name: Lint (T6 - 拦截静默 catch / 裸 console 回归)
         run: npm run lint
+      - name: i18n key 一致性校验（防缺 key 回归）
+        run: npm run check:i18n
       - name: Unit tests
         run: npm run test
       - name: Build

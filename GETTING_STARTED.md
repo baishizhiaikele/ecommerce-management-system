@@ -19,7 +19,7 @@
 ### 1.3 技术栈一览
 - **后端**：FastAPI（异步）、SQLAlchemy 2.0（异步引擎）、Pydantic v2、JWT 双令牌（access + refresh）、SQLite（本地）/ PostgreSQL（云端）
 - **前端**：React 18 + TypeScript + Vite + Ant Design 5 + Axios + React Router
-- **测试**：pytest（后端接口）、Playwright（端到端冒烟）
+- **测试**：pytest（后端 155 用例）、Vitest + React Testing Library（前端 48 用例）、Playwright（E2E 15 条）
 - **部署**：多阶段 Docker 构建，前端产物由后端**同源托管**（免跨域），`render.yaml` 一键部署
 
 ### 1.4 几个设计要点（先看一眼，后面会懂）
@@ -123,15 +123,17 @@ npm install
 ai-shop/
 ├── README.md              # 项目总览与部署说明
 ├── GETTING_STARTED.md     # 本教程
-├── PLAN.md                # 开发计划与进度
+├── PLAN.md                # 权威状态摘要
+├── CODE_REVIEW_REPORT.md  # 安全审查报告
 ├── render.yaml            # Render 一键部署蓝图（web 服务 + postgres）
+├── plans/                 # 项目规划文档
 ├── .gitignore / .dockerignore
 ├── backend/
 │   ├── Dockerfile         # 多阶段构建：先 build 前端，再跑后端
 │   ├── requirements.txt   # Python 依赖
 │   ├── .env.example       # 环境变量模板（复制为 .env 使用）
 │   ├── scripts/           # 辅助脚本：check_audit / test_auth_flow / test_smoke
-│   ├── tests/             # pytest 用例（27 项）
+│   ├── tests/             # pytest 用例（155 项）
 │   └── app/
 │       ├── main.py        # 应用入口：挂载路由、静态文件、SPA 兜底
 │       ├── state_machine.py   # 订单状态机（允许的流转规则）
@@ -146,12 +148,13 @@ ai-shop/
     ├── playwright.config.ts   # 端到端测试配置
     ├── e2e/               # Playwright 冒烟用例（smoke.spec.ts）
     └── src/
-        ├── api/           # axios 客户端（client / index）
-        ├── store/         # 状态管理（auth / cart）
-        ├── utils/         # 工具（format / roleRouting）
-        ├── layouts/       # 布局（Admin / Merchant / Main）
-        ├── components/    # 通用组件（ProtectedRoute 等）
-        └── pages/         # 页面（Auth/Login、Market、Cart、Orders、Admin...）
+        ├── api/           # 17 个 API 模块（按业务域拆分：products / orders / cart / auth...）
+        ├── store/         # Zustand 状态管理（auth / cart）
+        ├── i18n/          # 国际化词典（中英文各 1701 键）
+        ├── utils/         # 工具函数（cart 金额计算 / format / proxyImg...）
+        ├── layouts/       # 三套布局（Main / Merchant / Admin）
+        ├── components/    # 通用组件（AsyncBoundary / ProductCard / EmptyState...）
+        └── pages/         # 54 个页面组件（买家/商家/管理三端）
 ```
 
 **分层约定（新手务必理解）**：`api/` 只做「接收请求 → 调 service → 返回」，真正的业务逻辑写在 `services/`，数据形状由 `schemas/` 约束，数据库表结构在 `models/`。改功能优先去 `services/`，不要在大堆路由里堆逻辑。
@@ -289,13 +292,17 @@ curl.exe -s -X POST "http://localhost:8000/api/products/PRODUCT_ID/ai-generate" 
 # 后端 pytest（需激活后端虚拟环境）
 cd backend
 pytest -q
-# 期望：27 passed
+# 期望：155 passed
 
-# 端到端冒烟（需在 frontend 目录，且会自动拉起后端）
+# 前端单测
 cd frontend
+npx vitest run
+# 期望：48 passed（7 个测试文件）
+
+# 端到端冒烟（需在 frontend 目录）
 npx playwright install        # 首次需安装浏览器
 npm run e2e
-# 期望：3 passed（游客重定向 / 买家首页 / 管理员首页）
+# 期望：15 passed
 ```
 
 ### 6.2 一键部署到 Render（简述）
