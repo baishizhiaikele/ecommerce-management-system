@@ -46,7 +46,7 @@ function PasswordStrength({ password }: { password: string }) {
           <div
             key={i}
             className="h-1 flex-1 rounded-full"
-            style={{ background: i <= idx ? colors[idx] : "#E5E7EB" }}
+            style={{ background: i <= idx ? colors[idx] : "var(--brand-line)" }}
           />
         ))}
       </div>
