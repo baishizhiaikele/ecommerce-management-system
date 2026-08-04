@@ -1798,6 +1798,9 @@ export const zh: Record<string, string> = {
   "staff.perms": "权限",
   "staff.status": "状态",
   "staff.enabled": "已启用",
+
+  // 全局应用
+  "app.wsOffline": "实时通知已断开，正在尝试重连…",
   "staff.disabled": "已停用",
   "staff.confirmEnable": "确认启用该子账号？",
   "staff.confirmDisable": "确认停用该子账号？",

@@ -84,6 +84,7 @@ export default function App() {
   const init = useAuth((s) => s.init);
   const user = useAuth((s) => s.user);
   const [ready, setReady] = useState(false);
+  const [wsOffline, setWsOffline] = useState(false);
   const { isDark } = useTheme();
   const { helpOpen, setHelpOpen } = useShortcuts();
   const { t } = useI18n();
@@ -121,6 +122,7 @@ export default function App() {
       }
       ws.onopen = () => {
         retry = 0; // 连接成功，重置退避计数
+        setWsOffline(false);
       };
       ws.onmessage = (e) => {
         try {
@@ -135,6 +137,7 @@ export default function App() {
       };
       ws.onclose = () => {
         ws = null;
+        setWsOffline(true); // 断线提示（重连由 scheduleReconnect 自动进行）
         scheduleReconnect();
       };
     }
@@ -250,6 +253,15 @@ export default function App() {
         </Routes>
       </Suspense>
       </ErrorBoundary>
+      {wsOffline && user && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="ws-offline-banner"
+        >
+          {t("app.wsOffline")}
+        </div>
+      )}
       </FlashPriceProvider>
 
       <Modal

@@ -25,8 +25,21 @@ export function setErrorReporter(reporter: ErrorReporter | null): void {
   _reporter = reporter;
 }
 
+// 内存错误日志（ring buffer），便于本地排障与运维聚合查询，不依赖任何外部服务。
+const _log: Array<{ at: number; tag?: string; message: string; stack?: string }> = [];
+const MAX_LOG = 50;
+
+/** 返回最近收集的错误日志（只读快照），用于运维/调试面板聚合。*/
+export function getErrorLog() {
+  return _log.slice();
+}
+
 /** 上报一个错误（永不抛出）。*/
 export function reportError(err: unknown, meta?: ReportMeta): void {
+  const message = err instanceof Error ? err.message : String(err);
+  const stack = err instanceof Error ? err.stack : undefined;
+  _log.push({ at: Date.now(), tag: meta?.tag, message, stack });
+  if (_log.length > MAX_LOG) _log.shift();
   try {
     if (_reporter) {
       _reporter(err, meta);
@@ -38,6 +51,18 @@ export function reportError(err: unknown, meta?: ReportMeta): void {
   // 降级：分级日志，保留原始堆栈
   const tag = meta?.tag ? `[${meta.tag}] ` : "";
   console.error(`${tag}未捕获错误:`, err, meta?.extra ?? "");
+}
+
+// 全局未捕获异常自动上报（window 级兜底），与主流程解耦。
+let _globalHooked = false;
+if (typeof window !== "undefined" && !_globalHooked) {
+  _globalHooked = true;
+  window.addEventListener("error", (e) => {
+    reportError(e.error ?? e.message, { tag: "window.onerror" });
+  });
+  window.addEventListener("unhandledrejection", (e) => {
+    reportError(e.reason, { tag: "unhandledrejection" });
+  });
 }
 
 /**

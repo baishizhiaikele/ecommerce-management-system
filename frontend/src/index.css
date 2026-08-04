@@ -706,3 +706,48 @@ button,
   background: #0f1115;
   color: #cbd1da;
 }
+
+/* WebSocket 断线提示条（深浅自适应） */
+.ws-offline-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1090;
+  text-align: center;
+  padding: 6px 12px;
+  font-size: 13px;
+  background: #fff7e6;
+  color: #92400e;
+  border-bottom: 1px solid #ffe7ba;
+}
+[data-theme="dark"] .ws-offline-banner {
+  background: #3a2d12;
+  color: #fcd9a0;
+  border-bottom-color: #5a4520;
+}
+
+/* 第三方图表库 Recharts 暗色兜底（默认浅色轴/网格/tooltip 在暗背景下发白） */
+[data-theme="dark"] .recharts-cartesian-axis-tick-value,
+[data-theme="dark"] .recharts-text,
+[data-theme="dark"] .recharts-cartesian-axis-tick text,
+[data-theme="dark"] .recharts-legend-item-text {
+  fill: var(--brand-ink-soft);
+}
+[data-theme="dark"] .recharts-cartesian-grid line,
+[data-theme="dark"] .recharts-cartesian-grid-horizontal line,
+[data-theme="dark"] .recharts-cartesian-grid-vertical line {
+  stroke: var(--brand-line);
+}
+[data-theme="dark"] .recharts-default-tooltip {
+  background: var(--brand-surface) !important;
+  border: 1px solid var(--brand-line) !important;
+  color: var(--brand-ink);
+}
+[data-theme="dark"] .recharts-tooltip-label,
+[data-theme="dark"] .recharts-tooltip-item {
+  color: var(--brand-ink) !important;
+}
+[data-theme="dark"] .recharts-tooltip-cursor {
+  fill: var(--brand-line);
+}

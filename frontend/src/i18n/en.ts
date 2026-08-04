@@ -1798,6 +1798,9 @@ export const en: Record<string, string> = {
   "staff.perms": "Permissions",
   "staff.status": "Status",
   "staff.enabled": "Enabled",
+
+  // Global app
+  "app.wsOffline": "Realtime notifications disconnected, reconnecting…",
   "staff.disabled": "Disabled",
   "staff.confirmEnable": "Enable this sub-account?",
   "staff.confirmDisable": "Disable this sub-account?",
