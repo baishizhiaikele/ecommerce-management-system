@@ -30,6 +30,8 @@ import {
 } from "../api";
 import { money } from "../utils/format";
 import { calcSubtotal, calcCouponDiscount, calcPointsDiscount, calcPayable } from "../utils/cart";
+import { getErrorMessage } from "../api/client";
+import { swallow } from "../utils/reportError";
 import { useCart } from "../store/cart";
 import { useAuth } from "../store/auth";
 import { useI18n } from "../i18n";
@@ -89,8 +91,8 @@ export default function CheckoutPanel({ items, selectedIds, onReload, variant = 
         setSelAddrId(def.id);
         setAddress(formatAddr(def));
       }
-    } catch {
-      /* 优惠/地址依赖为可选，失败不影响主流程 */
+    } catch (e) {
+      swallow(e, "CheckoutPanel.loadDeps");
     }
   }, []);
 
@@ -117,6 +119,14 @@ export default function CheckoutPanel({ items, selectedIds, onReload, variant = 
   const cartMerchantIds = new Set(
     selectedItems.map((it) => it.merchant_id).filter(Boolean) as string[],
   );
+
+  // 品类名称通过 i18n 键读取，未覆盖时回退为 slug 本身
+  const categoryName = (slug?: string | null): string => {
+    if (!slug) return "";
+    const key = `category.${slug}`;
+    const label = t(key);
+    return label === key ? slug : label;
+  };
 
   const couponCheck = (c: UserCouponOut): { ok: boolean; reason: string } => {
     if (c.expire_at && new Date(c.expire_at).getTime() < Date.now())
@@ -234,7 +244,7 @@ export default function CheckoutPanel({ items, selectedIds, onReload, variant = 
       message.success(t("cart.orderSuccess"));
       navigate(`/orders/${order.id}`);
     } catch (e) {
-      message.error((e as any)?.response?.data?.detail || t("cart.orderFail"));
+      message.error(getErrorMessage(e, t("cart.orderFail")));
     } finally {
       setSubmitting(false);
     }
@@ -264,7 +274,7 @@ export default function CheckoutPanel({ items, selectedIds, onReload, variant = 
                 c.merchant_id
                   ? t("coupon.scope.shop")
                   : c.applicable_category
-                    ? `${t("coupon.scope.shop")}:${c.applicable_category}`
+                    ? `${t("coupon.scope.category")}：${categoryName(c.applicable_category)}`
                     : t("coupon.scope.platform");
               const expire = c.expire_at ? new Date(c.expire_at).toLocaleDateString() : "";
               const sub = [benefit, scope, expire ? `${t("coupon.expireAt")}:${expire}` : ""]
@@ -303,7 +313,7 @@ export default function CheckoutPanel({ items, selectedIds, onReload, variant = 
             <div key={p.product_id} className="mt-1.5">
               <div className="flex items-center justify-between text-[11px] text-slate-500">
                 <span className="truncate max-w-[60%]">{p.title}</span>
-                <span>{p.reached ? `已享减${money(p.value)}` : `还差${money(p.gap)}`}</span>
+                <span>{p.reached ? t("cart.fullReduceReached", { amount: money(p.value) }) : t("cart.fullReduceGap", { amount: money(p.gap) })}</span>
               </div>
               <Progress
                 percent={p.threshold > 0 ? Math.min(100, Math.round((p.line_total / p.threshold) * 100)) : 100}

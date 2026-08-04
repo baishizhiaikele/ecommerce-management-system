@@ -276,9 +276,10 @@ export default function Market() {
   const productSectionRef = useRef<HTMLElement | null>(null);
   // 以 ref 持有最新筛选条件，保证 setX + setTimeout(load, 0) 读取到最新值（P1-6 分面检索）
   const filterRef = useRef({ kw, cat, sort, minPrice, maxPrice, inStock, rating, page: 1 });
+  // 每次渲染同步最新筛选条件到 ref（供 setTimeout(load, 0) 延迟读取）
   useEffect(() => {
     filterRef.current = { kw, cat, sort, minPrice, maxPrice, inStock, rating, page: 1 };
-  });
+  }, [kw, cat, sort, minPrice, maxPrice, inStock, rating]);
   // 兼容通过 /market?kw= 或 /market?category= 进入时加载对应筛选结果。
   // 以 searchParams 为唯一驱动：只要 URL 上带了 kw/category，就强制以其值加载，
   // 不再依赖"是否与当前 state 不同"的判断——避免 state 已同步时漏触发 load。

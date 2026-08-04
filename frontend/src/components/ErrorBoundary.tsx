@@ -1,4 +1,5 @@
 import { Component, ReactNode } from "react";
+import { translate } from "../i18n";
 
 interface Props {
   children: ReactNode;
@@ -34,16 +35,16 @@ export default class ErrorBoundary extends Component<Props, State> {
       return (
         <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3 p-6 text-center">
           <div className="text-slate-700 text-base font-medium">
-            页面加载出错
+            {translate("errorBoundary.title")}
           </div>
           <div className="text-slate-400 text-sm max-w-md break-words">
-            {error.message || "发生未知错误"}
+            {error.message || translate("errorBoundary.unknown")}
           </div>
           <button
             onClick={this.reset}
             className="mt-2 rounded-md bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-700"
           >
-            重试
+            {translate("common.retry")}
           </button>
         </div>
       );

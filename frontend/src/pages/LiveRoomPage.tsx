@@ -81,7 +81,11 @@ export default function LiveRoomPage() {
         };
         ws.onclose = () => {
           wsRef.current = null;
-          if (!stop) timer = window.setInterval(fallbackPoll, 3000);
+          // P0-C11：新建 interval 前先清理旧句柄，防止 WS 多次断连导致定时器泄漏叠加
+          if (!stop) {
+            if (timer) clearInterval(timer);
+            timer = window.setInterval(fallbackPoll, 3000);
+          }
         };
         ws.onerror = () => {
           ws.close();

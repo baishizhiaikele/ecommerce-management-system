@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { proxyImg } from "../api";
+import { translate } from "../i18n";
 
 interface Props {
   name?: string;
@@ -103,7 +104,7 @@ function pickIcon(name: string): LucideIcon {
 
 /** 按商品名生成稳定的渐变色。 */
 function colorOf(name: string): { from: string; to: string } {
-  const text = name || "商品";
+  const text = name || translate("common.product");
   let h = 0;
   for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) >>> 0;
   const h1 = h % 360;

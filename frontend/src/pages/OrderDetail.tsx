@@ -6,7 +6,8 @@ import {
   Descriptions,
   Tag,
   Button,
-  Spin,
+  Skeleton,
+  Result,
   message,
   Modal,
   Rate,
@@ -14,6 +15,7 @@ import {
   List,
   Timeline,
 } from "antd";
+import { ReloadOutlined } from "@ant-design/icons";
 import {
   getOrder,
   transitionOrder,
@@ -38,6 +40,7 @@ import {
 } from "../api";
 import { money, orderStatusMeta, nextActions, actionLabel, escrowMeta, formatDateTime } from "../utils/format";
 import { getPaymentStatus, PaymentStatus } from "../api";
+import { getErrorMessage } from "../api/client";
 import { useAuth } from "../store/auth";
 import { useI18n } from "../i18n";
 import ProductImage from "../components/ProductImage";
@@ -50,6 +53,7 @@ export default function OrderDetail() {
   const [order, setOrder] = useState<OrderOut | null>(null);
   const [escrow, setEscrow] = useState<PaymentStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
   const [reviewFor, setReviewFor] = useState<{ product_id: string; name: string } | null>(null);
   const [rating, setRating] = useState(5);
@@ -107,8 +111,10 @@ export default function OrderDetail() {
       } catch {
         /* 物流非关键路径 */
       }
-    } catch {
-      /* 忽略 */
+      setLoadError(null);
+    } catch (e) {
+      // 不能静默：否则网络失败和"订单不存在"在界面上完全一样，用户无从判断也无法重试
+      setLoadError(getErrorMessage(e, t("common.operationFailed")));
     } finally {
       setLoading(false);
     }
@@ -306,8 +312,42 @@ export default function OrderDetail() {
     }
   };
 
-  if (loading) return <div className="text-center py-20"><Spin /></div>;
-  if (!order) return <div className="text-center py-20">{t("od.notFound")}</div>;
+  if (loading)
+    return (
+      <div className="py-10" role="status" aria-busy="true">
+        <span className="sr-only">{t("common.loading")}</span>
+        <Skeleton active paragraph={{ rows: 6 }} />
+      </div>
+    );
+  // 加载失败：给出重试，而不是让用户以为订单被删了
+  if (loadError)
+    return (
+      <Result
+        status="warning"
+        title={t("state.errorTitle")}
+        subTitle={loadError}
+        extra={
+          <div className="flex items-center justify-center gap-2">
+            <Button type="primary" icon={<ReloadOutlined />} onClick={load}>
+              {t("common.retry")}
+            </Button>
+            <Button onClick={() => navigate("/orders")}>{t("od.backToOrders")}</Button>
+          </div>
+        }
+      />
+    );
+  if (!order)
+    return (
+      <Result
+        status="404"
+        title={t("od.notFound")}
+        extra={
+          <Button type="primary" onClick={() => navigate("/orders")}>
+            {t("od.backToOrders")}
+          </Button>
+        }
+      />
+    );
 
   const actions = user ? nextActions(order.status, user.role) : [];
 
@@ -375,6 +415,29 @@ export default function OrderDetail() {
         {/* T10 物流轨迹常驻卡片：已发货/运输中/已完成时持续展示，对标京东物流进度条 */}
         {["shipped", "transit", "completed"].includes(order.status) && logData.events.length > 0 && (
           <Card className="soft-card mt-3" title={t("od.logistics")}>
+            {/* 物流进度条 */}
+            {logData.events.length >= 2 && (
+              <div className="mb-3">
+                <div className="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>{t("od.shipped")}</span>
+                  <span>{t("od.delivering")}</span>
+                  <span>{t("od.delivered")}</span>
+                </div>
+                <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-green-500 rounded-full transition-all duration-500"
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        Math.round(
+                          (logData.events.length >= 3 ? 80 : 30)
+                        ),
+                      )}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
             <div className="flex items-center justify-between mb-2">
               <div className="text-sm text-slate-500">
                 {t("od.trackingNo")}：

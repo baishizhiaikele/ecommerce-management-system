@@ -1,8 +1,11 @@
-import { useEffect, useState } from "react";
-import { Empty, Spin, message } from "antd";
+import { useCallback, useEffect, useState } from "react";
+import { Button } from "antd";
+import { useNavigate } from "react-router-dom";
 import { getCart, type CartItemOut } from "../api";
+import { getErrorMessage } from "../api/client";
 import { useI18n } from "../i18n";
 import CheckoutPanel from "../components/CheckoutPanel";
+import AsyncBoundary from "../components/AsyncBoundary";
 
 /**
  * 独立确认订单页（/checkout）。
@@ -11,52 +14,52 @@ import CheckoutPanel from "../components/CheckoutPanel";
  */
 export default function Checkout() {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const [items, setItems] = useState<CartItemOut[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  // 结算页拉取失败必须与"购物车为空"区分：前者要重试，后者要引导去逛
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const cart = await getCart();
+      setItems(cart);
+      setSelectedIds(cart.map((it) => it.id));
+    } catch (e) {
+      setError(getErrorMessage(e, t("cart.loadFail")));
+    } finally {
+      setLoading(false);
+    }
+  }, [t]);
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        const cart = await getCart();
-        setItems(cart);
-        setSelectedIds(cart.map((it) => it.id));
-      } catch (e) {
-        message.error((e as any)?.response?.data?.detail || t("cart.loadFail"));
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="py-20 flex justify-center">
-        <Spin size="large" />
-      </div>
-    );
-  }
-
-  if (items.length === 0) {
-    return (
-      <div className="py-20">
-        <Empty description={t("cart.empty")} />
-      </div>
-    );
-  }
+    void load();
+  }, [load]);
 
   return (
-    <CheckoutPanel
-      items={items}
-      selectedIds={selectedIds}
-      onReload={() => {
-        getCart().then((cart) => {
-          setItems(cart);
-          setSelectedIds(cart.map((it) => it.id));
-        });
-      }}
-      variant="page"
-    />
+    <AsyncBoundary
+      loading={loading}
+      error={error}
+      retry={load}
+      isEmpty={items.length === 0}
+      emptyTitle={t("cart.empty")}
+      emptyDescription={t("cart.emptyDesc")}
+      emptyAction={
+        <Button type="primary" onClick={() => navigate("/")}>
+          {t("cart.goShop")}
+        </Button>
+      }
+      errorAction={<Button onClick={() => navigate("/cart")}>{t("checkout.backToCart")}</Button>}
+    >
+      <CheckoutPanel
+        items={items}
+        selectedIds={selectedIds}
+        onReload={() => void load()}
+        variant="page"
+      />
+    </AsyncBoundary>
   );
 }

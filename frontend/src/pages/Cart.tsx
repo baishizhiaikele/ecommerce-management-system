@@ -4,22 +4,24 @@ import {
   Button,
   Card,
   Checkbox,
-  Empty,
   InputNumber,
   message,
   Modal,
   Popconfirm,
-  Spin,
+  Skeleton,
   Tag,
   Tooltip,
 } from "antd";
 import {
   DeleteOutlined,
+  MinusOutlined,
+  PlusOutlined,
   ReloadOutlined,
   SafetyOutlined,
   ShoppingOutlined,
 } from "@ant-design/icons";
 import {
+  addCartItem,
   getCart,
   removeCartItem,
   updateCartItem,
@@ -28,6 +30,8 @@ import {
   type CartItemOut,
   type CartPreview,
 } from "../api";
+import AsyncBoundary from "../components/AsyncBoundary";
+import { getErrorMessage } from "../api/client";
 import { money } from "../utils/format";
 import { useAuth } from "../store/auth";
 import { useI18n } from "../i18n";
@@ -47,10 +51,15 @@ export default function Cart() {
   const [items, setItems] = useState<CartItemOut[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editingId, setEditingId] = useState<string>();
-  const [qtyInput, setQtyInput] = useState<number>(1);
+  // 加载失败必须与"购物车为空"区分开，否则用户会误以为商品丢了
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [clearOpen, setClearOpen] = useState(false);
   const [preview, setPreview] = useState<CartPreview | null>(null);
+  // 正在提交数量/删除的行，用于禁用按钮防止重复点击
+  const [busyIds, setBusyIds] = useState<string[]>([]);
+
+  const setBusy = (id: string, busy: boolean) =>
+    setBusyIds((s) => (busy ? [...s, id] : s.filter((x) => x !== id)));
 
   // 组件首次挂载就刷新购物车角标
   useEffect(() => {
@@ -59,6 +68,7 @@ export default function Cart() {
 
   const load = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [cart, pv] = await Promise.all([
         getCart(),
@@ -76,7 +86,8 @@ export default function Cart() {
         return prev.length ? valid : cart.map((it) => it.id);
       });
     } catch (e) {
-      message.error((e as any)?.response?.data?.detail || t("cart.loadFail"));
+      // 只记录到页面错误态，不再弹 toast：整页已有明确的失败提示和重试按钮
+      setLoadError(getErrorMessage(e, t("cart.loadFail")));
     } finally {
       setLoading(false);
     }
@@ -92,26 +103,77 @@ export default function Cart() {
   const toggleAll = (checked: boolean) =>
     setSelectedIds(checked ? items.map((it) => it.id) : []);
 
-  const removeItem = async (id: string) => {
+  const syncBadge = () =>
+    void import("../store/cart").then((m) => m.useCart.getState().reloadServer());
+
+  /** 误删是购物车最高频的挫败点，删除后给一次“撤销”机会而不是直接消失 */
+  const removeItem = async (it: CartItemOut) => {
+    setBusy(it.id, true);
     try {
-      await removeCartItem(id);
-      setItems((s) => s.filter((it) => it.id !== id));
-      setSelectedIds((s) => s.filter((x) => x !== id));
-      void import("../store/cart").then((m) => m.useCart.getState().reloadServer());
-    } catch {
-      message.error(t("cart.removeFail"));
+      await removeCartItem(it.id);
+      setItems((s) => s.filter((x) => x.id !== it.id));
+      setSelectedIds((s) => s.filter((x) => x !== it.id));
+      syncBadge();
+      const wasSelected = selectedIds.includes(it.id);
+      const key = `undo-${it.id}`;
+      message.open({
+        key,
+        type: "success",
+        duration: 6,
+        content: (
+          <span className="inline-flex items-center gap-3">
+            {t("cart.removed", { name: it.name })}
+            <Button
+              size="small"
+              type="link"
+              className="p-0"
+              onClick={async () => {
+                message.destroy(key);
+                try {
+                  await addCartItem({
+                    product_id: it.product_id,
+                    quantity: it.quantity,
+                    // 保留规格，否则撤销后恢复的是错误的 SKU
+                    variant_id: it.variant_id ?? undefined,
+                  });
+                  await load();
+                  if (wasSelected) setSelectedIds((s) => [...s, it.id]);
+                  message.success(t("cart.restored"));
+                } catch (e) {
+                  message.error(getErrorMessage(e, t("cart.restoreFail")));
+                }
+              }}
+            >
+              {t("common.undo")}
+            </Button>
+          </span>
+        ),
+      });
+    } catch (e) {
+      message.error(getErrorMessage(e, t("cart.removeFail")));
+    } finally {
+      setBusy(it.id, false);
     }
   };
 
-  const saveQty = async (it: CartItemOut) => {
-    const q = Math.max(1, Math.min(99, Math.floor(qtyInput || 1)));
-    setEditingId(undefined);
+  /** 直接加减，省去“点数字→输入→确认”三步操作 */
+  const changeQty = async (it: CartItemOut, next: number) => {
+    const q = Math.max(1, Math.min(99, Math.floor(next || 1)));
+    if (q === it.quantity) return;
+    const prev = it.quantity;
+    // 乐观更新，失败再回滚，避免每次加减都等一个网络往返
+    setItems((s) => s.map((x) => (x.id === it.id ? { ...x, quantity: q } : x)));
+    setBusy(it.id, true);
     try {
       await updateCartItem(it.id, q);
-      setItems((s) => s.map((x) => (x.id === it.id ? { ...x, quantity: q } : x)));
-      void import("../store/cart").then((m) => m.useCart.getState().reloadServer());
-    } catch {
-      message.error(t("cart.updateFail"));
+      syncBadge();
+      const pv = await getCartPreview().catch(() => null);
+      if (pv) setPreview(pv);
+    } catch (e) {
+      setItems((s) => s.map((x) => (x.id === it.id ? { ...x, quantity: prev } : x)));
+      message.error(getErrorMessage(e, t("cart.updateFail")));
+    } finally {
+      setBusy(it.id, false);
     }
   };
 
@@ -154,17 +216,28 @@ export default function Cart() {
         )}
       </div>
 
-      {loading ? (
-        <div className="py-20 flex justify-center">
-          <Spin size="large" />
-        </div>
-      ) : items.length === 0 ? (
-        <Empty description={t("cart.empty")} className="py-20">
+      <AsyncBoundary
+        loading={loading}
+        error={loadError}
+        retry={load}
+        isEmpty={items.length === 0}
+        emptyTitle={t("cart.empty")}
+        emptyDescription={t("cart.emptyDesc")}
+        emptyAction={
           <Button type="primary" onClick={() => navigate("/")}>
             {t("cart.goShop")}
           </Button>
-        </Empty>
-      ) : (
+        }
+        skeleton={
+          <div className="space-y-3 py-4">
+            {[0, 1, 2].map((i) => (
+              <Card key={i} className="card-soft" styles={{ body: { padding: 16 } }}>
+                <Skeleton active avatar={{ shape: "square", size: 80 }} paragraph={{ rows: 2 }} />
+              </Card>
+            ))}
+          </div>
+        }
+      >
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
           {/* 左：商品列表（粘性，结算栏随页面滚动） */}
           <div className="lg:col-span-2 lg:sticky lg:top-24 space-y-3">
@@ -183,11 +256,13 @@ export default function Cart() {
                   <Checkbox
                     checked={selectedIds.includes(it.id)}
                     onChange={(e) => toggle(it.id, e.target.checked)}
+                    aria-label={t("cart.selectItem", { name: it.name })}
                   />
-                  <Link to={`/products/${it.product_id}`}>
+                  <Link to={`/products/${it.product_id}`} tabIndex={-1} aria-hidden="true">
                     <img
                       src={it.image_url ? proxyImg(it.image_url) : undefined}
-                      alt={it.name}
+                      alt=""
+                      loading="lazy"
                       className="h-20 w-20 rounded-xl object-cover bg-slate-50"
                     />
                   </Link>
@@ -201,9 +276,9 @@ export default function Cart() {
                     <div className="text-xs text-slate-400 mt-1">
                       ¥{money(it.price)} {it.stock != null && `· ${t("cart.stock")} ${it.stock}`}
                     </div>
-                    {(it as any).variant_attrs && (it as any).variant_attrs.length > 0 && (
+                    {it.variant_attrs && it.variant_attrs.length > 0 && (
                       <div className="mt-1 flex flex-wrap gap-1">
-                        {(it as any).variant_attrs.map((v: any, i: number) => (
+                        {it.variant_attrs.map((v, i) => (
                           <Tag key={i} className="m-0">
                             {v.label}: {v.value}
                           </Tag>
@@ -212,42 +287,56 @@ export default function Cart() {
                     )}
                   </div>
                   <div className="text-right">
-                    {editingId === it.id ? (
-                      <div className="flex items-center gap-2">
-                        <InputNumber
-                          min={1}
-                          max={99}
-                          value={qtyInput}
-                          onChange={(v) => setQtyInput(Number(v) || 1)}
-                          size="small"
-                          style={{ width: 70 }}
-                        />
-                        <Button size="small" type="primary" onClick={() => saveQty(it)}>
-                          {t("common.ok")}
-                        </Button>
-                      </div>
-                    ) : (
-                      <button
-                        className="font-semibold text-slate-700 hover:text-[#4F46E5]"
-                        onClick={() => {
-                          setEditingId(it.id);
-                          setQtyInput(it.quantity);
+                    <div className="flex items-center justify-end gap-1">
+                      <Button
+                        size="small"
+                        icon={<MinusOutlined />}
+                        disabled={it.quantity <= 1 || busyIds.includes(it.id)}
+                        aria-label={t("cart.decrease", { name: it.name })}
+                        onClick={() => changeQty(it, it.quantity - 1)}
+                      />
+                      <InputNumber
+                        min={1}
+                        max={99}
+                        value={it.quantity}
+                        size="small"
+                        style={{ width: 56 }}
+                        controls={false}
+                        disabled={busyIds.includes(it.id)}
+                        aria-label={t("cart.qtyOf", { name: it.name })}
+                        onChange={(v) => {
+                          if (v != null) changeQty(it, Number(v));
                         }}
-                      >
-                        ×{it.quantity}
-                      </button>
-                    )}
-                    <div className="text-[#4F46E5] font-bold mt-1">
+                      />
+                      <Button
+                        size="small"
+                        icon={<PlusOutlined />}
+                        disabled={
+                          busyIds.includes(it.id) ||
+                          it.quantity >= 99 ||
+                          (it.stock != null && it.quantity >= it.stock)
+                        }
+                        aria-label={t("cart.increase", { name: it.name })}
+                        onClick={() => changeQty(it, it.quantity + 1)}
+                      />
+                    </div>
+                    <div className="text-[#4F46E5] font-bold mt-1" aria-live="polite">
                       ¥{money(Number(it.price) * it.quantity)}
                     </div>
                   </div>
                   <Popconfirm
                     title={t("cart.confirmRemove")}
-                    onConfirm={() => removeItem(it.id)}
+                    onConfirm={() => removeItem(it)}
                     okText={t("common.ok")}
                     cancelText={t("common.cancel")}
                   >
-                    <Button type="text" danger icon={<DeleteOutlined />} />
+                    <Button
+                      type="text"
+                      danger
+                      icon={<DeleteOutlined />}
+                      loading={busyIds.includes(it.id)}
+                      aria-label={t("cart.removeItem", { name: it.name })}
+                    />
                   </Popconfirm>
                 </div>
               </Card>
@@ -328,7 +417,7 @@ export default function Cart() {
             />
           </div>
         </div>
-      )}
+      </AsyncBoundary>
 
       {!user && (
         <Modal
@@ -336,12 +425,21 @@ export default function Cart() {
           footer={null}
           closable={false}
           centered
+          maskClosable={false}
+          title={t("cart.loginTitle")}
         >
           <div className="text-center py-4">
             <p className="mb-4 text-slate-600">{t("cart.loginTip")}</p>
-            <Button type="primary" onClick={() => navigate("/login", { state: { from: "/cart" } })}>
-              {t("common.login")}
-            </Button>
+            <div className="flex items-center justify-center gap-2">
+              <Button onClick={() => navigate("/")}>{t("cart.keepBrowsing")}</Button>
+              <Button
+                type="primary"
+                autoFocus
+                onClick={() => navigate("/login", { state: { from: "/cart" } })}
+              >
+                {t("common.login")}
+              </Button>
+            </div>
           </div>
         </Modal>
       )}

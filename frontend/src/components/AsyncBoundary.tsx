@@ -14,6 +14,8 @@ interface Props {
   emptyTitle?: string;
   emptyDescription?: string;
   emptyAction?: React.ReactNode;
+  /** 错误态下额外的兜底操作（如"返回首页"） */
+  errorAction?: React.ReactNode;
   /** 自定义骨架，默认为 3 行段落骨架 */
   skeleton?: React.ReactNode;
   children: React.ReactNode;
@@ -32,26 +34,38 @@ export default function AsyncBoundary({
   emptyTitle,
   emptyDescription,
   emptyAction,
+  errorAction,
   skeleton,
   children,
 }: Props) {
   if (loading) {
-    return <>{skeleton ?? <Skeleton active paragraph={{ rows: 4 }} className="py-6" />}</>;
+    return (
+      // aria-busy + 可读文案：读屏用户能感知"正在加载"，而不是面对一片静默
+      <div role="status" aria-busy="true" aria-live="polite">
+        <span className="sr-only">{translate("common.loading")}</span>
+        {skeleton ?? <Skeleton active paragraph={{ rows: 4 }} className="py-6" />}
+      </div>
+    );
   }
   if (error) {
     return (
-      <Result
-        status="warning"
-        title={translate("state.errorTitle")}
-        subTitle={error || translate("state.errorDesc")}
-        extra={
-          retry && (
-            <Button type="primary" icon={<ReloadOutlined />} onClick={retry}>
-              {translate("common.retry")}
-            </Button>
-          )
-        }
-      />
+      <div role="alert">
+        <Result
+          status="warning"
+          title={translate("state.errorTitle")}
+          subTitle={error || translate("state.errorDesc")}
+          extra={
+            <div className="flex items-center justify-center gap-2">
+              {retry && (
+                <Button type="primary" icon={<ReloadOutlined />} onClick={retry}>
+                  {translate("common.retry")}
+                </Button>
+              )}
+              {errorAction}
+            </div>
+          }
+        />
+      </div>
     );
   }
   if (isEmpty) {

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Card, Tag, Empty, Spin, Segmented, Row, Col, Button, message } from "antd";
 import type { AxiosError } from "axios";
 import { Flame, Zap, Gift, PackagePlus, Percent, Boxes, ShoppingCart } from "lucide-react";
-import { getPromotions, addCartItem, getErrorMessage, ApiError, type PromotionOut, type PromotionType } from "../api";
+import { getPromotions, getErrorMessage, ApiError, type PromotionOut, type PromotionType } from "../api";
 import { useCart } from "../store/cart";
 import { money, parseTime } from "../utils/format";
 import { useI18n, translate } from "../i18n";
@@ -69,8 +69,8 @@ export default function Promotions() {
   const onAddToCart = async (p: PromotionOut) => {
     if (!p.product_id) return;
     try {
-      await addCartItem({ product_id: p.product_id, quantity: 1 });
-      add({
+      // P0-F4：add() 内部对登录用户已调 addCartItem，不要在外层重复调用
+      await add({
         product_id: p.product_id,
         name: p.product_name || p.title,
         price: finalPrice(p) ?? Number(p.original_price) ?? 0,

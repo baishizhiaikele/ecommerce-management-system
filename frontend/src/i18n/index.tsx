@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react";
 import { zh } from "./zh";
 import { en } from "./en";
 
@@ -69,11 +69,17 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
   const t = useCallback(
     (key: string, params?: Record<string, string | number>) => translate(key, params),
-    []
+    [lang]  // P0-C10：补 lang 依赖，语言切换时 t 引用更新，依赖 t 的组件正确刷新
+  );
+
+  // P0-C10：useMemo 稳定 value 引用，避免每次渲染新对象导致全站 useI18n() 消费者强制重渲染
+  const value = useMemo(
+    () => ({ lang, setLang, t, translate }),
+    [lang, setLang, t]
   );
 
   return (
-    <LanguageContext.Provider value={{ lang, setLang, t, translate }}>
+    <LanguageContext.Provider value={value}>
       {children}
     </LanguageContext.Provider>
   );

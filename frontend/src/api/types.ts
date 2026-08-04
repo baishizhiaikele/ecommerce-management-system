@@ -111,6 +111,7 @@ export interface CartItemOut {
   quantity: number;
   variant_id?: string | null;
   variant_label?: string | null;
+  variant_attrs?: { label: string; value: string }[] | null;
   merchant_id?: string | null;
   category_id?: string | null;
   is_flash?: boolean;
