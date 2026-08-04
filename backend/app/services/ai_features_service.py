@@ -39,6 +39,9 @@ _ALL_FLOORS: dict[str, str] = {
     "theme": "主题频道",
 }
 
+# 段位默认值（未登录用户或段位未识别时使用）
+_DEFAULT_SEGMENT = "buyer"
+
 # 身份优先级（决定楼层的基础排序）——各身份差异显著，肉眼可辨
 _SEGMENT_PRIORITY: dict[str, list[str]] = {
     "new": ["categories", "coupon", "flash", "shops", "top_sales", "recommend", "top_rating", "recent", "theme"],
@@ -119,9 +122,9 @@ async def arrange_home(
     if user is not None:
         segment = await infer_segment(db, user)
     else:
-        segment = segment_override or "buyer"
+        segment = segment_override or _DEFAULT_SEGMENT
     if segment not in _SEGMENT_PRIORITY:
-        segment = "buyer"
+        segment = _DEFAULT_SEGMENT
 
     if hour is None:
         hour = datetime.now().hour

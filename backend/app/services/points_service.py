@@ -15,12 +15,29 @@ async def add_points(
     delta: int,
     remark: str | None = None,
 ) -> None:
-    """增加 / 扣减用户积分，并写一条积分流水（不提交，由调用方统一 commit）。"""
+    """增加 / 扣减用户积分，并写一条积分流水（不提交，由调用方统一 commit）。
+
+    P0-C5：扣减积分时使用条件更新 WHERE points >= -delta，防止 SQLite 下
+    SELECT FOR UPDATE 静默失效导致并发超扣（两个请求各扣 500，用户仅 500 分 → 双花）。
+    """
     user = await db.get(User, user_id)
     if not user:
         return
-    # P1-M13：积分下限为 0，避免并发或异常扣减产生负积分
-    user.points = max(0, (user.points or 0) + delta)
+    if delta < 0:
+        # 扣减：条件更新，积分不足时 rowcount==0
+        from sqlalchemy import update as _update
+        result = await db.execute(
+            _update(User)
+            .where(User.id == user_id, User.points >= -delta)
+            .values(points=User.points + delta)
+        )
+        if result.rowcount == 0:
+            raise ValueError("积分不足，无法扣减")
+        # 刷新 user 对象以获取最新积分值
+        await db.refresh(user)
+    else:
+        # 增加：直接设值（无超扣风险）
+        user.points = max(0, (user.points or 0) + delta)
     db.add(
         PointLog(
             user_id=user_id,

@@ -47,13 +47,15 @@ async def _create_paid_order(client, bh, mh, price=60):
     amount = pay.json()["amount"]
 
     # 沙箱网关回调：资金进入托管
-    ts = 1700000000
-    sig = _sign(f"{oid}.TXN1.{amount}.{ts}")
+    import time, uuid
+    txn = f"TXN-{uuid.uuid4().hex[:8]}"
+    ts = int(time.time())
+    sig = _sign(f"{oid}.{txn}.{amount}.{ts}")
     wh = await client.post(
         "/api/payments/webhook/sandbox",
         json={
             "order_id": oid,
-            "transaction_id": "TXN1",
+            "transaction_id": txn,
             "amount": amount,
             "timestamp": ts,
             "signature": sig,

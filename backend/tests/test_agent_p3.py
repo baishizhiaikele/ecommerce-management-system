@@ -76,7 +76,7 @@ async def test_agent_add_to_cart_and_checkout(client, merchant_headers, buyer_he
     co = await client.post(
         "/api/agent/tool",
         headers=buyer_headers,
-        json={"tool": "checkout", "params": {"address": "代理测试地址"}},
+        json={"tool": "checkout", "params": {"address": "代理测试地址"}, "confirm": True},
     )
     assert co.status_code == 200, co.text
     assert co.json()["tool_calls"][0]["result"]["order_id"]

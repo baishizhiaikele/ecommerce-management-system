@@ -23,9 +23,9 @@ ALLOWED_TRANSITIONS: dict[OrderStatus, list[tuple[OrderStatus, list[Role]]]] = {
         # 收货后售后（7 天无理由等）
         (OrderStatus.RETURN_REQUESTED, [Role.BUYER]),
     ],
-    # 仅退款（未发货）
+    # 仅退款（未发货）—— system 角色用于自动退款审核
     OrderStatus.REFUND_REQUESTED: [
-        (OrderStatus.REFUNDED, [Role.MERCHANT, Role.ADMIN]),
+        (OrderStatus.REFUNDED, [Role.MERCHANT, Role.ADMIN, "system"]),
         (OrderStatus.REFUND_REJECTED, [Role.MERCHANT, Role.ADMIN]),
     ],
     OrderStatus.REFUND_REJECTED: [
@@ -58,18 +58,22 @@ ALLOWED_TRANSITIONS: dict[OrderStatus, list[tuple[OrderStatus, list[Role]]]] = {
 }
 
 
-def can_transition(current: OrderStatus, target: OrderStatus, role: Role) -> bool:
+def can_transition(current: OrderStatus, target: OrderStatus, role: str | Role) -> bool:
+    """检查是否允许状态流转。role 支持 Role 枚举值或 "system"（自动退款）。"""
     if current == target:
         return False
+    role_val = role.value if isinstance(role, Role) else role
     for allowed_target, allowed_roles in ALLOWED_TRANSITIONS.get(current, []):
-        if allowed_target == target and role in allowed_roles:
+        allowed_vals = [r.value if isinstance(r, Role) else r for r in allowed_roles]
+        if allowed_target == target and role_val in allowed_vals:
             return True
     return False
 
 
-def next_allowed(current: OrderStatus, role: Role) -> list[OrderStatus]:
+def next_allowed(current: OrderStatus, role: str | Role) -> list[OrderStatus]:
+    role_val = role.value if isinstance(role, Role) else role
     return [
         target
         for target, roles in ALLOWED_TRANSITIONS.get(current, [])
-        if role in roles
+        if role_val in [r.value if isinstance(r, Role) else r for r in roles]
     ]

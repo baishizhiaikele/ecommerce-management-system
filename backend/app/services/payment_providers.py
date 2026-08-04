@@ -321,9 +321,17 @@ _PROVIDERS: dict[str, type[PaymentProvider]] = {
 }
 
 
-def get_provider(name: str | None = None) -> PaymentProvider:
-    """按配置或显式名称返回网关实现；未知网关回退到沙箱。"""
+def get_provider(name: str | None = None, strict: bool = False) -> PaymentProvider:
+    """按配置或显式名称返回网关实现。
+
+    - strict=False（内部调用）：未知网关回退到沙箱（兼容历史路径）。
+    - strict=True（webhook 入口）：未知/不匹配网关直接抛错，防止攻击者注入 mock 等伪造网关。
+    """
     key = (name or settings.PAYMENT_GATEWAY or "sandbox").lower()
+    if strict and key not in _PROVIDERS:
+        raise ValueError(f"不支持的支付网关: {key}")
+    if strict and key == "mock" and not settings.TESTING:
+        raise ValueError(f"网关 mock 仅测试环境可用")
     return _PROVIDERS.get(key, SandboxProvider)()
 
 

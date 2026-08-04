@@ -140,8 +140,20 @@ async def find_usable_user_coupon(
 
 
 async def use_coupon(db: AsyncSession, uc: UserCoupon) -> None:
-    uc.is_used = True
-    uc.used_at = datetime.now(timezone.utc)
+    """核销优惠券（P0-C5：条件更新防 double-spend）。
+
+    使用 UPDATE ... WHERE is_used=0 原子操作，而非直接设 is_used=True，
+    防止 SQLite 下 SELECT FOR UPDATE 静默失效导致同一券被并发订单双花。
+    """
+    from sqlalchemy import update as _update
+
+    result = await db.execute(
+        _update(UserCoupon)
+        .where(UserCoupon.id == uc.id, UserCoupon.is_used == False)  # noqa: E712
+        .values(is_used=True, used_at=datetime.now(timezone.utc))
+    )
+    if result.rowcount == 0:
+        raise ValueError("优惠券已被使用或不存在")
 
 
 async def create_coupon(db: AsyncSession, user: User, data: CouponCreate) -> Coupon:

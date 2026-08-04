@@ -65,7 +65,7 @@ async def test_pickup_order_free_freight_and_code(client, buyer_headers, merchan
     pay = await client.post(f"/api/payments/orders/{oid}/pay", headers=bh)
     assert pay.status_code == 200, pay.text
     amount = pay.json()["amount"]
-    ts = 1700000000
+    import time; ts = int(time.time())
     sig = _sign(f"{oid}.TXNPICK.{amount}.{ts}")
     wh = await client.post(
         "/api/payments/webhook/sandbox",
@@ -129,7 +129,7 @@ async def test_express_ship_auto_trace(client, buyer_headers, merchant_headers):
 
     pay = await client.post(f"/api/payments/orders/{oid}/pay", headers=bh)
     amount = pay.json()["amount"]
-    ts = 1700000001
+    import time; ts = int(time.time())
     sig = _sign(f"{oid}.TXNEXP.{amount}.{ts}")
     await client.post(
         "/api/payments/webhook/sandbox",

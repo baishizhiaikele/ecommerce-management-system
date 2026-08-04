@@ -57,3 +57,24 @@ async def similar(
     cached = [ProductOut.model_validate(it).model_dump() for it in items]
     await cache_set(cache_key, cached, ttl=300)
     return cached
+
+
+@router.get("/collaborative", response_model=list[ProductOut])
+async def collaborative(
+    limit: int = Query(8, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> list:
+    """T11 升级：user-user 协同过滤推荐。
+
+    找到行为最相似的 Top-N 用户，聚合他们的偏好商品，排除已接触过的。
+    冷启动（无相似用户）时回退到信号融合推荐。
+    """
+    cache_key = f"collab_rec:{user.id}:{limit}"
+    cached = await cache_get(cache_key)
+    if cached is not None:
+        return cached
+    items = await recommendation_service.recommend_from_similar_users(db, user.id, limit)
+    cached = [ProductOut.model_validate(it).model_dump() for it in items]
+    await cache_set(cache_key, cached, ttl=120)
+    return cached

@@ -52,12 +52,14 @@ async def test_payment_capture_and_idempotency(client, buyer_headers, merchant_h
     assert data["status"] == "created"
     amount = data["amount"]
 
-    # 构造网关回调（带签名）
-    ts = 1700000000
-    sig = _sign(f"{oid}.TXN1.{amount}.{ts}")
+    # 构造网关回调（带签名，使用当前时间戳通过时效校验）
+    import time, uuid
+    txn = f"TXN-{uuid.uuid4().hex[:8]}"
+    ts = int(time.time())
+    sig = _sign(f"{oid}.{txn}.{amount}.{ts}")
     payload = {
         "order_id": oid,
-        "transaction_id": "TXN1",
+        "transaction_id": txn,
         "amount": amount,
         "timestamp": ts,
         "signature": sig,
@@ -70,15 +72,15 @@ async def test_payment_capture_and_idempotency(client, buyer_headers, merchant_h
         o = await s.get(Order, oid)
         assert o.status == OrderStatus.PAID
 
-    # 幂等：重复回调直接返回 already_paid
+    # 幂等：重复回调直接返回 already_processed（P0-F2 修复后终态不再推进）
     wh2 = await client.post("/api/payments/webhook/sandbox", json=payload)
     assert wh2.status_code == 200
-    assert wh2.json()["status"] == "already_paid"
+    assert wh2.json()["status"] == "already_processed"
 
     st = await client.get(f"/api/payments/orders/{oid}/status", headers=bh)
     assert st.status_code == 200
     assert st.json()["status"] == "paid"
-    assert st.json()["transaction_id"] == "TXN1"
+    assert st.json()["transaction_id"] == txn
 
 
 @pytest.mark.asyncio
@@ -105,11 +107,12 @@ async def test_payment_webhook_bad_signature(client, buyer_headers, merchant_hea
     )
     oid = co.json()["id"]
 
+    import time
     payload = {
         "order_id": oid,
         "transaction_id": "TXN9",
         "amount": 30,
-        "timestamp": 1,
+        "timestamp": int(time.time()),
         "signature": "deadbeef",
     }
     wh = await client.post("/api/payments/webhook/sandbox", json=payload)
@@ -142,13 +145,15 @@ async def test_refund_marks_payment_refunded(client, buyer_headers, merchant_hea
 
     pay = await client.post(f"/api/payments/orders/{oid}/pay", headers=bh)
     amount = pay.json()["amount"]
-    ts = 1700000000
-    sig = _sign(f"{oid}.TXN1.{amount}.{ts}")
+    import time, uuid
+    txn = f"TXN-{uuid.uuid4().hex[:8]}"
+    ts = int(time.time())
+    sig = _sign(f"{oid}.{txn}.{amount}.{ts}")
     await client.post(
         "/api/payments/webhook/sandbox",
         json={
             "order_id": oid,
-            "transaction_id": "TXN1",
+            "transaction_id": txn,
             "amount": amount,
             "timestamp": ts,
             "signature": sig,
@@ -157,6 +162,7 @@ async def test_refund_marks_payment_refunded(client, buyer_headers, merchant_hea
 
     async with SessionLocal() as s:
         o = await s.get(Order, oid)
+        o.refund_amount = amount  # P0-C4：退款测试需显式设置退款金额
         await refund_payment(s, o)
         await s.commit()
         p = (await s.scalars(select(Payment).where(Payment.order_id == oid))).first()

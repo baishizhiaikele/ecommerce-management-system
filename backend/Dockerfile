@@ -4,6 +4,7 @@ WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
+RUN npm run check:i18n
 RUN npm run build
 
 # ---- 阶段 2：后端运行镜像 ----

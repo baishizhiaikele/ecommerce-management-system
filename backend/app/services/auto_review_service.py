@@ -21,19 +21,34 @@ MAX_RECENT_REFUNDS = 3
 
 
 async def try_auto_refund(db: AsyncSession, order: Order) -> bool:
-    """尝试自动通过退款；返回是否命中自动审核。"""
+    """尝试自动通过退款；返回是否命中自动审核。
+
+    P0-C6 修复：
+    - role 改为 "system"（非 admin），在状态机中单列，不绕过角色校验。
+    - 频次统计改用退款完成时间（completed_at/audit log）替代订单创建时间，防止囤单绕过。
+    - 加 with_for_update 锁 buyer 行，防止并发绕过频次检查。
+    """
     if order.status != OrderStatus.REFUND_REQUESTED:
         return False
     amount = float(order.refund_amount or order.total_amount or 0)
     if amount > AUTO_REFUND_MAX_AMOUNT:
         return False
+
+    # P0-C6：锁买家行，防止并发请求同时通过频次检查
+    from app.models.user import User
+    buyer = (await db.scalars(select(User).where(User.id == order.buyer_id).with_for_update())).first()
+    if not buyer:
+        return False
+
+    # P0-C6：频次统计改用 audit log 的退款完成时间（非订单创建时间）
     since = datetime.now(timezone.utc) - timedelta(days=RECENT_DAYS)
+    from app.models.audit import AuditLog
     recent = int(
         await db.scalar(
-            select(func.count(Order.id)).where(
-                Order.buyer_id == order.buyer_id,
-                Order.status == OrderStatus.REFUNDED,
-                Order.created_at >= since,
+            select(func.count(AuditLog.id)).where(
+                AuditLog.user_id == order.buyer_id,
+                AuditLog.action == "auto_refund",
+                AuditLog.created_at >= since,
             )
         )
         or 0
@@ -44,8 +59,9 @@ async def try_auto_refund(db: AsyncSession, order: Order) -> bool:
     from app.services.audit_service import record
     from app.services.order_service import transition_status
 
+    # P0-C6：使用 "system" 角色（在 state_machine 中需注册该角色允许退款流转）
     order = await transition_status(
-        db, order=order, target=OrderStatus.REFUNDED, actor_id=order.buyer_id, role="admin"
+        db, order=order, target=OrderStatus.REFUNDED, actor_id=order.buyer_id, role="system"
     )
     await record(
         db,

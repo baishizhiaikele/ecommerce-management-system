@@ -21,6 +21,7 @@ from app.models.product import Product, ProductStatus
 DEFAULT_LEAD_TIME_DAYS = 7      # 补货提前期（下单到入库）
 DEFAULT_REPLENISH_CYCLE = 30    # 一次备货覆盖天数
 DEFAULT_MIN_SAFETY = 10         # 最小安全库存
+INFINITE_DAYS = 999             # 无销量时预设"无限可售天数"（非真实无穷大）
 
 
 async def restock_suggestions(
@@ -72,7 +73,7 @@ async def restock_suggestions(
         safety = max(int(avg_daily * lead_time_days), min_safety)
         recommended = max(0, safety + int(avg_daily * replenish_cycle) - p.stock)
         # 可售天数（避免除零）
-        days_left = (p.stock / avg_daily) if avg_daily > 0 else 999
+        days_left = (p.stock / avg_daily) if avg_daily > 0 else INFINITE_DAYS
         urgent = days_left < 3
         if recommended <= 0 and not urgent:
             continue

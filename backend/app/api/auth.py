@@ -23,8 +23,9 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 def _issue_tokens(user: User) -> Token:
+    # P0-C7：access token 携带 token_version，登出后旧 token 立即失效
     return Token(
-        access_token=create_access_token(user.id, user.role.value),
+        access_token=create_access_token(user.id, user.role.value, user.token_version),
         refresh_token=create_refresh_token(user.id, user.token_version),
     )
 

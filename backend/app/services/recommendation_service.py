@@ -213,3 +213,156 @@ async def recommend_for(db: AsyncSession, user_id: str, limit: int = 8) -> list[
             if len(items) >= limit:
                 break
     return items[:limit]
+
+
+async def similar_users(db: AsyncSession, user_id: str, limit: int = 20) -> list[str]:
+    """user-user 协同过滤（T11 升级）：找到与目标用户行为最相似的 Top-N 用户。
+
+    相似度基于三路信号重叠：
+    - 浏览过相同商品
+    - 收藏过相同商品
+    - 购买过相同商品
+    每路信号权重：购买 3.0 > 收藏 2.0 > 浏览 1.0
+
+    返回按相似度降序的用户 ID 列表。
+    """
+    from sqlalchemy import literal_column
+
+    # 目标用户的浏览/收藏/购买商品集合
+    viewed = select(ProductView.product_id).where(ProductView.user_id == user_id)
+    favorited = select(Favorite.product_id).where(Favorite.user_id == user_id)
+    bought = (
+        select(OrderItem.product_id)
+        .join(Order, Order.id == OrderItem.order_id)
+        .where(Order.buyer_id == user_id)
+    )
+
+    # 统计其他用户与目标用户的商品重叠
+    # 浏览重叠：+1.0
+    vw = (
+        select(
+            ProductView.user_id.label("uid"),
+            func.count().label("cnt"),
+            literal_column("1.0").label("weight"),
+        )
+        .where(ProductView.product_id.in_(viewed), ProductView.user_id != user_id)
+        .group_by(ProductView.user_id)
+    )
+    # 收藏重叠：+2.0
+    fv = (
+        select(
+            Favorite.user_id.label("uid"),
+            func.count().label("cnt"),
+            literal_column("2.0").label("weight"),
+        )
+        .where(Favorite.product_id.in_(favorited), Favorite.user_id != user_id)
+        .group_by(Favorite.user_id)
+    )
+    # 购买重叠：+3.0
+    bv = (
+        select(
+            Order.buyer_id.label("uid"),
+            func.count().label("cnt"),
+            literal_column("3.0").label("weight"),
+        )
+        .where(OrderItem.product_id.in_(bought), Order.buyer_id != user_id)
+        .group_by(Order.buyer_id)
+    )
+
+    union = vw.union_all(fv).union_all(bv).subquery()
+    ranked = (
+        select(
+            union.c.uid,
+            func.sum(union.c.cnt * union.c.weight).label("score"),
+        )
+        .group_by(union.c.uid)
+        .order_by(func.sum(union.c.cnt * union.c.weight).desc())
+        .limit(limit)
+    )
+    rows = list(await db.execute(ranked))
+    return [r[0] for r in rows]
+
+
+async def recommend_from_similar_users(
+    db: AsyncSession, user_id: str, limit: int = 8
+) -> list[Product]:
+    """基于相似用户的协同过滤推荐。
+
+    找到行为最相似的用户群，聚合他们购买/收藏/浏览过的商品，
+    排除目标用户已接触过的，按聚合得分降序返回。
+    """
+    similar_ids = await similar_users(db, user_id, limit=10)
+    if not similar_ids:
+        return await recommend_for(db, user_id, limit)  # 冷启动兜底
+
+    # 目标用户已接触商品
+    touched = select(ProductView.product_id).where(ProductView.user_id == user_id)
+    favorited = select(Favorite.product_id).where(Favorite.user_id == user_id)
+    bought = (
+        select(OrderItem.product_id)
+        .join(Order, Order.id == OrderItem.order_id)
+        .where(Order.buyer_id == user_id)
+    )
+
+    # 聚合相似用户的偏好商品
+    from sqlalchemy import literal_column
+    # 相似用户购买的商品：+3.0
+    sim_bought = (
+        select(
+            OrderItem.product_id.label("pid"),
+            func.count().label("cnt"),
+            literal_column("3.0").label("weight"),
+        )
+        .join(Order, Order.id == OrderItem.order_id)
+        .where(Order.buyer_id.in_(similar_ids))
+        .group_by(OrderItem.product_id)
+    )
+    # 相似用户收藏的商品：+2.0
+    sim_fav = (
+        select(
+            Favorite.product_id.label("pid"),
+            func.count().label("cnt"),
+            literal_column("2.0").label("weight"),
+        )
+        .where(Favorite.user_id.in_(similar_ids))
+        .group_by(Favorite.product_id)
+    )
+    # 相似用户浏览的商品：+1.0
+    sim_view = (
+        select(
+            ProductView.product_id.label("pid"),
+            func.count().label("cnt"),
+            literal_column("1.0").label("weight"),
+        )
+        .where(ProductView.user_id.in_(similar_ids))
+        .group_by(ProductView.product_id)
+    )
+
+    union = sim_bought.union_all(sim_fav).union_all(sim_view).subquery()
+    ranked = (
+        select(
+            union.c.pid,
+            func.sum(union.c.cnt * union.c.weight).label("score"),
+        )
+        .where(
+            union.c.pid.notin_(touched),
+            union.c.pid.notin_(favorited),
+            union.c.pid.notin_(bought),
+        )
+        .group_by(union.c.pid)
+        .order_by(func.sum(union.c.cnt * union.c.weight).desc())
+        .limit(limit)
+    )
+    rows = list(await db.execute(ranked))
+    ids = [r[0] for r in rows]
+    if not ids:
+        return await recommend_for(db, user_id, limit)
+
+    items = list(
+        await db.scalars(
+            select(Product)
+            .where(Product.id.in_(ids), Product.status == ProductStatus.ACTIVE)
+        )
+    )
+    by_id = {p.id: p for p in items}
+    return [by_id[i] for i in ids if i in by_id][:limit]

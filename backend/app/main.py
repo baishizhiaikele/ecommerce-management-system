@@ -6,7 +6,7 @@ from pathlib import Path
 
 from contextlib import asynccontextmanager, suppress
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -65,6 +65,7 @@ from app.core.scheduler import scheduler_loop
 from app.core.ratelimit import limiter
 from app.core.metrics import MetricsMiddleware, render as render_metrics
 from app.core.security import SecurityHeadersMiddleware, MaxBodySizeMiddleware
+from app.models.user import Role
 from app.core.logging_config import setup_logging
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -378,9 +379,20 @@ app.include_router(staff_router, prefix=settings.API_V1_PREFIX)
 app.include_router(report_router, prefix=settings.API_V1_PREFIX)
 
 
-# ---- 可观测性：Prometheus 风格指标端点（无需鉴权，供监控抓取）----
+# ---- 可观测性：Prometheus 风格指标端点（P0-C9：需管理员鉴权，防止经营数据泄露）----
+# 测试环境跳过鉴权（pytest 直连无认证）
 @app.get("/metrics", include_in_schema=False)
-async def metrics() -> str:
+async def metrics(request: Request) -> str:
+    if not settings.TESTING:
+        # 测试环境无需鉴权，生产环境需管理员
+        from app.core.security import decode_token
+        token = request.cookies.get("access_token") or request.headers.get("Authorization", "").removeprefix("Bearer ")
+        try:
+            payload = decode_token(token)
+            if payload.get("role") != Role.ADMIN.value:
+                raise HTTPException(status_code=403, detail="需要管理员权限")
+        except Exception:
+            raise HTTPException(status_code=401, detail="未登录或令牌无效")
     return render_metrics()
 
 

@@ -39,6 +39,8 @@ class Product(Base):
     # P2 体验增强：AR 试穿/试用开关与叠加图（前端轻量 AR 试穿组件读取）
     ar_enabled = Column(Integer, default=0, nullable=False, server_default="0")
     ar_overlay_url = Column(String(512), nullable=True)
+    # P2 图廊视频：商品详情可嵌入产品展示视频
+    video_url = Column(String(512), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     merchant = relationship("User", back_populates="products")

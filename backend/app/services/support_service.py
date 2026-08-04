@@ -80,7 +80,7 @@ async def _to_out(db: AsyncSession, t: SupportTicket, viewer_role: str) -> Suppo
 
     visible = (
         messages
-        if viewer_role == "merchant"
+        if viewer_role == Role.MERCHANT.value
         else [m for m in messages if not m.is_internal]
     )
 
@@ -325,7 +325,7 @@ async def add_message(
         ticket.unread_for_merchant += 1
         ticket.status = TicketStatus.OPEN
 
-    viewer_role = "merchant" if sender_role == SenderRole.MERCHANT else "buyer"
+    viewer_role = Role.MERCHANT.value if sender_role == SenderRole.MERCHANT else Role.BUYER.value
     await db.commit()
     ticket = await _reload(db, ticket.id)
     return await _to_out(db, ticket, viewer_role)

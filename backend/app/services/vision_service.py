@@ -50,10 +50,13 @@ def compute_phash(image_bytes: bytes) -> str | None:
     return hex_str
 
 
+_MAX_HAMMING = 999  # 汉明距离在输入无效时返回的最大值（表示不匹配）
+
+
 def _hamming(a: str | None, b: str | None) -> int:
     """汉明距离（两位串异或的 1 的个数）。"""
     if not a or not b or len(a) != len(b):
-        return 999
+        return _MAX_HAMMING
     diff = 0
     for ca, cb in zip(a, b):
         if ca != cb:

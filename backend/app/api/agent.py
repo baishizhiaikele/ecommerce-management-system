@@ -9,6 +9,7 @@ from app.core.deps import get_current_user
 from app.db.session import get_db
 from app.models.user import User
 from app.services import agent_service
+from app.services.agent_service import route_intent
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -23,6 +24,7 @@ class ChatIn(BaseModel):
 class ToolCallIn(BaseModel):
     tool: str
     params: dict = {}
+    confirm: bool = False  # P0-F3：写操作需显式确认
 
 
 @router.get("/tools")
@@ -37,6 +39,20 @@ async def chat(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
+    # P0-F3：写操作（checkout/add_to_cart）不允许通过聊天自动触发，需走 /agent/tool 显式调用
+    if not body.tool:
+        intent = agent_service.route_intent(body.message)
+        if intent in ("checkout", "add_to_cart"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"操作 '{intent}' 需要确认后才能执行。请通过 /agent/tool 接口显式调用或在前端确认后再试。",
+            )
+    # P0-F3：地址为空时禁止下单（防止占位符生成脏订单）
+    if body.tool == "checkout" and not (body.address and body.address.strip() and body.address != "（未提供地址）"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="下单需要提供收货地址，例如：北京市海淀区xx路1号",
+        )
     return await agent_service.agent_chat(
         db, user, body.message, body.product_id, body.address, body.tool
     )
@@ -48,9 +64,17 @@ async def call_tool(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """由前端直接触发某个工具（精确调用，绕过意图识别）。"""
+    """由前端直接触发某个工具（精确调用，绕过意图识别）。
+
+    P0-F3：写操作（checkout/add_to_cart）需 body.confirm=True 才会真实执行。
+    """
     if body.tool not in agent_service.TOOLS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="未知工具")
+    # P0-F3：写操作需确认
+    confirm = body.confirm
+    if body.tool in ("checkout", "add_to_cart") and not confirm:
+        # 未确认时返回预览
+        confirm = False
     return await agent_service.agent_chat(
         db,
         user,
@@ -58,4 +82,5 @@ async def call_tool(
         product_id=body.params.get("product_id"),
         address=body.params.get("address"),
         tool=body.tool,
+        confirm=confirm,
     )

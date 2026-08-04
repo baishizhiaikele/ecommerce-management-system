@@ -16,7 +16,7 @@ from app.models.product import Product, ProductStatus
 from app.models.variant import ProductVariant
 import json
 from app.models.sequence import OrderSequence
-from app.models.user import User
+from app.models.user import User, Role
 from app.models.points import PointAction
 from app.state_machine import can_transition
 from app.services.audit_service import record
@@ -391,7 +391,7 @@ async def list_orders(
     page: int = 1, page_size: int = 200,
 ) -> list[Order]:
     stmt = select(Order)
-    if role == "merchant":
+    if role == Role.MERCHANT.value:
         stmt = (
             stmt.join(OrderItem, OrderItem.order_id == Order.id)
             .join(Product, Product.id == OrderItem.product_id)
@@ -412,10 +412,10 @@ async def list_orders(
 
 async def get_order(db: AsyncSession, order_id: str, *, user_id: str, role: str) -> Order:
     order = await _load_order(db, order_id)
-    if role == "admin":
+    if role == Role.ADMIN.value:
         return order
     if order.buyer_id != user_id:
-        if role == "merchant":
+        if role == Role.MERCHANT.value:
             # P2-M5：批量预取订单内商品，避免逐 item 查库的 N+1
             item_pids = [it.product_id for it in order.items]
             pmap = {
@@ -436,9 +436,9 @@ async def get_order(db: AsyncSession, order_id: str, *, user_id: str, role: str)
 
 async def soft_delete_order(db: AsyncSession, order_id: str, *, user_id: str, role: str) -> None:
     """买家软删除自己的订单（仅本人可操作，管理员不可代删以免破坏数据）。"""
-    if role == "admin":
+    if role == Role.ADMIN.value:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="管理员不可删除用户订单")
-    if role == "merchant":
+    if role == Role.MERCHANT.value:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="商家不可删除订单")
     order = await _load_order(db, order_id)
     if order.buyer_id != user_id:
@@ -583,7 +583,7 @@ async def verify_pickup(
     # 已支付但未备货的订单先流转到 shipped（备货完成）再核销
     if order.status == OrderStatus.PAID:
         order = await transition_status(
-            db, order=order, target=OrderStatus.SHIPPED, actor_id=actor_id, role="merchant"
+            db, order=order, target=OrderStatus.SHIPPED, actor_id=actor_id, role=Role.MERCHANT.value
         )
     order.picked_up_at = now
     trace = json.loads(order.logistics or "[]")
@@ -597,6 +597,6 @@ async def verify_pickup(
     order.logistics = json.dumps(trace, ensure_ascii=False)
     # 核销即买家当面确认收货：以买家身份完成订单（触发托管释放/积分）
     order = await transition_status(
-        db, order=order, target=OrderStatus.COMPLETED, actor_id=order.buyer_id, role="buyer"
+        db, order=order, target=OrderStatus.COMPLETED, actor_id=order.buyer_id, role=Role.BUYER.value
     )
     return order

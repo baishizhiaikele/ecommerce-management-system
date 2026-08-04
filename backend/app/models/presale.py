@@ -3,7 +3,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, Enum as SAEnum, Float, ForeignKey, Integer, Numeric, String
+from sqlalchemy import Column, DateTime, Enum as SAEnum, ForeignKey, Integer, Numeric, String
 
 from app.db.base import Base
 
@@ -27,7 +27,7 @@ class Presale(Base):
     title = Column(String(100), nullable=False)
     presale_price = Column(Numeric(12, 2), nullable=False)
     deposit = Column(Numeric(12, 2), nullable=False)
-    inflate_rate = Column(Float, default=1.5, nullable=False)
+    inflate_rate = Column(Numeric(4, 2), default=1.5, nullable=False)
     end_at = Column(DateTime(timezone=True), nullable=True)
     is_active = Column(Integer, default=1, nullable=False)
     created_at = Column(DateTime(timezone=True), default=_now)

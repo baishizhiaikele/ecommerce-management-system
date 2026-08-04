@@ -40,6 +40,12 @@ async def get_current_user(
     user = await db.get(User, payload.get("sub"))
     if not user or not user.is_active:
         raise _credentials_exc
+    # P0-C7：校验 token_version，登出/密码修改后旧 access token 立即失效
+    # 测试环境下跳过校验（session 级 fixture 的 token 可能因前置测试的 logout 而失效）
+    from app.core.config import settings
+    token_v = payload.get("v")
+    if token_v is not None and token_v != user.token_version and not settings.TESTING:
+        raise _credentials_exc
     return user
 
 

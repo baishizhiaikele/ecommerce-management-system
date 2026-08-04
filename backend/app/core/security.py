@@ -27,9 +27,10 @@ def _encode(payload: dict) -> str:
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-def create_access_token(sub: str, role: str) -> str:
+def create_access_token(sub: str, role: str, version: int = 1) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    return _encode({"sub": str(sub), "role": role, "type": "access", "exp": expire})
+    # P0-C7：access token 含 v 字段，登出时递增 token_version 可使旧 access token 立即失效
+    return _encode({"sub": str(sub), "role": role, "type": "access", "v": version, "exp": expire})
 
 
 def create_refresh_token(sub: str, version: int = 1) -> str:
@@ -59,9 +60,14 @@ def is_token_type(token: str, expected: str) -> bool:
 
 
 def set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
-    """将令牌写入 HttpOnly Cookie（S4）：降低 XSS 直接盗用风险。"""
-    secure = bool(settings.FRONTEND_ORIGINS and settings.FRONTEND_ORIGINS[0].startswith("https"))
-    common = {"httponly": True, "samesite": "lax", "secure": secure, "path": "/"}
+    """将令牌写入 HttpOnly Cookie（S4）：降低 XSS 直接盗用风险。
+
+    P0-C8：Secure 由显式配置项控制（非推断），SameSite=Strict 防 CSRF。
+    """
+    secure = getattr(settings, "COOKIE_SECURE", None)
+    if secure is None:
+        secure = bool(settings.FRONTEND_ORIGINS and settings.FRONTEND_ORIGINS[0].startswith("https"))
+    common = {"httponly": True, "samesite": "strict", "secure": secure, "path": "/"}
     response.set_cookie(
         key="access_token",
         value=access_token,

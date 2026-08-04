@@ -106,10 +106,40 @@ async def tool_add_to_cart(
     return {"product_id": product_id, "quantity": item.quantity, "added": True}
 
 
-async def tool_checkout(db: AsyncSession, user: User, address: str) -> dict:
+async def tool_checkout(db: AsyncSession, user: User, address: str, confirm: bool = False) -> dict:
+    """AI 代理下单：仅 confirm=True 时才落库创建真实订单。
+
+    P0-F3 修复：不传 confirm 时仅返回订单预览（商品清单+预估金额），避免用户咨询触发误下单。
+    """
+    if not address or address == "（未提供地址）":
+        raise ValueError("请先提供收货地址，例如：北京市海淀区xx路1号")
+
+    if not confirm:
+        # 预览模式：返回购物车清单与预估金额，不落库
+        from app.models.cart import CartItem
+        from sqlalchemy import select as _sel
+        items = (await db.scalars(_sel(CartItem).where(CartItem.user_id == user.id))).all()
+        if not items:
+            return {"preview": True, "message": "购物车为空，请先将商品加入购物车", "items": [], "total": 0}
+        total = 0.0
+        item_list = []
+        for ci in items:
+            product = await db.get(Product, ci.product_id)
+            price = float(product.price) if product else 0
+            total += price * ci.quantity
+            item_list.append({
+                "product_id": ci.product_id,
+                "name": product.name if product else "未知商品",
+                "price": price,
+                "quantity": ci.quantity,
+                "subtotal": round(price * ci.quantity, 2),
+            })
+        return {"preview": True, "message": f"确认下单？共 {len(items)} 种商品，预估 ¥{round(total, 2)}。请回复「确认下单」", "items": item_list, "total": round(total, 2)}
+
     order = await order_service.checkout(db, buyer=user, address=address)
     await record(db, user.id, "agent.checkout", "order", order.id, "代理下单")
     return {
+        "preview": False,
         "order_id": order.id,
         "order_no": order.order_no,
         "total_amount": float(order.total_amount),
@@ -219,6 +249,8 @@ def list_tools() -> list[dict]:
 
 
 # ---------- 意图识别（轻量关键词路由，无需外部 LLM） ----------
+# P0-F3 修复：写操作（checkout/add_to_cart）不再自动路由，仅允许通过 tool 参数显式调用。
+# 用户咨询"这个下单后多久发货""付款方式有哪些"等不会误触发真实下单。
 def route_intent(message: str) -> str | None:
     m = (message or "").lower()
     if any(k in m for k in ("库存", "有货", "stock", "还有吗")):
@@ -227,10 +259,7 @@ def route_intent(message: str) -> str | None:
         return "compare_price"
     if any(k in m for k in ("凑单", "满减", "免运费", "bundle", "还差")):
         return "bundle_recommend"
-    if any(k in m for k in ("加购", "加入购物车", "add to cart", "帮我买")):
-        return "add_to_cart"
-    if any(k in m for k in ("下单", "结算", "checkout", "付款", "拍下")):
-        return "checkout"
+    # P0-F3：add_to_cart / checkout 仅允许通过 tool 参数显式调用，不自动路由
     # 购物意图：含「买/想买/推荐/找/搜/看看」或预算/类目词 → 走商品搜索
     if any(k in m for k in ("买", "推荐", "找", "搜", "看看", "想要", "需要", "挑", "选购")):
         return "search_products"
@@ -249,8 +278,14 @@ async def agent_chat(
     product_id: str | None = None,
     address: str | None = None,
     tool: str | None = None,
+    confirm: bool = False,
 ) -> dict:
-    """解析用户意图并调用对应工具，返回自然语言回复 + 结构化调用记录。"""
+    """解析用户意图并调用对应工具，返回自然语言回复 + 结构化调用记录。
+
+    P0-F3：confirm 参数控制 checkout 是否真实落库。
+    - 通过 /agent/tool 显式调用时 confirm=True（用户已在前端确认）
+    - 通过 /agent/chat 关键词匹配时 confirm=False（仅预览）
+    """
     chosen = tool or route_intent(message)
     if not chosen or chosen not in TOOLS:
         return {
@@ -279,7 +314,7 @@ async def agent_chat(
     elif chosen == "add_to_cart":
         result = await fn(db, user, product_id, 1)
     elif chosen == "checkout":
-        result = await fn(db, user, address or "（未提供地址）")
+        result = await fn(db, user, address or "（未提供地址）", confirm=confirm)
     else:  # search_products
         result = await fn(db, user, message)
     calls.append({"tool": chosen, "result": result})
@@ -306,6 +341,8 @@ def _render_reply(tool: str, data: dict) -> str:
     if tool == "add_to_cart":
         return f"已为你加入购物车（数量 {data['quantity']}）。"
     if tool == "checkout":
+        if data.get("preview"):
+            return data.get("message", "请确认下单")
         return f"已下单：订单号 {data['order_no']}，应付 ¥{data['total_amount']}。"
     if tool == "search_products":
         kw = data.get("keyword")
