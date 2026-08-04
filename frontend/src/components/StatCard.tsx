@@ -64,7 +64,7 @@ export default function StatCard({
   return (
     <Card className="chart-card" styles={{ body: { padding: 20 } }} bordered={false}>
       <div className="flex items-start justify-between">
-        <div style={{ color: "#64748b", fontSize: 13 }}>{title}</div>
+        <div style={{ color: "var(--brand-muted)", fontSize: 13 }}>{title}</div>
         {icon && (
           <div className="glow-icon" style={{ width: 40, height: 40, fontSize: 19 }}>
             {icon}

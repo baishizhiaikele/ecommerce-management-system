@@ -434,7 +434,7 @@ export default function AIMall() {
       </Space>
 
       {data && (
-        <Card size="small" style={{ background: "#fafafa", marginBottom: 16 }}>
+        <Card size="small" style={{ background: "var(--brand-surface)", marginBottom: 16 }}>
           <Text strong>{t("ai.home.insight")}：</Text>
           <Text>{data.insight}</Text>
         </Card>

@@ -165,7 +165,7 @@ export default function Notifications() {
                 return (
                   <List.Item
                     className="px-4 cursor-pointer hover:bg-slate-50 transition"
-                    style={{ background: n.is_read ? undefined : "#F5F3FF" }}
+                    style={{ background: n.is_read ? undefined : "var(--brand-soft)" }}
                     onClick={() => onRead(n)}
                   >
                     <List.Item.Meta

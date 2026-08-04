@@ -682,7 +682,7 @@ export default function Support() {
                     style={{ flex: 1 }}
                     title={tk.subject || t("support.defaultSubject")}
                     description={
-                      <span style={{ color: "#888" }}>
+                      <span style={{ color: "var(--brand-muted)" }}>
                         {tk.product_name ? `${tk.product_name} · ` : ""}
                         {last ? last.content.slice(0, 40) : ""}
                       </span>
@@ -744,7 +744,7 @@ export default function Support() {
               </Space.Compact>
               <AttachmentUploader value={replyAttach} onChange={setReplyAttach} />
               {isInternal && (
-                <div style={{ color: "#999", fontSize: 12 }}>{t("support.internalNoteHint")}</div>
+                <div style={{ color: "var(--brand-muted)", fontSize: 12 }}>{t("support.internalNoteHint")}</div>
               )}
               {role === "merchant" && (
                 <Button danger block onClick={onClose} disabled={active.status === "closed"}>
@@ -797,7 +797,7 @@ export default function Support() {
                 let bubble: ReactNode;
                 if (m.sender_role === "buyer") {
                   bubble = (
-                    <div style={{ background: "#f0f0f0", padding: "8px 12px", borderRadius: 10 }}>
+                    <div style={{ background: "var(--brand-surface)", padding: "8px 12px", borderRadius: 10 }}>
                       {hasAttach && <AttachmentList urls={m.attachments.map((a) => a.url)} topMargin={false} />}
                       {hasText && <div style={{ marginTop: hasAttach ? 6 : 0 }}>{m.content}</div>}
                     </div>
@@ -806,7 +806,7 @@ export default function Support() {
                   bubble = (
                     <>
                       <Tag color="gold">{t("support.internalNote")}</Tag>
-                      <div style={{ background: "#fff7e6", border: "1px solid #ffe7ba", padding: "8px 12px", borderRadius: 10 }}>
+                      <div style={{ background: "var(--brand-surface)", border: "1px solid var(--brand-line)", padding: "8px 12px", borderRadius: 10 }}>
                         {hasAttach && <AttachmentList urls={m.attachments.map((a) => a.url)} topMargin={false} />}
                         {hasText && <div style={{ marginTop: hasAttach ? 6 : 0 }}>{m.content}</div>}
                       </div>

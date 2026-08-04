@@ -33,7 +33,7 @@ export default function PageHeader({ icon, accent: _accent, title, subtitle, ext
             {title}
           </Title>
           {subtitle && (
-            <div style={{ color: "#64748b", marginTop: 4, fontSize: 13 }}>{subtitle}</div>
+            <div style={{ color: "var(--brand-muted)", marginTop: 4, fontSize: 13 }}>{subtitle}</div>
           )}
         </div>
       </div>
