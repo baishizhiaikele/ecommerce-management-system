@@ -23,6 +23,50 @@
   border-radius: 4px;
 }
 
+/* 读屏专用文本：视觉上隐藏，但仍会被朗读（用于加载态、图标按钮补充说明） */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* 禁用态要"看得出来不能点"，否则用户会反复点击并以为页面卡死 */
+button:disabled,
+.ant-btn-disabled,
+.ant-btn[disabled] {
+  cursor: not-allowed !important;
+}
+
+/* 触屏最小点击区域 44px（WCAG 2.5.5），移动端图标按钮过小是主要误触来源 */
+@media (pointer: coarse) {
+  .ant-btn-icon-only,
+  .ant-btn-sm.ant-btn-icon-only {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .ant-checkbox-wrapper {
+    padding: 6px 0;
+  }
+}
+
+/* 尊重系统"减少动态效果"偏好，避免前庭障碍用户不适 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* T20：加购时购物车角标 bump 动效 */
 @keyframes cart-bump {
   0% { transform: scale(1); }
@@ -525,4 +569,140 @@ button,
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* ============ 深色模式（data-theme="dark"） ============ */
+/* 通过重映射 --brand-* 变量，绝大多数引用 var() 的卡片/表面/文字自动变暗；
+   下方的 Tailwind 工具类覆盖处理组件里写死的 bg-white / text-slate-* 等。 */
+[data-theme="dark"] {
+  --brand-primary: #818cf8;
+  --brand-primary-strong: #a5b4fc;
+  --brand-soft: #1e1b4b;
+  --brand-ink: #e5e7eb;
+  --brand-ink-soft: #cbd1da;
+  --brand-muted: #9ca3af;
+  --brand-faint: #6b7280;
+  --brand-line: #2a2f3a;
+  --brand-surface: #171a21;
+  --brand-bg: #0f1115;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 20px rgba(0, 0, 0, 0.35);
+  --shadow-lift: 0 10px 34px rgba(0, 0, 0, 0.5);
+  --shadow-pop: 0 12px 40px rgba(0, 0, 0, 0.55);
+
+  color-scheme: dark;
+}
+
+[data-theme="dark"] body {
+  background: var(--brand-bg);
+  color: var(--brand-ink);
+}
+
+/* 玻璃拟态与极光背景在暗色下降低亮度 */
+[data-theme="dark"] .glass {
+  background: rgba(23, 26, 33, 0.72);
+  border-color: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+}
+[data-theme="dark"] .aurora-bg {
+  background:
+    radial-gradient(1200px 600px at 15% -10%, rgba(129, 140, 248, 0.16), transparent 60%),
+    radial-gradient(1000px 500px at 100% 0%, rgba(45, 212, 191, 0.12), transparent 55%),
+    var(--brand-bg);
+}
+
+/* 卡片悬浮边框在暗色下更克制 */
+[data-theme="dark"] .product-card:hover {
+  border-color: #3b4252 !important;
+}
+
+/* 选区与滚动条 */
+[data-theme="dark"] ::selection {
+  background: rgba(129, 140, 248, 0.32);
+}
+[data-theme="dark"] * {
+  scrollbar-color: #3a414f var(--brand-bg);
+}
+[data-theme="dark"] ::-webkit-scrollbar-track {
+  background: var(--brand-bg);
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: #3a414f;
+  border-radius: 8px;
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: #4b5563;
+}
+
+/* 覆盖组件里写死的 Tailwind 浅色工具类 */
+[data-theme="dark"] .bg-white,
+[data-theme="dark"] .bg-white\/90,
+[data-theme="dark"] .bg-white\/95 {
+  background-color: #171a21 !important;
+}
+[data-theme="dark"] .bg-slate-50 {
+  background-color: #13161c !important;
+}
+[data-theme="dark"] .bg-slate-100 {
+  background-color: #1b1f27 !important;
+}
+[data-theme="dark"] .bg-slate-200 {
+  background-color: #232833 !important;
+}
+[data-theme="dark"] .bg-indigo-50 {
+  background-color: #1a1b3a !important;
+}
+[data-theme="dark"] .text-slate-500,
+[data-theme="dark"] .text-slate-600,
+[data-theme="dark"] .text-slate-700,
+[data-theme="dark"] .text-slate-800,
+[data-theme="dark"] .text-slate-900 {
+  color: #cbd1da !important;
+}
+[data-theme="dark"] .text-slate-400 {
+  color: #9ca3af !important;
+}
+[data-theme="dark"] .text-indigo-600 {
+  color: #a5b4fc !important;
+}
+[data-theme="dark"] .border-slate-200,
+[data-theme="dark"] .border-slate-300 {
+  border-color: #2a2f3a !important;
+}
+[data-theme="dark"] .ring-indigo-500 {
+  --tw-ring-color: #6366f1 !important;
+}
+[data-theme="dark"] .shadow-sm,
+[data-theme="dark"] .shadow-md,
+[data-theme="dark"] .shadow-lg {
+  box-shadow: var(--shadow-card) !important;
+}
+[data-theme="dark"] .divide-slate-100 > * + *,
+[data-theme="dark"] .divide-slate-200 > * + * {
+  border-color: #2a2f3a !important;
+}
+[data-theme="dark"] .hover\:bg-slate-50:hover,
+[data-theme="dark"] .hover\:bg-slate-100:hover {
+  background-color: #1b1f27 !important;
+}
+
+/* 快捷键帮助面板用的 kbd 样式 */
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  padding: 2px 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--brand-ink-soft);
+  background: var(--brand-bg);
+  border: 1px solid var(--brand-line);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+}
+[data-theme="dark"] .kbd {
+  background: #0f1115;
+  color: #cbd1da;
 }

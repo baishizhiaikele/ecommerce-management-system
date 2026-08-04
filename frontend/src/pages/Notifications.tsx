@@ -8,10 +8,11 @@ import {
   ShoppingOutlined,
   NotificationOutlined,
 } from "@ant-design/icons";
-import { listNotifications, markRead, markAllRead, NotificationOut, NotificationType } from "../api";
+import { listNotifications, markRead, markAllRead, NotificationOut, NotificationType, getErrorMessage } from "../api";
 import { useI18n } from "../i18n";
 import { useNavigate } from "react-router-dom";
 import EmptyState from "../components/EmptyState";
+import AsyncBoundary from "../components/AsyncBoundary";
 
 const META: Record<NotificationType, { icon: React.ReactNode; color: string }> = {
   order: { icon: <ShoppingOutlined />, color: "#4F46E5" },
@@ -36,17 +37,20 @@ const readMute = (): NotificationType[] => {
 export default function Notifications() {
   const [items, setItems] = useState<NotificationOut[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [tab, setTab] = useState<"all" | NotificationType>("all");
   const [muted, setMuted] = useState<NotificationType[]>(readMute);
   const { t } = useI18n();
   const nav = useNavigate();
 
   const load = async () => {
+    setLoadError(false);
     setLoading(true);
     try {
       setItems(await listNotifications());
-    } catch {
-      /* 忽略 */
+    } catch (e) {
+      setLoadError(true);
+      message.error(getErrorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -70,18 +74,23 @@ export default function Notifications() {
     try {
       await markRead(n.id);
       setItems((s) => s.map((x) => (x.id === n.id ? { ...x, is_read: true } : x)));
-    } catch {
-      /* 忽略 */
+    } catch (e) {
+      message.error(getErrorMessage(e));
     }
   };
 
+  const [markingAll, setMarkingAll] = useState(false);
   const onAll = async () => {
+    if (markingAll) return;
+    setMarkingAll(true);
     try {
       await markAllRead();
       message.success(t("notif.markAllRead"));
       setItems((s) => s.map((x) => ({ ...x, is_read: true })));
-    } catch {
-      /* 忽略 */
+    } catch (e) {
+      message.error(getErrorMessage(e));
+    } finally {
+      setMarkingAll(false);
     }
   };
 
@@ -125,7 +134,7 @@ export default function Notifications() {
           <Popover content={mutePopover} title={t("notif.mute")} trigger="click">
             <Button icon={<NotificationOutlined />}>{t("notif.mute")}</Button>
           </Popover>
-          <Button type="primary" onClick={onAll}>
+          <Button type="primary" loading={markingAll} onClick={onAll}>
             {t("notif.markAllRead")}
           </Button>
         </div>
@@ -144,49 +153,47 @@ export default function Notifications() {
         items={tabItems}
       />
 
-      {loading ? (
-        <div className="flex justify-center py-20">
-          <Spin />
-        </div>
-      ) : visible.length === 0 ? (
-        <EmptyState title={t("notif.empty")} description={t("notif.emptyDesc")} />
-      ) : (
-        <div className="card-soft overflow-hidden">
-          <List
-            dataSource={visible}
-            renderItem={(n) => {
-              const m = META[n.type];
-              return (
-                <List.Item
-                  className="px-4 cursor-pointer hover:bg-slate-50 transition"
-                  style={{ background: n.is_read ? undefined : "#F5F3FF" }}
-                  onClick={() => onRead(n)}
-                >
-                  <List.Item.Meta
-                    avatar={
-                      <Badge dot={!n.is_read} offset={[-4, 26]}>
-                        <div
-                          className="w-9 h-9 rounded-full flex items-center justify-center"
-                          style={{ background: `${m.color}1A`, color: m.color }}
-                        >
-                          {m.icon}
-                        </div>
-                      </Badge>
-                    }
-                    title={
-                      <span className="flex items-center gap-2">
-                        {n.title}
-                        {!n.is_read && <Tag color="blue">{t("notif.unread")}</Tag>}
-                      </span>
-                    }
-                    description={n.content}
-                  />
-                </List.Item>
-              );
-            }}
-          />
-        </div>
-      )}
+      <AsyncBoundary loading={loading} error={loadError ? t("common.loadFailed") : null} retry={load}>
+        {visible.length === 0 ? (
+          <EmptyState title={t("notif.empty")} description={t("notif.emptyDesc")} />
+        ) : (
+          <div className="card-soft overflow-hidden">
+            <List
+              dataSource={visible}
+              renderItem={(n) => {
+                const m = META[n.type];
+                return (
+                  <List.Item
+                    className="px-4 cursor-pointer hover:bg-slate-50 transition"
+                    style={{ background: n.is_read ? undefined : "#F5F3FF" }}
+                    onClick={() => onRead(n)}
+                  >
+                    <List.Item.Meta
+                      avatar={
+                        <Badge dot={!n.is_read} offset={[-4, 26]}>
+                          <div
+                            className="w-9 h-9 rounded-full flex items-center justify-center"
+                            style={{ background: `${m.color}1A`, color: m.color }}
+                          >
+                            {m.icon}
+                          </div>
+                        </Badge>
+                      }
+                      title={
+                        <span className="flex items-center gap-2">
+                          {n.title}
+                          {!n.is_read && <Tag color="blue">{t("notif.unread")}</Tag>}
+                        </span>
+                      }
+                      description={n.content}
+                    />
+                  </List.Item>
+                );
+              }}
+            />
+          </div>
+        )}
+      </AsyncBoundary>
     </div>
   );
 }

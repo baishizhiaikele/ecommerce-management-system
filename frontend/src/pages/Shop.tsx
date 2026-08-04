@@ -74,15 +74,20 @@ export default function Shop() {
     }
   }, [detail]);
 
+  const [followLoading, setFollowLoading] = useState(false);
   const toggleFollow = async () => {
-    if (!detail) return;
+    if (!detail || followLoading) return;
+    const wasFollowed = followed;
+    setFollowLoading(true);
     try {
-      if (followed) await unfollowShop(detail.id);
+      if (wasFollowed) await unfollowShop(detail.id);
       else await followShop(detail.id);
-      setFollowed(!followed);
-      setFollowers((f) => f + (followed ? -1 : 1));
-    } catch {
-      /* 忽略 */
+      setFollowed(!wasFollowed);
+      setFollowers((f) => f + (wasFollowed ? -1 : 1));
+    } catch (e) {
+      message.error(getErrorMessage(e));
+    } finally {
+      setFollowLoading(false);
     }
   };
 
@@ -164,7 +169,7 @@ export default function Shop() {
                     cancelText={t("common.cancel")}
                     onConfirm={toggleFollow}
                   >
-                    <Button size="small" type="default" className="mt-2">
+                    <Button size="small" type="default" className="mt-2" loading={followLoading}>
                       {t("shop.unfollow")} · {followers}
                     </Button>
                   </Popconfirm>
@@ -173,6 +178,7 @@ export default function Shop() {
                     size="small"
                     type="primary"
                     className="mt-2"
+                    loading={followLoading}
                     onClick={toggleFollow}
                   >
                     {t("shop.follow")} · {followers}

@@ -12,7 +12,7 @@ import {
   Collapse,
 } from "antd";
 import { QuestionCircleOutlined } from "@ant-design/icons";
-import { CrownOutlined, GiftOutlined, ThunderboltOutlined } from "@ant-design/icons";
+import { CrownOutlined, GiftOutlined, ThunderboltOutlined, ReloadOutlined } from "@ant-design/icons";
 import EmptyState from "../components/EmptyState";
 import {
   getMembership,
@@ -20,6 +20,7 @@ import {
   claimTask,
   getPlusStatus,
   subscribePlus,
+  getErrorMessage,
   MembershipOut,
   TaskOut,
   PlusStatus,
@@ -44,16 +45,19 @@ export default function Membership() {
   const [claiming, setClaiming] = useState<string | null>(null);
   const [plus, setPlus] = useState<PlusStatus | null>(null);
   const [subscribing, setSubscribing] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState(false);
 
   const load = useCallback(async () => {
+    setLoadError(false);
     setLoading(true);
     try {
       const [m, t, p] = await Promise.all([getMembership(), listTasks(), getPlusStatus()]);
       setMember(m);
       setTasks(t);
       setPlus(p);
-    } catch {
-      /* 忽略 */
+    } catch (e) {
+      setLoadError(true);
+      message.error(getErrorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -90,7 +94,17 @@ export default function Membership() {
   };
 
   if (loading) return <div className="text-center py-20"><Spin /></div>;
-  if (!member) return <EmptyState title={tr("common.loadFailed")} />;
+  if (!member)
+    return (
+      <EmptyState
+        title={tr("common.loadFailed")}
+        action={
+          <Button type="primary" icon={<ReloadOutlined />} onClick={load}>
+            {tr("common.retry")}
+          </Button>
+        }
+      />
+    );
 
   const color = TIER_COLOR[member.level] || "#6366f1";
 

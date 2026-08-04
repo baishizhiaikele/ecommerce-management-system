@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { swallow } from "./utils/reportError";
 import { Route, Routes } from "react-router-dom";
-import { Spin, message } from "antd";
+import { ConfigProvider, Spin, Modal } from "antd";
 import Login from "./pages/Auth/Login";
 import ConsoleLogin from "./pages/Auth/ConsoleLogin";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -12,10 +12,14 @@ import AdminLayout from "./layouts/AdminLayout";
 import Market from "./pages/Market";
 import Notifications from "./pages/Notifications";
 import NotFound from "./pages/NotFound";
-import { getLang } from "./i18n";
+import { getLang, useI18n } from "./i18n";
 import { FlashPriceProvider } from "./context/FlashPriceContext";
 import { useAuth } from "./store/auth";
+import { useTheme } from "./hooks/useTheme";
+import { useShortcuts } from "./hooks/useShortcuts";
+import { theme as appTheme, darkTheme } from "./theme";
 import { trackAffiliate } from "./api";
+import { toast } from "./utils/toast";
 
 // S5：按路由懒加载，把买家二级页、商家后台、管理后台（含 recharts 等较重依赖）拆出首屏包体
 const ProductDetail = lazy(() => import("./pages/ProductDetail"));
@@ -80,6 +84,9 @@ export default function App() {
   const init = useAuth((s) => s.init);
   const user = useAuth((s) => s.user);
   const [ready, setReady] = useState(false);
+  const { isDark } = useTheme();
+  const { helpOpen, setHelpOpen } = useShortcuts();
+  const { t } = useI18n();
 
   useEffect(() => {
     init().finally(() => setReady(true));
@@ -118,7 +125,7 @@ export default function App() {
       ws.onmessage = (e) => {
         try {
           const m = JSON.parse(e.data);
-          message.open({ content: `${m.title}：${m.content}`, duration: 4 });
+          toast.info(`${m.title}：${m.content}`, 4);
         } catch {
           /* 忽略非 JSON 消息 */
         }
@@ -162,7 +169,8 @@ export default function App() {
   }
 
   return (
-    <FlashPriceProvider>
+    <ConfigProvider theme={isDark ? darkTheme : appTheme}>
+      <FlashPriceProvider>
       {/* P2-14 a11y：键盘用户可跳过顶部导航直接到达主内容 */}
       <a
         href="#main-content"
@@ -243,5 +251,30 @@ export default function App() {
       </Suspense>
       </ErrorBoundary>
       </FlashPriceProvider>
+
+      <Modal
+        open={helpOpen}
+        title={t("shortcut.title")}
+        footer={null}
+        onCancel={() => setHelpOpen(false)}
+        destroyOnClose
+      >
+        <ul className="space-y-2 text-sm">
+          <li className="flex items-center justify-between gap-3">
+            <span>{t("shortcut.search")}</span>
+            <kbd className="kbd">/</kbd>
+          </li>
+          <li className="flex items-center justify-between gap-3">
+            <span>{t("shortcut.help")}</span>
+            <kbd className="kbd">?</kbd>
+          </li>
+          <li className="flex items-center justify-between gap-3">
+            <span>{t("shortcut.close")}</span>
+            <kbd className="kbd">Esc</kbd>
+          </li>
+        </ul>
+        <p className="mt-4 text-xs text-slate-400">{t("shortcut.hint")}</p>
+      </Modal>
+    </ConfigProvider>
   );
 }

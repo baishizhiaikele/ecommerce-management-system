@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Card, Progress, List, Tag, Spin, Typography, Tooltip, Button } from "antd";
+import { Card, Progress, List, Tag, Spin, Typography, Tooltip, Button, message } from "antd";
 import { TrophyOutlined, CheckCircleFilled } from "@ant-design/icons";
 import { Gift } from "lucide-react";
 import EmptyState from "../components/EmptyState";
-import { pointHistory, PointLogOut, me } from "../api";
+import AsyncBoundary from "../components/AsyncBoundary";
+import { pointHistory, PointLogOut, me, getErrorMessage } from "../api";
 import { formatDateTime } from "../utils/format";
 import { useAuth, vipTier, VIP_TIERS, type AuthUser } from "../store/auth";
 import { useI18n } from "../i18n";
@@ -32,8 +33,10 @@ export default function Points() {
   const tier = vipTier(growth);
   const [logs, setLogs] = useState<PointLogOut[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   const load = async () => {
+    setLoadError(false);
     setLoading(true);
     try {
       // 同步最新用户积分（签到/任务加分后在积分页直接反映）
@@ -41,11 +44,12 @@ export default function Points() {
         const fresh = await me();
         setUser(fresh as unknown as AuthUser);
       } catch {
-        /* 忽略 */
+        /* 忽略：积分余额同步失败不阻断历史加载 */
       }
       setLogs(await pointHistory());
-    } catch {
-      /* 忽略 */
+    } catch (e) {
+      setLoadError(true);
+      message.error(getErrorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -211,28 +215,26 @@ export default function Points() {
       </Card>
 
       <Card className="rounded-2xl soft-card fade-up" title={t("sec.pointsHistory")}>
-        {loading ? (
-          <div className="flex justify-center py-10">
-            <Spin />
-          </div>
-        ) : logs.length === 0 ? (
-          <EmptyState title={t("empty.points")} description={t("empty.pointsDesc")} />
-        ) : (
-          <List
-            dataSource={logs}
-            renderItem={(l) => (
-              <List.Item>
-                <List.Item.Meta
-                  title={t(ACTION_LABEL[l.action] || l.action)}
-                  description={`${l.remark ? l.remark + " · " : ""}${formatDateTime(l.created_at)}`}
-                />
-                <span className={l.delta >= 0 ? "text-green-600" : "text-red-500"}>
-                  {l.delta >= 0 ? `+${l.delta}` : l.delta}（余 {l.balance}）
-                </span>
-              </List.Item>
-            )}
-          />
-        )}
+        <AsyncBoundary loading={loading} error={loadError ? t("common.loadFailed") : null} retry={load}>
+          {logs.length === 0 ? (
+            <EmptyState title={t("empty.points")} description={t("empty.pointsDesc")} />
+          ) : (
+            <List
+              dataSource={logs}
+              renderItem={(l) => (
+                <List.Item>
+                  <List.Item.Meta
+                    title={t(ACTION_LABEL[l.action] || l.action)}
+                    description={`${l.remark ? l.remark + " · " : ""}${formatDateTime(l.created_at)}`}
+                  />
+                  <span className={l.delta >= 0 ? "text-green-600" : "text-red-500"}>
+                    {l.delta >= 0 ? `+${l.delta}` : l.delta}（余 {l.balance}）
+                  </span>
+                </List.Item>
+              )}
+            />
+          )}
+        </AsyncBoundary>
       </Card>
     </div>
   );

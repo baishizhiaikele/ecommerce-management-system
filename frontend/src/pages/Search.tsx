@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Spin, Empty, Input, message, Button } from "antd";
+import { Spin, Empty, Input, message, Button, Result } from "antd";
+import { ReloadOutlined } from "@ant-design/icons";
 import { Search, Camera } from "lucide-react";
 import { listProducts, ProductOut, searchByImage } from "../api";
 import { getErrorMessage } from "../api";
@@ -15,16 +16,26 @@ export default function SearchPage() {
   const nav = useNavigate();
   const [list, setList] = useState<ProductOut[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [kwInput, setKwInput] = useState(keyword);
   const [imgSearching, setImgSearching] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<any>(null);
 
   useEffect(() => {
     setKwInput(keyword);
   }, [keyword]);
 
+  // 快捷键 "/" 跳转到搜索页后自动聚焦输入框
+  useEffect(() => {
+    if (params.get("focus") === "1" && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [params]);
+
   useEffect(() => {
     let cancelled = false;
+    setLoadError(false);
     setLoading(true);
     if (!keyword) {
       setList([]);
@@ -35,8 +46,12 @@ export default function SearchPage() {
       .then((r) => {
         if (!cancelled) setList(r);
       })
-      .catch(() => {
-        if (!cancelled) setList([]);
+      .catch((err) => {
+        if (!cancelled) {
+          setLoadError(true);
+          setList([]);
+          message.error(getErrorMessage(err));
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -71,6 +86,7 @@ export default function SearchPage() {
       <PageHeader title={t("search.title")} subtitle={keyword ? `${t("search.for")}「${keyword}」` : undefined} />
       <div className="my-3 flex gap-2 max-w-xl">
         <Input
+          ref={inputRef}
           size="large"
           allowClear
           prefix={<Search size={16} className="text-slate-400" />}
@@ -90,7 +106,18 @@ export default function SearchPage() {
         <input ref={fileRef} type="file" accept="image/*" hidden onChange={onPickImage} />
       </div>
 
-      {loading ? (
+      {loadError ? (
+        <Result
+          status="warning"
+          title={t("common.loadFailed")}
+          subTitle={keyword ? `${t("search.for")}「${keyword}」` : undefined}
+          extra={
+            <Button type="primary" icon={<ReloadOutlined />} onClick={() => nav(`/search?keyword=${encodeURIComponent(keyword)}`)}>
+              {t("common.retry")}
+            </Button>
+          }
+        />
+      ) : loading ? (
         <div className="py-16 text-center">
           <Spin />
         </div>

@@ -24,10 +24,11 @@ import {
   Spin,
   Tag,
   Upload,
+  Result,
   message,
 } from "antd";
 import type { UploadFile } from "antd";
-import { RobotOutlined, UploadOutlined, DeleteOutlined, ThunderboltOutlined } from "@ant-design/icons";
+import { RobotOutlined, UploadOutlined, DeleteOutlined, ThunderboltOutlined, ReloadOutlined } from "@ant-design/icons";
 import {
   aiReplyTicket,
   createTicket,
@@ -232,6 +233,7 @@ export default function Support() {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(8);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   const [statusF, setStatusF] = useState<string>("all");
   const [priorityF, setPriorityF] = useState<string>("all");
@@ -258,6 +260,7 @@ export default function Support() {
     role === "merchant" ? t.unread_for_merchant : t.unread_for_buyer;
 
   const load = async () => {
+    setLoadError(false);
     setLoading(true);
     try {
       const res = await listTickets({
@@ -270,8 +273,9 @@ export default function Support() {
       });
       setTickets(res.items);
       setTotal(res.total);
-    } catch {
-      /* 忽略 */
+    } catch (e) {
+      setLoadError(true);
+      message.error(getErrorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -614,7 +618,17 @@ export default function Support() {
         </div>
       )}
 
-      {loading ? (
+      {loadError ? (
+        <Result
+          status="warning"
+          title={t("support.loadFailed")}
+          extra={
+            <Button type="primary" icon={<ReloadOutlined />} onClick={load}>
+              {t("common.retry")}
+            </Button>
+          }
+        />
+      ) : loading ? (
         <div style={{ textAlign: "center", padding: 40 }}>
           <Spin />
         </div>

@@ -25,7 +25,10 @@ import {
   Receipt,
   Search,
   ChevronDown,
+  Sun,
+  Moon,
 } from "lucide-react";
+import { useTheme } from "../hooks/useTheme";
 
 const NAV = [
   { key: "market", labelKey: "nav.market", path: "/market", icon: <Store size={16} /> },
@@ -84,6 +87,7 @@ const MOBILE_NAV = [
 export default function MainLayout() {
   const { user, logout } = useAuth();
   const { t, lang, setLang } = useI18n();
+  const { isDark, toggleTheme } = useTheme();
   const cartCount = useCartCount();
   const navigate = useNavigate();
   const location = useLocation();
@@ -316,6 +320,15 @@ export default function MainLayout() {
               {unread > 0 && (
                 <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-500" />
               )}
+            </button>
+            <button
+              onClick={toggleTheme}
+              aria-label={isDark ? t("theme.toLight") : t("theme.toDark")}
+              aria-pressed={isDark}
+              title={isDark ? t("theme.toLight") : t("theme.toDark")}
+              className="flex items-center justify-center w-9 h-9 rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              {isDark ? <Sun size={16} /> : <Moon size={16} />}
             </button>
             <button
               onClick={() => setLang(lang === "zh" ? "en" : "zh")}

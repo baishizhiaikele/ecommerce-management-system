@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import type { AxiosError } from "axios";
 import { Button, Tabs, Tag, Spin, message } from "antd";
+import { ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import EmptyState from "../components/EmptyState";
-import { listCoupons, claimCoupon, myCoupons, CouponOut, UserCouponOut } from "../api";
+import AsyncBoundary from "../components/AsyncBoundary";
+import { listCoupons, claimCoupon, myCoupons, CouponOut, UserCouponOut, getErrorMessage } from "../api";
 import { useI18n, translate } from "../i18n";
 
 function couponLabel(c: { type: string; threshold: string; value: string }) {
@@ -77,15 +79,18 @@ export default function Coupons() {
   const [avail, setAvail] = useState<CouponOut[]>([]);
   const [mine, setMine] = useState<UserCouponOut[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   const load = async () => {
+    setLoadError(false);
     setLoading(true);
     try {
       const [a, m] = await Promise.all([listCoupons(), myCoupons()]);
       setAvail(a);
       setMine(m);
-    } catch {
-      /* 忽略 */
+    } catch (e) {
+      setLoadError(true);
+      message.error(getErrorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -114,7 +119,10 @@ export default function Coupons() {
     [avail, claimedIds]
   );
 
+  const [claiming, setClaiming] = useState<string | null>(null);
   const onClaim = async (id: string) => {
+    if (claiming) return;
+    setClaiming(id);
     try {
       await claimCoupon(id);
       message.success(t("coupon.claimSuccess"));
@@ -122,6 +130,8 @@ export default function Coupons() {
     } catch (e) {
       const err = e as AxiosError<ApiError>;
       message.error(err.response?.data?.detail || t("coupon.claimFail"));
+    } finally {
+      setClaiming(null);
     }
   };
 
@@ -130,11 +140,7 @@ export default function Coupons() {
       <div className="section-title">
         <h2>{t("coupon.myTitle")}</h2>
       </div>
-      {loading ? (
-        <div className="flex justify-center py-20">
-          <Spin />
-        </div>
-      ) : (
+      <AsyncBoundary loading={loading} error={loadError ? t("common.loadFailed") : null} retry={load}>
         <Tabs
           items={[
             {
@@ -186,7 +192,12 @@ export default function Coupons() {
                         key={c.id}
                         c={c}
                         footer={
-                          <Button type="primary" size="small" onClick={() => onClaim(c.id)}>
+                          <Button
+                            type="primary"
+                            size="small"
+                            loading={claiming === c.id}
+                            onClick={() => onClaim(c.id)}
+                          >
                             {t("coupon.receive")}
                           </Button>
                         }
@@ -197,7 +208,7 @@ export default function Coupons() {
             },
           ]}
         />
-      )}
+      </AsyncBoundary>
     </div>
   );
 }

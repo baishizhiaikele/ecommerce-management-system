@@ -15,6 +15,7 @@ import {
   Tooltip,
   Drawer,
   Modal,
+  Result,
 } from "antd";
 import {
   ShoppingCartOutlined,
@@ -22,9 +23,10 @@ import {
   HeartFilled,
   RobotOutlined,
   CameraOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 import { Heart } from "lucide-react";
-import { getProduct, listProductReviews, listVariants, addCartItem, logView, proxyImg, listProducts, addFavorite, removeFavorite, isFavorited, getPriceHistory, getNotesForProduct, trackAffiliateClick, getSimilarProducts, listCoupons, getErrorMessage, type ProductOut, type ReviewOut, type VariantOut, type PriceHistoryOut, type NoteOut } from "../api";
+import { getProduct, listProductReviews, listVariants, logView, proxyImg, listProducts, addFavorite, removeFavorite, isFavorited, getPriceHistory, getNotesForProduct, trackAffiliateClick, getSimilarProducts, listCoupons, getErrorMessage, type ProductOut, type ReviewOut, type VariantOut, type PriceHistoryOut, type NoteOut } from "../api";
 import { reportError, swallow } from "../utils/reportError";
 import { money, productStatusMeta } from "../utils/format";
 import { useFlashPrice } from "../context/FlashPriceContext";
@@ -72,6 +74,7 @@ export default function ProductDetail() {
   const [selected, setSelected] = useState<Record<string, string>>({});
   const [qty, setQty] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [arOpen, setArOpen] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -111,6 +114,7 @@ export default function ProductDetail() {
       setReviews(rv);
       setVariants(vs);
     } catch {
+      setLoadError(true);
       message.error(t("common.loadFailed"));
     } finally {
       setLoading(false);
@@ -127,7 +131,7 @@ export default function ProductDetail() {
       const raw = localStorage.getItem("browse_history") || "[]";
       const arr = JSON.parse(raw) as BrowseHistoryItem[];
       const next = [
-        { id: p.id, name: p.name, price: p.price, image_url: p.image_url, stock: p.stock },
+        { id: p.id, name: p.name, price: Number(p.price), image_url: p.image_url, stock: p.stock },
         ...arr.filter((x) => x.id !== p.id),
       ].slice(0, 20);
       localStorage.setItem("browse_history", JSON.stringify(next));
@@ -192,17 +196,29 @@ export default function ProductDetail() {
   const [seedingNotes, setSeedingNotes] = useState<NoteOut[]>([]); // P3-G 种草社交背书
   const [landedPrice, setLandedPrice] = useState<number | null>(null); // T9 到手价预估
 
+  interface GalleryItem { url: string; type: "image" | "video" }
+  const isVideoUrl = (url: string) => /\.(mp4|webm|ogg)(\?|$)/i.test(url);
   const gallery = useMemo(() => {
-    const extra: string[] = [];
+    const items: GalleryItem[] = [];
+    // 视频优先展示
+    if ((p as any).video_url) {
+      items.push({ url: (p as any).video_url, type: "video" });
+    }
+    // 主图
+    if (p?.image_url) items.push({ url: p.image_url, type: "image" });
+    // 附加图
     try {
       const arr = JSON.parse(p?.images || "[]");
-      if (Array.isArray(arr)) extra.push(...arr.filter((x: unknown) => typeof x === "string"));
-    } catch {
-      /* ignore */
-    }
-    const base = p?.image_url ? [p.image_url] : [];
-    return Array.from(new Set([...base, ...extra])).filter(Boolean) as string[];
-  }, [p?.image_url, p?.images]);
+      if (Array.isArray(arr)) {
+        for (const x of arr) {
+          if (typeof x === "string") {
+            items.push({ url: x, type: isVideoUrl(x) ? "video" : "image" });
+          }
+        }
+      }
+    } catch { /* ignore */ }
+    return items;
+  }, [p?.image_url, p?.images, (p as any).video_url]);
 
   useEffect(() => {
     setActiveImg(0);
@@ -314,6 +330,19 @@ export default function ProductDetail() {
   };
 
   if (loading) return <div className="text-center py-20"><Spin /></div>;
+  if (loadError)
+    return (
+      <Result
+        status="warning"
+        title={t("common.loadFailed")}
+        subTitle={t("pd.maybeOff")}
+        extra={
+          <Button type="primary" icon={<ReloadOutlined />} onClick={load}>
+            {t("common.retry")}
+          </Button>
+        }
+      />
+    );
   if (!p) return <EmptyState title={t("pd.notFound")} description={t("pd.maybeOff")} />;
 
   const addToCart = async () => {
@@ -335,8 +364,8 @@ export default function ProductDetail() {
       return;
     }
     try {
-      await addCartItem({ product_id: p.id, quantity: qty, variant_id: matchedVariant?.id });
-      useCart.getState().add({
+      // P0-F4：add() 内部对登录用户已调 addCartItem，不要在外层重复调用
+      await useCart.getState().add({
         product_id: p.id,
         name: p.name,
         price: displayPrice,
@@ -367,8 +396,8 @@ export default function ProductDetail() {
       return;
     }
     try {
-      await addCartItem({ product_id: p.id, quantity: qty, variant_id: matchedVariant?.id });
-      useCart.getState().add({
+      // P0-F4：add() 内部对登录用户已调 addCartItem，不要在外层重复调用
+      await useCart.getState().add({
         product_id: p.id,
         name: p.name,
         price: displayPrice,
@@ -410,27 +439,46 @@ export default function ProductDetail() {
               if (el) el.style.transformOrigin = "center center";
             }}
           >
-            <ProductImage
-              name={p.name}
-              image_url={gallery[activeImg] || p.image_url}
-              height="100%"
-              rounded={16}
-              className="w-full h-full transition-transform duration-200 group-hover:scale-125"
-            />
+            {gallery[activeImg]?.type === "video" ? (
+              <video
+                src={gallery[activeImg].url}
+                controls
+                autoPlay
+                muted
+                loop
+                playsInline
+                className="w-full h-full object-contain rounded-2xl"
+                style={{ maxHeight: "100%" }}
+              />
+            ) : (
+              <ProductImage
+                name={p.name}
+                image_url={gallery[activeImg]?.url || p.image_url}
+                height="100%"
+                rounded={16}
+                className="w-full h-full transition-transform duration-200 group-hover:scale-125"
+              />
+            )}
           </div>
           {gallery.length > 1 && (
             <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
-              {gallery.map((src, i) => (
+              {gallery.map((item, i) => (
                 <button
                   key={i}
                   onClick={() => setActiveImg(i)}
                   aria-current={i === activeImg ? "true" : undefined}
-                  aria-label={`${t("pd.thumbnail")} ${i + 1}`}
-                  className={`shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 ${
+                  aria-label={`${item.type === "video" ? t("pd.videoThumbnail") : t("pd.thumbnail")} ${i + 1}`}
+                  className={`shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 relative ${
                     i === activeImg ? "border-indigo-500" : "border-transparent"
                   }`}
                 >
-                  <ProductImage name={p.name} image_url={src} height={64} rounded={8} className="w-full h-full" />
+                  {item.type === "video" ? (
+                    <div className="w-full h-full bg-slate-900 flex items-center justify-center">
+                      <span className="text-white text-xl">▶</span>
+                    </div>
+                  ) : (
+                    <ProductImage name={p.name} image_url={item.url} height={64} rounded={8} className="w-full h-full" />
+                  )}
                 </button>
               ))}
             </div>
@@ -644,7 +692,7 @@ export default function ProductDetail() {
                   key: "ar",
                   label: t("pd.ar"),
                   children: (
-                    <ARTryOn productImage={gallery[0]} overlayImage={p?.ar_overlay_url} />
+                    <ARTryOn productImage={gallery[0]?.url} overlayImage={p?.ar_overlay_url} />
                   ),
                 },
               ]

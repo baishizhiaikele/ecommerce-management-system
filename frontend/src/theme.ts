@@ -1,4 +1,5 @@
 import type { ThemeConfig } from "antd";
+import { theme as antdTheme } from "antd";
 
 // 简约风 · 中性灰阶梯 + 单一克制品牌色（不渐变）
 export const brand = {
@@ -93,6 +94,55 @@ export const theme: ThemeConfig = {
     },
     Modal: {
       borderRadiusLG: 14,
+    },
+  },
+};
+
+// 深色模式：复用浅色 token 结构，仅重映射颜色为暗色调，保持品牌色一致。
+export const darkTheme: ThemeConfig = {
+  ...theme,
+  algorithm: antdTheme.darkAlgorithm,
+  token: {
+    ...theme.token,
+    colorTextBase: "#E5E7EB",
+    colorText: "#E5E7EB",
+    colorTextSecondary: "#9CA3AF",
+    colorBorder: "#2A2F3A",
+    colorBorderSecondary: "#2A2F3A",
+    colorBgLayout: "#0F1115",
+    colorBgContainer: "#171A21",
+    colorBgElevated: "#1E222B",
+  },
+  components: {
+    ...theme.components,
+    Layout: {
+      headerBg: "#171A21",
+      headerHeight: 64,
+      siderBg: "#171A21",
+      bodyBg: "#0F1115",
+    },
+    Menu: {
+      itemSelectedBg: "rgba(99,91,255,0.16)",
+      itemSelectedColor: "#A5B4FC",
+      itemHoverBg: "rgba(255,255,255,0.06)",
+      itemHeight: 44,
+      itemMarginInline: 8,
+      itemBorderRadius: 8,
+      itemMarginBlock: 4,
+    },
+    Table: {
+      headerBg: "#1B1F27",
+      headerColor: "#9CA3AF",
+      headerSplitColor: "transparent",
+      rowHoverBg: "rgba(99,91,255,0.08)",
+      borderColor: "#2A2F3A",
+    },
+    Segmented: {
+      itemSelectedBg: "#2A2F3A",
+      trackBg: "rgba(255,255,255,0.06)",
+    },
+    Tooltip: {
+      colorBgSpotlight: "rgba(0,0,0,0.85)",
     },
   },
 };
