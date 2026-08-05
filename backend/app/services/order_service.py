@@ -143,6 +143,7 @@ async def _build_order_items(
             OrderItem(
                 order_id=order.id,
                 product_id=product.id,
+                variant_id=variant.id if variant else None,  # P0#2：保留规格外键，否则回补时无法定位 SKU
                 quantity=item.quantity,
                 price=unit_price,
                 name=product.name,
