@@ -57,8 +57,8 @@ function PasswordStrength({ password }: { password: string }) {
   );
 }
 
-export default function Login() {
-  const [mode, setMode] = useState<Mode>("login");
+export default function Login({ initialMode = "login" }: { initialMode?: Mode }) {
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();

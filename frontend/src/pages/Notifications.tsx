@@ -11,6 +11,7 @@ import {
 import { listNotifications, markRead, markAllRead, NotificationOut, NotificationType, getErrorMessage } from "../api";
 import { useI18n } from "../i18n";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../store/auth";
 import EmptyState from "../components/EmptyState";
 import AsyncBoundary from "../components/AsyncBoundary";
 
@@ -41,6 +42,7 @@ export default function Notifications() {
   const [tab, setTab] = useState<"all" | NotificationType>("all");
   const [muted, setMuted] = useState<NotificationType[]>(readMute);
   const { t } = useI18n();
+  const { user } = useAuth();
   const nav = useNavigate();
 
   const load = async () => {
@@ -48,7 +50,12 @@ export default function Notifications() {
     setLoading(true);
     try {
       setItems(await listNotifications());
-    } catch (e) {
+    } catch (e: any) {
+      // 游客未登录：不显示失败，展示空态并引导登录
+      if (e?.response?.status === 401 || !user) {
+        setItems([]);
+        return;
+      }
       setLoadError(true);
       message.error(getErrorMessage(e));
     } finally {

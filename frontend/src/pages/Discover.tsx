@@ -57,7 +57,12 @@ export default function Discover() {
       // 种草推荐流：已审核通过的笔记按「热度+新近」综合排序（商业化闭环入口）
       (kw ? listNotes({ keyword: kw }) : getNoteFeed({ limit: 30, offset: 0 }))
         .then(setNotes)
-        .catch((e) => message.error(getErrorMessage(e)))
+        .catch((e: any) => {
+          // 游客未登录时静默处理，展示空态而非弹出后端错误文案
+          if (e?.response?.status !== 401 && user) {
+            message.error(getErrorMessage(e));
+          }
+        })
         .finally(() => setLoading(false));
     },
     []

@@ -17,8 +17,10 @@ import {
 } from "antd";
 import { RefreshCw, Sparkles } from "lucide-react";
 import { useI18n } from "../i18n";
+import { useAuth } from "../store/auth";
 import ProductImage from "../components/ProductImage";
 import ProductPrice from "../components/ProductPrice";
+import { getErrorMessage } from "../api/client";
 import {
   CategoryOut,
   CouponOut,
@@ -366,6 +368,7 @@ function FloorBody({ floor }: { floor: FloorOut }) {
 
 export default function AIMall() {
   const { t } = useI18n();
+  const { user } = useAuth();
   const nav = useNavigate();
   const [data, setData] = useState<HomeArrangeOut | null>(null);
   const [loading, setLoading] = useState(false);
@@ -379,16 +382,22 @@ export default function AIMall() {
 
   // D 方案 A：身份由后端按登录用户真实推导，前端不再手动选择假身份
   const arrange = useCallback(async () => {
+    // 游客不可访问 AI 编排接口，直接给空态引导登录，避免 401/422 错误对象渲染崩溃
+    if (!user) {
+      setData(null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const d = await homeArrange();
       setData(d);
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || t("common.operationFailed"));
+      message.error(getErrorMessage(e, t("common.operationFailed")));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     arrange();
@@ -455,7 +464,17 @@ export default function AIMall() {
             <FloorBody floor={f} />
           </div>
         ))}
-        {!loading && !data && <Empty description={t("common.noData")} />}
+        {!loading && !data && (
+          user ? (
+            <Empty description={t("common.noData")} />
+          ) : (
+            <Empty description={t("common.loginToView")}>
+              <Button type="primary" onClick={() => nav("/login")}>
+                {t("common.login")}
+              </Button>
+            </Empty>
+          )
+        )}
       </Spin>
 
       {/* P3-B：AI 可行动代理层 —— 用户用自然语言触发真实工具操作 */}

@@ -185,6 +185,9 @@ export default function App() {
         <Suspense fallback={<RouteFallback />}>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Login initialMode="register" />} />
+            <Route path="/auth/register" element={<Login initialMode="register" />} />
+            <Route path="/auth/login" element={<Login />} />
             <Route path="/console/login" element={<ConsoleLogin />} />
             {/* 游客可浏览的页面：未登录也放行，仅在加购/下单等动作点引导登录 */}
             <Route element={<ProtectedRoute guest><MainLayout /></ProtectedRoute>}>

@@ -99,6 +99,7 @@ export const en: Record<string, string> = {
   "common.retry": "Retry",
   "common.undo": "Undo",
   "common.login": "Sign in",
+  "common.loginToView": "Sign in to view your AI-curated mall",
   "common.actions": "Actions",
   "state.errorTitle": "Failed to load",
   "state.errorDesc": "Network or service error. Please try again.",

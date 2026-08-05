@@ -99,6 +99,7 @@ export const zh: Record<string, string> = {
   "common.retry": "重试",
   "common.undo": "撤销",
   "common.login": "登录",
+  "common.loginToView": "登录后查看 AI 为你编排的专属商城",
   "common.actions": "操作",
   "state.errorTitle": "加载失败",
   "state.errorDesc": "网络或服务异常，请稍后重试",
