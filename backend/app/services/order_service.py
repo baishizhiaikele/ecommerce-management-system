@@ -403,6 +403,8 @@ async def list_orders(
     stmt = stmt.where(Order.deleted_at.is_(None))
     if status:
         stmt = stmt.where(Order.status == status)
+    # P2#10：预加载订单项，避免序列化时逐订单 lazyload 触发 N+1
+    stmt = stmt.options(selectinload(Order.items))
     # P2-M6：服务端分页，避免一次性加载整张订单表
     page_size = min(max(page_size, 1), 500)
     stmt = stmt.limit(page_size).offset(max(page - 1, 0) * page_size)
@@ -448,7 +450,13 @@ async def soft_delete_order(db: AsyncSession, order_id: str, *, user_id: str, ro
 
 
 async def transition_status(
-    db: AsyncSession, *, order: Order, target: OrderStatus, actor_id: str, role: str
+    db: AsyncSession,
+    *,
+    order: Order,
+    target: OrderStatus,
+    actor_id: str,
+    role: str,
+    autocommit: bool = True,
 ) -> Order:
     prev = order.status
     # 防御：确保 items 关系已加载，避免调用方未 eager-load 时在异步上下文触发
@@ -510,7 +518,7 @@ async def transition_status(
         for it in order.items:
             product = _pmap.get(it.product_id)
             if product:
-                await record_cancel_return(db, product, it.quantity)
+                await record_cancel_return(db, product, it.quantity, variant_id=it.variant_id)
     elif target == OrderStatus.REFUND_REQUESTED:
         order.return_requested_at = now
     elif target == OrderStatus.RETURN_SHIPPED:
@@ -521,7 +529,7 @@ async def transition_status(
         for it in order.items:
             product = _pmap.get(it.product_id)
             if product:
-                await record_cancel_return(db, product, it.quantity)
+                await record_cancel_return(db, product, it.quantity, variant_id=it.variant_id)
                 product.sales_count = max((product.sales_count or 0) - it.quantity, 0)
     elif target == OrderStatus.EXCHANGE:
         order.exchange_at = now
@@ -531,7 +539,7 @@ async def transition_status(
             for it in order.items:
                 product = await db.get(Product, it.product_id)
                 if product:
-                    await record_cancel_return(db, product, it.quantity)
+                    await record_cancel_return(db, product, it.quantity, variant_id=it.variant_id)
                     product.sales_count = max((product.sales_count or 0) - it.quantity, 0)
         # 担保交易：退款逆向托管资金
         from app.services.payment_service import reverse_escrow
@@ -541,20 +549,25 @@ async def transition_status(
 
     # M4：状态变更与其审计记录在同一事务内一次性提交，保证二者原子一致；
     # 任何异常（含死锁）均回滚，避免"状态已落库而审计缺失"或会话残留脏状态。
+    # P1-5：autocommit=False 时（如支付 webhook 已托管事务）不在此提交，
+    # 交由调用方统一提交，避免"内部提前提交、外层再提交"的双提交与部分失败不一致。
     try:
         await record(db, actor_id, f"order.{target.value}", "order", order.id, order.order_no)
         # P1-5 售后进度可视化：把售后相关流转落成面向用户的时间线事件
         _event = _aftersale_event(target, role, order)
         if _event:
             db.add(AftersaleEvent(order_id=order.id, actor_role=role, **_event))
-        await db.commit()
+        if autocommit:
+            await db.commit()
     except OperationalError as e:
-        await db.rollback()
+        if autocommit:
+            await db.rollback()
         if is_deadlock(e):
             logger.warning("订单 %s 状态流转(%s)遇死锁，已回滚", order.id, target.value)
         raise
     except Exception:
-        await db.rollback()
+        if autocommit:
+            await db.rollback()
         raise
 
     # 解耦：完成后发积分 / 通知；退款后回收积分

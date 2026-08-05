@@ -82,7 +82,8 @@ async def _on_order_refunded(order_id: str, buyer_id: str) -> None:
         from app.services.affiliate_service import reverse_commission
 
         await reverse_commission(s, order_id)
-        await s.commit()
+        # 退款逆向：积分回收 + 通知，全部纳入同一事务，
+        # 避免「退款/佣金已提交、积分未扣」的部分失败导致状态不一致（P1#6）。
         refund_amt = float(order.refund_amount or order.total_amount or 0)
         revert = int(refund_amt * POINTS_PER_YUAN)
         if revert > 0:
@@ -129,10 +130,46 @@ async def _on_product_price_changed(product_id: str, old_price: float, new_price
         await s.commit()
 
 
+async def _on_order_return_received(order_id: str, buyer_id: str) -> None:
+    # P2#11：补齐此前「发布但无订阅者」被静默丢弃的事件，通知买家退货已签收
+    async with SessionLocal() as s:
+        order = await s.get(Order, order_id)
+        if not order:
+            return
+        await notify(
+            s,
+            buyer_id,
+            NotificationType.ORDER,
+            "退货已签收",
+            f"订单 {order.order_no} 的退货商品已签收，退款将尽快处理。",
+            order.id,
+        )
+        await s.commit()
+
+
+async def _on_order_dispute_opened(order_id: str, buyer_id: str) -> None:
+    # P2#11：补齐此前「发布但无订阅者」被静默丢弃的事件，通知平台介入纠纷
+    async with SessionLocal() as s:
+        order = await s.get(Order, order_id)
+        if not order:
+            return
+        await notify(
+            s,
+            buyer_id,
+            NotificationType.ORDER,
+            "纠纷已发起",
+            f"订单 {order.order_no} 的纠纷已提交，平台将介入处理。",
+            order.id,
+        )
+        await s.commit()
+
+
 def register_handlers() -> None:
     bus.subscribe("review.created", _on_review_created)
     bus.subscribe("product.out_of_stock", _on_product_out_of_stock)
     bus.subscribe("order.completed", _on_order_completed)
     bus.subscribe("order.refunded", _on_order_refunded)
+    bus.subscribe("order.return_received", _on_order_return_received)
+    bus.subscribe("order.dispute_opened", _on_order_dispute_opened)
     bus.subscribe("coupon.claimed", _on_coupon_claimed)
     bus.subscribe("product.price_changed", _on_product_price_changed)

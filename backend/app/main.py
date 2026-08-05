@@ -14,50 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from alembic.config import Config
 from alembic import command
 
-from app.api.admin import router as admin_router
-from app.api.ai import router as ai_router
-from app.api.auth import router as auth_router
-from app.api.banners import router as banners_router
-from app.api.cart import router as cart_router
-from app.api.categories import router as categories_router
-from app.api.coupons import router as coupons_router
-from app.api.promotions import router as promotions_router
-from app.api.rewards import router as rewards_router
-from app.api.inventory import router as inventory_router
-from app.api.search import router as search_router
-from app.api.variant import router as variant_router
-from app.api.follow import router as follow_router
-from app.api.users import router as users_router
-from app.api.favorites import router as favorites_router
-from app.api.health import router as health_router
-from app.api.merchant import router as merchant_router
-from app.api.notifications import router as notifications_router
-from app.api.orders import router as orders_router
-from app.api.points import router as points_router
-from app.api.products import router as products_router
-from app.api.recommendations import router as recommendations_router
-from app.api.reviews import router as reviews_router
-from app.api.shops import router as shops_router
-from app.api.support import router as support_router
-from app.api.upload import UPLOAD_DIR, router as upload_router
-from app.api.ws import router as ws_router
-from app.api.shipping import router as shipping_router
-from app.api.payments import router as payments_router
-from app.api.agent import router as agent_router
-from app.api.marketing import router as marketing_router
-from app.api.decoration import router as decoration_router
-from app.api.notes import router as notes_router
-from app.api.plus import router as plus_router
-from app.api.qna import router as qna_router
-from app.api.views import router as views_router
-from app.api.knowledge import router as knowledge_router
-from app.api.affiliate import router as affiliate_router
-from app.api.live import router as live_router
-from app.api.images import router as images_router
-from app.api.invoices import router as invoices_router
-from app.api.presale import router as presale_router
-from app.api.staff import router as staff_router
-from app.api.report import router as report_router
+from app.api import ALL_ROUTERS, UPLOAD_DIR  # P2#14：路由聚合，消除逐文件 import
 from app.core.config import settings
 from app.core.seed import seed_demo
 from app.events_handlers import register_handlers
@@ -229,8 +186,9 @@ async def _ensure_demo_indexes() -> None:
         for sql in indexes:
             try:
                 await conn.execute(text(sql))
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as exc:  # noqa: BLE001
+                # P2#8：索引建失败不应静默吞掉，否则线上性能问题无声发生
+                logger.warning("补充索引失败（%s）：%s", sql, exc)
 
 
 async def run_migrations() -> None:
@@ -238,21 +196,27 @@ async def run_migrations() -> None:
     await loop.run_in_executor(None, _run_alembic_upgrade)
     # 补充索引（幂等，兼容旧库）
     await _ensure_demo_indexes()
-    # 建表兜底：仅创建 Alembic 迁移中尚未覆盖的新增表（对已存在表幂等无副作用）
+    # 建表兜底：仅当 ALLOW_SCHEMA_AUTOFIX=True 时执行。
+    # 生产环境（默认 False）应完全依赖 Alembic 建表，避免「只写 model 不写迁移」导致 schema 漂移。
+    # 本地/演示/测试环境开启此开关以获得「改 model 即生效」的便利。
     from app.db.base import Base
     from app.db.session import engine
 
-    # 建表兜底：用同步引擎执行，规避 aiosqlite 异步连接 run_sync 死锁
-    from sqlalchemy import create_engine
-    from sqlalchemy.pool import NullPool
+    if settings.ALLOW_SCHEMA_AUTOFIX:
+        logger.info("[schema] ALLOW_SCHEMA_AUTOFIX=True，运行 create_all 兜底建表")
+        # 建表兜底：用同步引擎执行，规避 aiosqlite 异步连接 run_sync 死锁
+        from sqlalchemy import create_engine
+        from sqlalchemy.pool import NullPool
 
-    _url = settings.async_database_url
-    _sync_url = _url.replace("sqlite+aiosqlite", "sqlite") if _url.startswith("sqlite") else _url
-    _sync_engine = create_engine(_sync_url, poolclass=NullPool)
-    try:
-        Base.metadata.create_all(_sync_engine)
-    finally:
-        _sync_engine.dispose()
+        _url = settings.async_database_url
+        _sync_url = _url.replace("sqlite+aiosqlite", "sqlite") if _url.startswith("sqlite") else _url
+        _sync_engine = create_engine(_sync_url, poolclass=NullPool)
+        try:
+            Base.metadata.create_all(_sync_engine)
+        finally:
+            _sync_engine.dispose()
+    else:
+        logger.info("[schema] ALLOW_SCHEMA_AUTOFIX=False，跳过 create_all 兜底；建表完全由 Alembic 负责")
     # 列演进已由 Alembic 迁移 0009_demo_columns 正式接管。
     # T18：_ensure_demo_columns 作为最终兜底，仅在 ALLOW_SCHEMA_AUTOFIX=True 时执行，
     # 避免生产环境静默补列掩盖 schema 漂移（应由 Alembic 正确治理）。本地/演示/测试环境可开启。
@@ -333,50 +297,10 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "Accept"],
 )
 
-app.include_router(health_router, prefix=settings.API_V1_PREFIX)
-app.include_router(auth_router, prefix=settings.API_V1_PREFIX)
-app.include_router(categories_router, prefix=settings.API_V1_PREFIX)
-app.include_router(products_router, prefix=settings.API_V1_PREFIX)
-app.include_router(reviews_router, prefix=settings.API_V1_PREFIX)
-app.include_router(cart_router, prefix=settings.API_V1_PREFIX)
-app.include_router(orders_router, prefix=settings.API_V1_PREFIX)
-app.include_router(ai_router, prefix=settings.API_V1_PREFIX)
-app.include_router(merchant_router, prefix=settings.API_V1_PREFIX)
-app.include_router(admin_router, prefix=settings.API_V1_PREFIX)
-app.include_router(coupons_router, prefix=settings.API_V1_PREFIX)
-app.include_router(favorites_router, prefix=settings.API_V1_PREFIX)
-app.include_router(notifications_router, prefix=settings.API_V1_PREFIX)
-app.include_router(points_router, prefix=settings.API_V1_PREFIX)
-app.include_router(recommendations_router, prefix=settings.API_V1_PREFIX)
-app.include_router(support_router, prefix=settings.API_V1_PREFIX)
-app.include_router(shops_router, prefix=settings.API_V1_PREFIX)
-app.include_router(banners_router, prefix=settings.API_V1_PREFIX)
-app.include_router(promotions_router, prefix=settings.API_V1_PREFIX)
-app.include_router(users_router, prefix=settings.API_V1_PREFIX)
-app.include_router(rewards_router, prefix=settings.API_V1_PREFIX)
-app.include_router(inventory_router, prefix=settings.API_V1_PREFIX)
-app.include_router(search_router, prefix=settings.API_V1_PREFIX)
-app.include_router(variant_router, prefix=settings.API_V1_PREFIX)
-app.include_router(follow_router, prefix=settings.API_V1_PREFIX)
-app.include_router(ws_router, prefix=settings.API_V1_PREFIX)
-app.include_router(shipping_router, prefix=settings.API_V1_PREFIX)
-app.include_router(payments_router, prefix=settings.API_V1_PREFIX)
-app.include_router(agent_router, prefix=settings.API_V1_PREFIX)
-app.include_router(marketing_router, prefix=settings.API_V1_PREFIX)
-app.include_router(decoration_router, prefix=settings.API_V1_PREFIX)
-app.include_router(notes_router, prefix=settings.API_V1_PREFIX)
-app.include_router(plus_router, prefix=settings.API_V1_PREFIX)
-app.include_router(qna_router, prefix=settings.API_V1_PREFIX)
-app.include_router(views_router, prefix=settings.API_V1_PREFIX)
-app.include_router(knowledge_router, prefix=settings.API_V1_PREFIX)
-app.include_router(affiliate_router, prefix=settings.API_V1_PREFIX)
-app.include_router(live_router, prefix=settings.API_V1_PREFIX)
-app.include_router(invoices_router, prefix=settings.API_V1_PREFIX)
-app.include_router(presale_router, prefix=settings.API_V1_PREFIX)
-app.include_router(images_router, prefix=settings.API_V1_PREFIX)
-app.include_router(upload_router, prefix=settings.API_V1_PREFIX)
-app.include_router(staff_router, prefix=settings.API_V1_PREFIX)
-app.include_router(report_router, prefix=settings.API_V1_PREFIX)
+# P2#14：路由聚合注册，所有业务路由统一挂载到 API_V1_PREFIX 下。
+# 新增路由只需在 app/api/__init__.py 的 ALL_ROUTERS 中登记，此处自动生效。
+for _router in ALL_ROUTERS:
+    app.include_router(_router, prefix=settings.API_V1_PREFIX)
 
 
 # ---- 可观测性：Prometheus 风格指标端点（P0-C9：需管理员鉴权，防止经营数据泄露）----

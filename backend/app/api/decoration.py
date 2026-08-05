@@ -69,6 +69,22 @@ async def save_decoration(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"不支持的模块类型: {mod.get('type')}",
             )
+    # 安全修复（P1#4）：products 模块引用的商品必须属于当前商家，
+    # 防止商家把他人商品挂进自己店铺页。过滤掉非本商家的商品 id。
+    for mod in data.layout:
+        if mod.get("type") != "products":
+            continue
+        ids = [str(i) for i in (mod.get("product_ids") or [])]
+        if not ids:
+            continue
+        owned = set(
+            await db.scalars(
+                select(Product.id).where(
+                    Product.id.in_(ids), Product.merchant_id == user.id
+                )
+            )
+        )
+        mod["product_ids"] = [pid for pid in ids if pid in owned]
     deco = await db.scalar(select(ShopDecoration).where(ShopDecoration.merchant_id == user.id))
     if not deco:
         deco = ShopDecoration(merchant_id=user.id)

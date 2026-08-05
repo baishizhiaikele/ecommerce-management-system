@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from datetime import datetime, timezone
 
 from sqlalchemy import select
@@ -25,6 +26,8 @@ from app.models.settlement import Settlement
 from app.services import order_service
 from app.services.payment_providers import get_provider, get_order_payment
 from app.core.metrics import inc_counter
+
+logger = logging.getLogger(__name__)
 
 
 def _utcnow() -> datetime:
@@ -148,12 +151,14 @@ async def handle_webhook(db: AsyncSession, gateway: str, payload: dict) -> Payme
 
     order = await db.get(Order, order_id)
     if order and order.status == OrderStatus.PENDING_PAYMENT:
+        # P1-5：webhook 在末尾统一提交，这里禁用 transition_status 的内部提交，保证整笔回调原子
         await order_service.transition_status(
             db,
             order=order,
             target=OrderStatus.PAID,
             actor_id=order.buyer_id,
             role=Role.BUYER,
+            autocommit=False,
         )
     await db.commit()
     await db.refresh(payment)
@@ -231,8 +236,14 @@ async def release_escrow(db: AsyncSession, order: Order, payment: Payment | None
     merchant_amounts = await _order_merchant_subtotals(db, order)
     settlements: list[Settlement] = []
     if not merchant_amounts:
-        # 兜底：无商品明细时整单结算给首个商家（兼容历史数据）
-        merchant_amounts = {await _order_merchant_id(db, order): float(order.total_amount)}
+        # 兜底：订单无商品明细（历史脏数据/异常单）时无法按商家拆分，
+        # 不强行构造未知 merchant_id 写入结算台账（避免脏商家结算），改为告警并跳过，
+        # 由对账任务后续处理。此前此处引用了未定义的 _order_merchant_id，会直接 500。
+        logger.warning(
+            "订单 %s 无商品明细，release_escrow 按商家拆分结算为空，跳过资金释放",
+            order.id,
+        )
+        return settlements
     for merchant_id, amount in merchant_amounts.items():
         settlement = (
             await db.scalars(

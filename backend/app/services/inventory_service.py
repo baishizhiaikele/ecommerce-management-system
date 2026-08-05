@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.inventory import InventoryByWarehouse, StockChangeType, StockLog, Warehouse
 from app.models.notification import NotificationType
 from app.models.product import Product, ProductStatus
+from app.models.variant import ProductVariant
 from app.models.user import User
 from app.services.notification_service import notify
 
@@ -172,8 +173,14 @@ async def record_sale(db: AsyncSession, product: Product, quantity: int) -> None
     )
 
 
-async def record_cancel_return(db: AsyncSession, product: Product, quantity: int) -> None:
-    """订单取消/退款时回补库存（在订单事务内调用，不单独 commit）。"""
+async def record_cancel_return(
+    db: AsyncSession, product: Product, quantity: int, *, variant_id: int | None = None
+) -> None:
+    """订单取消/退款时回补库存（在订单事务内调用，不单独 commit）。
+
+    修复 P0#2：当传入 variant_id 时，同时回补对应 SKU 规格库存，
+    避免规格库存只扣不回补导致永久显示售罄。使用行锁防止并发超补。
+    """
     await _write_log(
         db,
         product=product,
@@ -183,6 +190,16 @@ async def record_cancel_return(db: AsyncSession, product: Product, quantity: int
         operator_id=None,
         remark="订单取消回补",
     )
+    if variant_id is not None:
+        variant = await db.scalar(
+            select(ProductVariant)
+            .where(ProductVariant.id == variant_id)
+            .with_for_update()
+        )
+        if variant is not None:
+            variant.stock = int(variant.stock or 0) + abs(quantity)
+            db.add(variant)
+            await db.flush()
 
 
 async def list_logs(

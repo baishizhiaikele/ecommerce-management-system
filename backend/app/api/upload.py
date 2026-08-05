@@ -96,7 +96,8 @@ async def upload_image(
     ext = real_ext if real_ext in ALLOWED_EXT else "jpg"
 
     filename = f"{uuid.uuid4().hex}.{ext}"
-    save_path = os.path.join(UPLOAD_DIR, filename)
+    # P2#12：通过存储抽象层写入，解耦本地磁盘与对象存储；本地实现仍落到 UPLOAD_DIR
+    save_path = storage.resolve_path(filename)
     # P4：文件写入放到线程池，避免阻塞事件循环
     await asyncio.to_thread(_write_file, save_path, data)
     # P1-13：写入后压缩（同样放到线程池，避免阻塞）

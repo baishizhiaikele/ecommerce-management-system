@@ -20,8 +20,9 @@ class Settings(BaseSettings):
     FRONTEND_BASE_URL: str = "http://localhost:5173"  # 用于生成分销/种草分享链接
     # 测试环境下关闭限流，避免影响 pytest 套件
     TESTING: bool = False
-    # 是否在启动时灌入演示数据（含弱口令演示账号）；生产环境应显式设为 False
-    SEED_DEMO: bool = True
+    # 是否在启动时灌入演示数据（含弱口令演示账号）。
+    # 遵循「默认安全、显式开启」原则：默认关闭，仅本地/演示/测试显式置 True。
+    SEED_DEMO: bool = False
     # T18：是否允许启动时自动补列（_ensure_demo_columns）。
     # 仅在本地 / 演示 / 测试环境为 True；生产环境必须保持 False，
     # 让 schema 漂移暴露出来（由 Alembic migration 正确治理），而非静默补列。
@@ -43,7 +44,6 @@ class Settings(BaseSettings):
     PAYMENT_SECRET: str = Field(default=..., description="支付回调验签密钥，生产环境必须注入环境变量，禁止弱默认值")
     PAYMENT_NOTIFY_BASE_URL: str = ""
     FONT_PATH: str = ""  # 图片渲染字体路径（留空则使用系统默认字体）
-    FRONTEND_BASE_URL: str = "http://localhost:5173"  # 供分享链接/营销图床拼接前端地址
 
     # 真实支付网关密钥（P0-1）：缺省为空 -> 网关自动降级为自签/沙箱契约，保证本地与 CI 可跑
     # 生产环境通过环境变量注入；配置完整后 StripeProvider.is_live()/WxPayProvider.is_live() 返回 True

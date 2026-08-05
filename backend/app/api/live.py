@@ -1,5 +1,5 @@
 """直播带货接口。"""
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,6 +8,7 @@ from app.core.deps import get_current_user, require_role
 from app.core.security import decode_token
 from app.core.ws import manager
 from app.db.session import SessionLocal, get_db
+from app.models.live import LiveRoom
 from app.models.user import Role, User
 from app.schemas.live import (
     LiveMessageCreate,
@@ -148,7 +149,13 @@ async def ai_script(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role(Role.MERCHANT)),
 ) -> dict:
-    """AI-3 直播数字人脚本：为直播间挂车商品生成开场/逐品讲解/收尾脚本。"""
+    """AI-3 直播数字人脚本：为直播间挂车商品生成开场/逐品讲解/收尾脚本。
+
+    安全修复（P1#4）：先校验直播间归属，避免商家读取他人直播间的挂车商品信息。
+    """
+    room = await db.get(LiveRoom, room_id)
+    if not room or room.merchant_id != user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="直播间不存在")
     detail = await live_service.room_detail(db, room_id)
     if not detail.products:
         return {"opening": "", "items": [], "ending": ""}
