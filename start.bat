@@ -19,6 +19,9 @@ for %%D in (
   "C:\Python311\Scripts"
   "C:\Python312\Scripts"
   "C:\Python313\Scripts"
+  "D:\computer\Python"
+  "D:\computer\Python\Scripts"
+  "D:\computer"
 ) do (
   if exist "%%~D" (
     set "PATH=%%~D;%PATH%"
