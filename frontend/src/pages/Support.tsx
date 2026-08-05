@@ -882,7 +882,7 @@ export default function Support() {
         okText={t("common.submit")}
         cancelText={t("common.cancel")}
         onCancel={() => setNewOpen(false)}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form layout="vertical" requiredMark={false} style={{ width: "100%" }}>
           <Form.Item label={t("support.filter.category")}>

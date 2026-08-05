@@ -187,7 +187,7 @@ export default function MerchantInventory() {
         onOk={submit}
         onCancel={() => setModal(false)}
         okText={t("common.submit")}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={form} layout="vertical">
           <Form.Item name="product_id" label={t("inv.product")} rules={[{ required: true, message: t("inv.reqProduct") }]}>

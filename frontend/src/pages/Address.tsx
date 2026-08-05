@@ -170,7 +170,7 @@ export default function AddressBook() {
         onCancel={() => setOpen(false)}
         onOk={submit}
         okText={t("common.save")}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={form} layout="vertical" className="mt-4">
           <Form.Item name="receiver" label={t("address.name")} rules={[{ required: true, message: t("address.reqReceiver") }]}>

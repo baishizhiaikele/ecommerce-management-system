@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
   Button,
   Card,
@@ -168,7 +169,16 @@ export default function Discover() {
       {loading ? (
         <div className="py-20 flex justify-center"><Spin /></div>
       ) : notes.length === 0 ? (
-        <Empty description={t("note.empty")} className="py-20" />
+        <Empty
+          description={!user ? t("common.loginToViewNotes") : t("note.empty")}
+          className="py-20"
+        >
+          {!user && (
+            <Link to="/login">
+              <Button type="primary">{t("common.signIn")}</Button>
+            </Link>
+          )}
+        </Empty>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {notes.map((n) => (

@@ -162,7 +162,7 @@ export default function MerchantReviews() {
         onOk={submitReply}
         onCancel={() => setReplyTo(null)}
         okText={t("common.submit")}
-        destroyOnClose
+        destroyOnHidden
       >
         <p className="text-slate-500 mb-2">{t("mr.original")}{replyTo?.content}</p>
         <Form form={form} layout="vertical">

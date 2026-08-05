@@ -302,7 +302,7 @@ export default function MerchantProducts() {
         onOk={submit}
         onCancel={() => setModal(false)}
         okText={t("common.save")}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={form} layout="vertical">
           <Form.Item name="name" label={t("mprod.name")} rules={[{ required: true, message: t("mprod.reqName") }]}>

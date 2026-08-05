@@ -87,15 +87,43 @@ api.interceptors.response.use(
           "/favorites",
           "/notifications",
         ];
-        if (!publicPaths.some((p) => path === p || path.startsWith(p + "/"))) {
+        const isPublic = publicPaths.some((p) => path === p || path.startsWith(p + "/"));
+        if (!isPublic) {
           // 带上来源页，登录后原路返回，避免用户重新找一遍刚才的页面
           const redirect = encodeURIComponent(path + window.location.search);
           window.location.href = `/login?redirect=${redirect}`;
         }
-        return Promise.reject(e);
+        // 公开页游客态的 401 属预期行为（游客可浏览），不向 console 抛噪声也不弹错误
+        if (isPublic) return Promise.reject(e);
       } finally {
         isRefreshing = false;
       }
+    }
+    // 公开页游客态的 401 已由上方静默处理，不再向 console 抛噪声
+    const path = window.location.pathname;
+    const publicPaths = [
+      "/login",
+      "/",
+      "/register",
+      "/about",
+      "/market",
+      "/products",
+      "/search",
+      "/shops",
+      "/ai-mall",
+      "/discover",
+      "/live",
+      "/presales",
+      "/promotions",
+      "/mall",
+      "/following",
+      "/affiliate",
+      "/history",
+      "/favorites",
+      "/notifications",
+    ];
+    if (error.response?.status === 401 && publicPaths.some((p) => path === p || path.startsWith(p + "/"))) {
+      return Promise.reject(error);
     }
     console.error("api error", error.response?.data || error.message);
     return Promise.reject(error);

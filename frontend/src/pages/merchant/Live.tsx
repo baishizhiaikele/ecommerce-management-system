@@ -202,7 +202,7 @@ export default function MerchantLive() {
         open={open}
         onOk={submit}
         onCancel={() => setOpen(false)}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={form} layout="vertical">
           <Form.Item

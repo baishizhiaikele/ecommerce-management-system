@@ -272,7 +272,7 @@ export default function App() {
         title={t("shortcut.title")}
         footer={null}
         onCancel={() => setHelpOpen(false)}
-        destroyOnClose
+        destroyOnHidden
       >
         <ul className="space-y-2 text-sm">
           <li className="flex items-center justify-between gap-3">

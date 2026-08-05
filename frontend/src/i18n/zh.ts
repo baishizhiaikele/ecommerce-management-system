@@ -100,6 +100,8 @@ export const zh: Record<string, string> = {
   "common.undo": "撤销",
   "common.login": "登录",
   "common.loginToView": "登录后查看 AI 为你编排的专属商城",
+  "common.loginToViewNotes": "登录后查看种草社区笔记",
+  "common.signIn": "去登录",
   "common.actions": "操作",
   "state.errorTitle": "加载失败",
   "state.errorDesc": "网络或服务异常，请稍后重试",

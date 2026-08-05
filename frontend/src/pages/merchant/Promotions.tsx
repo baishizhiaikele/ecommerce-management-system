@@ -196,7 +196,7 @@ export default function MerchantPromotions() {
         onOk={submit}
         onCancel={() => setModalOpen(false)}
         okText={t("mp.createBtn")}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={form} layout="vertical">
           <Form.Item name="product_id" label={t("col.product")} rules={[{ required: true, message: t("inv.reqProduct") }]}>

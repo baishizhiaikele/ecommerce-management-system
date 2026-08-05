@@ -98,7 +98,7 @@ export default function MerchantPresales() {
         ]}
       />
 
-      <Modal title={t("ps.m.create")} open={open} onOk={submit} onCancel={() => setOpen(false)} destroyOnClose>
+      <Modal title={t("ps.m.create")} open={open} onOk={submit} onCancel={() => setOpen(false)} destroyOnHidden>
         <Form form={form} layout="vertical" initialValues={{ inflate_rate: 1.5 }}>
           <Form.Item name="title" label={t("ps.m.presaleTitle")} rules={[{ required: true, min: 2 }]}>
             <Input maxLength={100} placeholder={t("ps.m.titlePh")} />

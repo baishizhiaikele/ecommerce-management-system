@@ -91,6 +91,17 @@
 
 ---
 
+## 真实体验走查遗留清理（本轮）
+
+> 前端真实走查后用户提出的 3 项 P1/P2 遗留问题，全部修复。
+
+**修复项**
+- `api/client.ts`：游客态访问公开页（market/products/discover 等）触发的 401 属预期行为，原拦截器仍 `console.error` 抛噪声 → 对 `publicPaths` 命中且状态码 401 的响应静默拒绝，不再向 console 抛错误（避免未登录浏览时控制台一片红）。
+- `destroyOnClose` 弃用：antd v5 已弃用 `Modal.destroyOnClose`，统一升级为 `destroyOnHidden`，覆盖 `App.tsx` 及 11 个业务组件的共 13 处，消除控制台弃用告警。
+- `Discover.tsx`（种草社区）：游客态无笔记时原本仅显示空态文字，与其他页面（AIMall 等）登录引导不一致 → 游客态空态增加「去登录」按钮（`common.loginToViewNotes` / `common.signIn`，中英文已补），点击跳转 `/login`。
+
+---
+
 ## 测试验证
 
 - 后端 `pytest tests` 全部通过（155 个用例，0 失败）

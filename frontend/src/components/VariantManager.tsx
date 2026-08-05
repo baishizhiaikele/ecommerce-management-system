@@ -174,7 +174,7 @@ export default function VariantManager({ productId, productName, open, onClose }
         onOk={submit}
         onCancel={() => setModalOpen(false)}
         okText={t("common.save")}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={form} layout="vertical">
           <Form.Item label={t("variant.skuCode")} name="sku_code">

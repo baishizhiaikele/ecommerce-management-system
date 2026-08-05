@@ -45,7 +45,7 @@ export default function LoginPrompt({ open, onClose, reason = "cart" }: LoginPro
       footer={null}
       centered
       width={400}
-      destroyOnClose
+      destroyOnHidden
       aria-labelledby={titleId}
     >
       <div className="text-center pt-2 pb-4">

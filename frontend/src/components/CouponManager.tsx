@@ -204,7 +204,7 @@ export default function CouponManager({ mode }: { mode: "admin" | "merchant" }) 
         open={open}
         onClose={() => setOpen(false)}
         width={420}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={form} layout="vertical" onFinish={onSubmit}>
           <Form.Item name="name" label={t("coupon.name")} rules={[{ required: true, message: t("mprod.reqName") }]}>
