@@ -21,8 +21,9 @@ class Settings(BaseSettings):
     # 测试环境下关闭限流，避免影响 pytest 套件
     TESTING: bool = False
     # 是否在启动时灌入演示数据（含弱口令演示账号）。
-    # 遵循「默认安全、显式开启」原则：默认关闭，仅本地/演示/测试显式置 True。
-    SEED_DEMO: bool = False
+    # 本项目当前仅作演示用途，故默认开启，与 render.yaml 的 SEED_DEMO: "true" 保持一致；
+    # 若后续作为真实生产环境使用，应改回 False 并在部署配置中显式关闭、清理旧演示数据。
+    SEED_DEMO: bool = True
     # T18：是否允许启动时自动补列（_ensure_demo_columns）。
     # 仅在本地 / 演示 / 测试环境为 True；生产环境必须保持 False，
     # 让 schema 漂移暴露出来（由 Alembic migration 正确治理），而非静默补列。

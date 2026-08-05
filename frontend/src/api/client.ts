@@ -61,10 +61,32 @@ api.interceptors.response.use(
         return api(original);
       } catch (e) {
         pending = [];
-        // 刷新失败：仅当当前并非公开访问页（登录页/首页）时才跳登录，
-        // 避免未登录用户浏览公开页面时被误踢到登录页、或 init() 与 401 形成死循环（S6）
+        // 刷新失败：仅当当前并非公开访问页（登录页/首页/游客可浏览的集市、
+        // 商品详情、搜索、店铺、发现、直播、预售、促销、会员、收藏、消息等）
+        // 时才跳登录，避免未登录用户浏览公开页面时被误踢到登录页、
+        // 或 init() 与 401 形成死循环（S6）
         const path = window.location.pathname;
-        const publicPaths = ["/login", "/", "/register", "/about"];
+        const publicPaths = [
+          "/login",
+          "/",
+          "/register",
+          "/about",
+          "/market",
+          "/products",
+          "/search",
+          "/shops",
+          "/ai-mall",
+          "/discover",
+          "/live",
+          "/presales",
+          "/promotions",
+          "/mall",
+          "/following",
+          "/affiliate",
+          "/history",
+          "/favorites",
+          "/notifications",
+        ];
         if (!publicPaths.some((p) => path === p || path.startsWith(p + "/"))) {
           // 带上来源页，登录后原路返回，避免用户重新找一遍刚才的页面
           const redirect = encodeURIComponent(path + window.location.search);

@@ -107,7 +107,7 @@ export default function ProductDetail() {
     try {
       const [prod, rv, vs] = await Promise.all([
         getProduct(id),
-        listProductReviews(id),
+        listProductReviews(id).catch(() => [] as any[]),
         listVariants(id).catch(() => [] as VariantOut[]),
       ]);
       setP(prod);
@@ -201,7 +201,7 @@ export default function ProductDetail() {
   const gallery = useMemo(() => {
     const items: GalleryItem[] = [];
     // 视频优先展示
-    if ((p as any).video_url) {
+    if (p && (p as any).video_url) {
       items.push({ url: (p as any).video_url, type: "video" });
     }
     // 主图
@@ -218,7 +218,7 @@ export default function ProductDetail() {
       }
     } catch { /* ignore */ }
     return items;
-  }, [p?.image_url, p?.images, (p as any).video_url]);
+  }, [p?.image_url, p?.images, p ? (p as any).video_url : null]);
 
   useEffect(() => {
     setActiveImg(0);

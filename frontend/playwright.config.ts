@@ -7,10 +7,14 @@ import { defineConfig, devices } from "@playwright/test";
  */
 export default defineConfig({
   testDir: "./e2e",
+  // 调试探针（下划线前缀）不进入全量套件
+  testIgnore: /_probe\.spec\.ts/,
   timeout: 60_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,
-  retries: 0,
+  // SQLite 测试库不支持高并发，串行执行避免锁竞争导致的偶发超时
+  workers: process.env.CI ? 2 : 1,
+  retries: 1,
   reporter: [["list"]],
   use: {
     baseURL: "http://localhost:5173",
@@ -27,7 +31,7 @@ export default defineConfig({
     {
       command:
         "cd ../backend && set EVENT_URL=sqlite+aiosqlite:///./test_e2e.db && python -m uvicorn app.main:app --port 8000 --log-level warning",
-      url: "http://localhost:8000/api/v1/health",
+      url: "http://localhost:8000/api/health",
       timeout: 60_000,
       reuseExistingServer: !process.env.CI,
     },

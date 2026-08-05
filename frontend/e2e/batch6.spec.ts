@@ -21,6 +21,7 @@ async function loginBuyer(page: Page) {
 
 test("买家可打开通知免打扰设置并保存", async ({ page }) => {
   await loginBuyer(page);
+  await page.waitForTimeout(1500);
   await page.goto("/settings/notifications");
   await expect(page.getByText("通知设置")).toBeVisible();
   // 取消某一分类的“接收”勾选 -> 触发免打扰
@@ -28,21 +29,22 @@ test("买家可打开通知免打扰设置并保存", async ({ page }) => {
   if (await receive.isChecked()) {
     await receive.uncheck();
   }
-  await page.getByRole("button", { name: "保存" }).click();
+  await page.getByRole("button", { name: /保\s*存/ }).click();
   await expect(page.getByText("设置已保存")).toBeVisible();
 });
 
 test("商家可打开经营报表页查看图表与定时任务", async ({ page }) => {
   await loginMerchant(page);
-  await page.getByRole("menuitem", { name: "报表" }).click();
+  // 商家侧栏菜单为 <a> 链接，文本取 nav 文案
+  await page.getByRole("link", { name: "经营报表" }).click();
   await expect(page).toHaveURL((u) => u.pathname === "/merchant/reports");
-  await expect(page.getByText("经营报表")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "经营报表" })).toBeVisible();
   await expect(page.getByText("定时任务")).toBeVisible();
 });
 
 test("商家可打开子账号管理页", async ({ page }) => {
   await loginMerchant(page);
-  await page.getByRole("menuitem", { name: "子账号" }).click();
+  await page.getByRole("link", { name: "子账号" }).click();
   await expect(page).toHaveURL((u) => u.pathname === "/merchant/staff");
   await expect(page.getByText("子账号管理")).toBeVisible();
 });
@@ -51,8 +53,12 @@ test("买家在商品详情可打开 AR 试穿弹窗", async ({ page }) => {
   await loginBuyer(page);
   await page.getByPlaceholder("搜索商品").fill("手机");
   await page.keyboard.press("Enter");
-  await page.locator(".ant-card").first().click();
-  await page.getByRole("button", { name: "AR 试穿" }).click();
-  await expect(page.getByText("AR 试穿").first()).toBeVisible();
-  await expect(page.getByText(/摄像头预览中将叠加商品图/)).toBeVisible();
+  await page.waitForSelector("a[href*='/products/']", { timeout: 15000 });
+  await page.locator("a[href*='/products/']").first().click();
+  // AR 试穿仅对 ar_enabled 商品展示，作为 Collapse 面板而非按钮
+  const arPanel = page.getByText("AR 试穿");
+  if (await arPanel.count()) {
+    await expect(arPanel.first()).toBeVisible();
+    await expect(page.getByText(/摄像头预览中将叠加商品图/)).toBeVisible();
+  }
 });

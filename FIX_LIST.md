@@ -41,6 +41,9 @@
 | 14 | `main.py` 60 个 router import 无聚合层 | `main.py` + 新增 `app/api/__init__.py` | ✅ 已修复：新增聚合层，main.py 循环注册 |
 | 15 | 配置重复 + 依赖分类错误 | `config.py` + `frontend/package.json` | ✅ 已修复：删除重复 `FRONTEND_BASE_URL`；`tailwind-merge` 移入 `dependencies` |
 | 16 | 双 UI 体系并存 | Ant Design + TailwindCSS | ⏳ 建议后续：长期统一设计 token（重构，非功能 bug） |
+| 17 | `NotificationSettings` 加载竞态 + `user is not defined` 崩溃 | `frontend/src/pages/NotificationSettings.tsx` | ✅ 已修复：`load()` 依赖 `user` 再触发，并补 `useAuth` 引入，消除刷新即崩的 race |
+| 18 | `ProductDetail` 空 `video_url` 崩溃 + 评价列表未 `.catch` | `frontend/src/pages/ProductDetail.tsx` | ✅ 已修复：空值守卫 + 评价请求异常兜底 |
+| 19 | `client.ts` 对 guest 路由误拦截 | `frontend/src/api/client.ts` | ✅ 已修复：`publicPaths` 增补游客可见路由 |
 
 ---
 
@@ -62,6 +65,29 @@
 
 前端：
 - `frontend/package.json` — #15 tailwind-merge 移入 dependencies
+- `frontend/src/pages/NotificationSettings.tsx` — #17 修复刷新竞态 + useAuth 引入
+- `frontend/src/pages/ProductDetail.tsx` — #18 空 video_url 守卫 + 评价兜底
+- `frontend/src/api/client.ts` — #19 guest 路由放行
+
+---
+
+## E2E 测试修复（本轮）
+
+> 为让 Playwright E2E 套件稳定全绿，同步修正了测试侧选择器与 3 个真实前端 bug。最终 **19 passed / 0 failed**（`workers:1, retries:1` 规避 SQLite 并行锁竞争）。
+
+**测试侧修正**
+- `e2e/helpers.ts`（新增）：`login()` 支持自定义账号并等待离开 `/login`；`registerAndLogin` 复用 `login()`。
+- `e2e/order-flow.spec.ts` / `refund-flow.spec.ts` / `shop.spec.ts` / `flows.spec.ts`：购物车等待由不存在的 `.ant-table,.ant-list,.cart` 改为等待「去结算」按钮（真实 DOM 用 `card-soft` + 中文按钮文案）。
+- `e2e/features.spec.ts`：我的收藏是 `<button aria-label>` 非链接；逛店铺实际文案「X 件好物」非「件在售」。
+- `e2e/batch6.spec.ts`：保存按钮渲染为「保 存」（含空格）→ 改用 `/保\s*存/` 正则。
+- `e2e/order-flow.spec.ts`：加购按钮多实例 → 补 `.first()` 避免 strict 违例。
+- `e2e/shop.spec.ts`：加购后补 `waitForTimeout(1200)` 再跳转 `/cart`，避免购物车空。
+- `playwright.config.ts`：`workers: process.env.CI ? 2 : 1` + `retries: 1`，消除并行下 SQLite 锁导致的偶发失败。
+
+**真实前端 bug（随 E2E 调试发现并修复）**
+- `NotificationSettings.tsx`：刷新即崩（`user is not defined` + 加载竞态）→ 引入 `useAuth` 并以 `user` 为加载前置条件。
+- `ProductDetail.tsx`：空 `video_url` 崩溃、评价请求未兜底 → 守卫 + `.catch`。
+- `client.ts`：游客可见路由被 401 拦截 → `publicPaths` 补全。
 
 ---
 

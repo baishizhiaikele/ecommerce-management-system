@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n";
+import { useAuth } from "../store/auth";
 import {
   getNotificationSettings,
   listNotificationCategories,
@@ -19,6 +20,7 @@ const CAT_LABELS: Record<string, { zh: string; en: string }> = {
 
 export default function NotificationSettings() {
   const { t, lang } = useI18n();
+  const { user } = useAuth();
   const nav = useNavigate();
   const [cats, setCats] = useState<string[]>([]);
   const [muted, setMuted] = useState<string[]>([]);
@@ -37,8 +39,10 @@ export default function NotificationSettings() {
   };
 
   useEffect(() => {
-    load();
-  }, []);
+    // 等登录态（user）恢复后再加载，避免整页刷新初期 user 为 null 时
+    // 带不到认证信息导致 401、settings 为空、保存按钮不渲染（竞态）
+    if (user) load();
+  }, [user]);
 
   const toggle = (c: string, checked: boolean) =>
     setMuted((prev) => (checked ? prev.filter((x) => x !== c) : [...prev, c]));

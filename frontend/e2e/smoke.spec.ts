@@ -5,7 +5,8 @@ import { test, expect } from "@playwright/test";
 // webServer 自动拉起后端（含前端静态产物）。
 
 test("未登录访问受保护路由跳转到登录页", async ({ page }) => {
-  await page.goto("/");
+  // 首页 / 集市对游客开放（guest 可浏览），受保护的订单页未登录须重定向登录
+  await page.goto("/orders");
   await expect(page).toHaveURL((u) => u.pathname === "/login");
   await expect(page.getByPlaceholder("用户名")).toBeVisible();
   await expect(page.getByPlaceholder("密码")).toBeVisible();
@@ -30,5 +31,5 @@ test("管理员登录后进入管理后台", async ({ page }) => {
 
   await expect(page).toHaveURL((u) => u.pathname.startsWith("/admin"));
   // 管理后台侧栏专属文案，验证角色路由与鉴权正确
-  await expect(page.getByText("审计日志")).toBeVisible();
+  await expect(page.getByText("审计日志").first()).toBeVisible();
 });
